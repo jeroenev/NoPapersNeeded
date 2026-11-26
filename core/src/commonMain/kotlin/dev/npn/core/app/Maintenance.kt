@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.index.SplitFailure
+import kotlinx.coroutines.flow.StateFlow
 
 /** Repair and surgery on existing documents: duplicates, relinks, and splitting; and on the index. */
 interface MaintenanceFacade {
@@ -44,14 +45,31 @@ interface MaintenanceFacade {
     ): SplitOutcome
 
     /**
-     * Check the library folder against itself: every live document's file is there, readable, and
-     * hashes to the document's id, and every journal object in the store holds the bytes its name
-     * claims. Reports what is missing, unreadable or changed, plus files in the object store the
-     * journal cannot read, and expected leftovers such as a superseded document as notes. Read-only:
-     * nothing is repaired, moved or deleted, and no document's content reaches the report. Main-safe
-     * and cancellable, reporting [onProgress] as it walks; throws only when the session is closed.
+     * Check the library folder against itself: every document the journal shows has its file there,
+     * readable, and hashing to the document's id (one the library already lists as missing is
+     * reported as such, never passed over), and every journal object in the store holds the bytes its
+     * name claims. Reports what is missing, unreadable or changed, and misnamed files in the object
+     * store. Read-only: nothing is repaired, moved or deleted, and no document's content reaches the
+     * report. Main-safe and cancellable, reporting [onProgress] as it walks; throws only when the
+     * session is closed.
      */
     suspend fun verifyLibrary(onProgress: (LibraryVerificationProgress) -> Unit = {}): LibraryVerificationReport
+
+    /** The check [startVerification] runs, as it goes, then its result until [clearVerification]. */
+    val verification: StateFlow<LibraryVerificationRun>
+
+    /**
+     * Run [verifyLibrary] as the session's own work, so it goes on when the screen that asked for it
+     * closes; [verification] follows it. False, starting nothing, while one runs or once the session
+     * is closed.
+     */
+    fun startVerification(): Boolean
+
+    /** Stop the running check, leaving no result. */
+    fun cancelVerification()
+
+    /** Forget the last check's result once it was shown. */
+    fun clearVerification()
 
     /**
      * Counts for a diagnostics bundle: the index's rows and journal objects, nothing that names a

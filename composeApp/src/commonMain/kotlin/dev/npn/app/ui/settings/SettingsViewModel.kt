@@ -22,7 +22,6 @@ import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
-import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.ReminderSettings
 import dev.npn.core.diagnostics.AiSummary
 import dev.npn.core.diagnostics.CloudSyncSummary
@@ -72,7 +71,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -475,10 +473,26 @@ class SettingsViewModel(
             CloudSyncState(config, status, engine, outcome, setup, cloud.available, health, docs)
         }
 
-    /** The library check's live state; [verifyLibrary] drives it. */
-    private val verification = MutableStateFlow(LibraryVerificationState())
+    /** Whether the open check's report was just copied, for the dialog's own confirmation. */
+    private val verificationCopied = MutableStateFlow(false)
 
-    private var verificationJob: Job? = null
+    /**
+     * The library check's live state. The check is the session's own work ([verifyLibrary] starts it
+     * there), so it goes on when this screen closes, and its result waits here for the next one.
+     */
+    private val verification: Flow<LibraryVerificationState> =
+        combine(maintenance.verification, verificationCopied) { run, copied ->
+            LibraryVerificationState(
+                running = run.running,
+                progress = run.progress,
+                report = run.report,
+                reportCopied = copied,
+            )
+        }
+
+    init {
+        viewModelScope.launch { reportVerificationFailures() }
+    }
 
     private fun configureCloud(change: (CloudSyncConfig) -> CloudSyncConfig) =
         launchReporting(Res.string.common_save_setting_failed) { sync.configure(change) }
@@ -778,41 +792,34 @@ class SettingsViewModel(
     }
 
     override fun verifyLibrary() {
-        if (verificationJob?.isActive == true) return
-        verification.value = LibraryVerificationState(running = true)
-        verificationJob =
-            viewModelScope.launch {
-                var report: LibraryVerificationReport? = null
-                try {
-                    reporting(Res.string.common_settings_verify_failed) {
-                        report =
-                            maintenance.verifyLibrary { progress ->
-                                verification.update { it.copy(progress = progress) }
-                            }
-                    }
-                } finally {
-                    verification.value = LibraryVerificationState(report = report)
-                }
-            }
+        verificationCopied.value = false
+        maintenance.startVerification()
+    }
+
+    /** Say once why a check failed, whichever screen started it, and clear it so no other says it again. */
+    private suspend fun reportVerificationFailures() {
+        maintenance.verification.collect { run ->
+            val failure = run.failure ?: return@collect
+            maintenance.clearVerification()
+            message(uiText(Res.string.common_settings_verify_failed, failure.reasonText()))
+        }
     }
 
     override fun cancelLibraryVerification() {
-        val job = verificationJob ?: return
-        if (!job.isActive) return
-        job.cancel()
-        // A job cancelled before its first dispatch never runs the body's finally; clear here too.
-        verification.value = LibraryVerificationState()
+        if (!maintenance.verification.value.running) return
+        maintenance.cancelVerification()
         message(uiText(Res.string.common_settings_verify_cancelled))
     }
 
     override fun dismissLibraryVerification() {
-        verification.update { it.copy(report = null) }
+        verificationCopied.value = false
+        maintenance.clearVerification()
     }
 
     override fun copyLibraryVerificationReport(text: String) =
         launchReporting(Res.string.common_settings_verify_copy_failed) {
             copy(text)
-            verification.update { it.copy(reportCopied = true) }
+            verificationCopied.value = true
             message(uiText(Res.string.common_settings_verify_copied))
         }
 

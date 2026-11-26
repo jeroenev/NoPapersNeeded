@@ -25,11 +25,9 @@ import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.TypedTextField
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
-import dev.npn.core.app.LibraryVerificationNote
 import dev.npn.core.app.LibraryVerificationProblem
 import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
-import dev.npn.core.app.VerificationNoteKind
 import dev.npn.core.app.VerificationPhase
 import dev.npn.core.app.VerificationProblemKind
 import dev.npn.core.model.FieldType
@@ -71,14 +69,14 @@ import no_papers_needed.composeapp.generated.resources.common_settings_verify_co
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_count_problems
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_group_documents
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_group_journal
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_group_missing
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_hash
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_help
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_known_missing
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_library
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_missing
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_more
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_not_a_file
-import no_papers_needed.composeapp.generated.resources.common_settings_verify_note_superseded
-import no_papers_needed.composeapp.generated.resources.common_settings_verify_notes
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_orphaned
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_problem_line
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_report_title
@@ -87,6 +85,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_verify_st
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_title
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_unreadable
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
+import no_papers_needed.composeapp.generated.resources.common_sync_health_open_document
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -279,20 +278,24 @@ private fun VerifyLibraryAction(
             report = report,
             copied = verification.reportCopied,
             onCopy = actions::copyLibraryVerificationReport,
+            onOpenDocument = actions::openDocument,
             onDismiss = actions::dismissLibraryVerification,
         )
     }
 }
 
 /**
- * The result of a check: the counts, the problems grouped by where they are, and the expected
- * leftovers. [onCopy] gets the same report as plain text, built in the app's language.
+ * The result of a check: the counts, and the problems grouped by where they are, the documents the
+ * library already lists as missing apart from damage found now. A document is named by its library
+ * path, with a way to open it while the library has it. [onCopy] gets the same report as plain text,
+ * built in the app's language.
  */
 @Composable
 private fun VerifyLibraryReportDialog(
     report: LibraryVerificationReport,
     copied: Boolean,
     onCopy: (String) -> Unit,
+    onOpenDocument: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val text = verificationReportText(report)
@@ -312,17 +315,16 @@ private fun VerifyLibraryReportDialog(
                 for (problem in report.storeProblems) {
                     Text(text = verificationProblemText(problem), style = MaterialTheme.typography.bodySmall)
                 }
-                val documents = report.documentProblems
-                if (documents.isNotEmpty()) {
-                    Text(
-                        text = stringResource(Res.string.common_settings_verify_group_documents),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    for (problem in documents.take(VERIFY_LISTED_PROBLEMS)) {
-                        Text(text = verificationProblemLine(problem), style = MaterialTheme.typography.bodySmall)
-                    }
-                    VerificationMoreLine(documents.size)
-                }
+                VerificationDocumentGroup(
+                    title = stringResource(Res.string.common_settings_verify_group_documents),
+                    problems = report.documentProblems,
+                    onOpenDocument = onOpenDocument,
+                )
+                VerificationDocumentGroup(
+                    title = stringResource(Res.string.common_settings_verify_group_missing),
+                    problems = report.knownMissing,
+                    onOpenDocument = onOpenDocument,
+                )
                 val objects = report.objectProblems
                 if (objects.isNotEmpty()) {
                     Text(
@@ -333,16 +335,6 @@ private fun VerifyLibraryReportDialog(
                         Text(text = verificationProblemLine(problem), style = MaterialTheme.typography.bodySmall)
                     }
                     VerificationMoreLine(objects.size)
-                }
-                val superseded = report.notes.count { it.kind == VerificationNoteKind.SUPERSEDED_DOCUMENT }
-                if (superseded > 0) {
-                    HelpText(
-                        pluralStringResource(
-                            Res.plurals.common_settings_verify_notes,
-                            superseded,
-                            superseded,
-                        ),
-                    )
                 }
                 if (copied) {
                     HelpText(stringResource(Res.string.common_settings_verify_copied))
@@ -360,6 +352,29 @@ private fun VerifyLibraryReportDialog(
             }
         },
     )
+}
+
+/** One group of document findings, each with a way to open its document while the library has it. */
+@Composable
+private fun VerificationDocumentGroup(
+    title: String,
+    problems: List<LibraryVerificationProblem>,
+    onOpenDocument: (String) -> Unit,
+) {
+    if (problems.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(text = title, style = MaterialTheme.typography.titleSmall)
+        for (problem in problems.take(VERIFY_LISTED_PROBLEMS)) {
+            Text(text = verificationProblemLine(problem), style = MaterialTheme.typography.bodySmall)
+            val docId = problem.docId
+            if (docId != null && problem.openable) {
+                TextButton(onClick = { onOpenDocument(docId) }) {
+                    Text(text = stringResource(Res.string.common_sync_health_open_document))
+                }
+            }
+        }
+        VerificationMoreLine(problems.size)
+    }
 }
 
 /** The counts, each a plural of its own so a one-item library reads correctly in every language. */
@@ -414,23 +429,17 @@ private fun verificationProgressText(progress: LibraryVerificationProgress): Str
         }
     }
 
-/** One finding: the file it names, then what is wrong with it. */
+/**
+ * One finding: where it is in the library (a file name alone is ambiguous across folders), then
+ * what is wrong with it. A document nothing places is named by its id's start.
+ */
 @Composable
 private fun verificationProblemLine(problem: LibraryVerificationProblem): String =
     stringResource(
         Res.string.common_settings_verify_problem_line,
-        problem.fileName ?: problem.relPath,
+        problem.relPath ?: problem.fileName ?: problem.docId.orEmpty().take(SHORT_ID_CHARS),
         verificationProblemText(problem),
     )
-
-/** A note in the app's language; notes are expected leftovers, never a problem. */
-@Composable
-private fun verificationNoteLine(note: LibraryVerificationNote): String =
-    when (note.kind) {
-        VerificationNoteKind.SUPERSEDED_DOCUMENT -> {
-            stringResource(Res.string.common_settings_verify_note_superseded, note.relPath)
-        }
-    }
 
 @Composable
 private fun verificationProblemText(problem: LibraryVerificationProblem): String =
@@ -439,6 +448,10 @@ private fun verificationProblemText(problem: LibraryVerificationProblem): String
         VerificationProblemKind.OBJECT_MISSING,
         -> {
             stringResource(Res.string.common_settings_verify_missing)
+        }
+
+        VerificationProblemKind.DOCUMENT_KNOWN_MISSING -> {
+            stringResource(Res.string.common_settings_verify_known_missing)
         }
 
         VerificationProblemKind.DOCUMENT_UNREADABLE,
@@ -495,8 +508,8 @@ private fun verificationReportText(report: LibraryVerificationReport): String {
     val summary = verificationSummaryLines(report)
     val stores = report.storeProblems.map { verificationProblemText(it) }
     val documents = report.documentProblems.map { " - " + verificationProblemLine(it) }
+    val missing = report.knownMissing.map { " - " + verificationProblemLine(it) }
     val objects = report.objectProblems.map { " - " + verificationProblemLine(it) }
-    val notes = report.notes.map { " - " + verificationNoteLine(it) }
     return buildString {
         appendLine(title)
         summary.forEach(::appendLine)
@@ -505,13 +518,19 @@ private fun verificationReportText(report: LibraryVerificationReport): String {
             appendLine(stringResource(Res.string.common_settings_verify_group_documents))
             documents.forEach(::appendLine)
         }
+        if (missing.isNotEmpty()) {
+            appendLine(stringResource(Res.string.common_settings_verify_group_missing))
+            missing.forEach(::appendLine)
+        }
         if (objects.isNotEmpty()) {
             appendLine(stringResource(Res.string.common_settings_verify_group_journal))
             objects.forEach(::appendLine)
         }
-        notes.forEach(::appendLine)
     }.trimEnd()
 }
 
 /** How many findings of one group the dialog lists before summarizing the rest. */
 private const val VERIFY_LISTED_PROBLEMS = 50
+
+/** How much of a document's id names one that has no path and no title. */
+private const val SHORT_ID_CHARS = 12

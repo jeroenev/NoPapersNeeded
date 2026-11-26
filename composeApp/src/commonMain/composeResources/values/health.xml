@@ -46,17 +46,15 @@
     </plurals>
     <string name="common_settings_verify_group_documents">Documents</string>
     <string name="common_settings_verify_group_journal">Journal files</string>
+    <string name="common_settings_verify_group_missing">Missing documents</string>
     <string name="common_settings_verify_missing">The file is missing.</string>
+    <string name="common_settings_verify_known_missing">The library already lists it as missing.</string>
     <string name="common_settings_verify_unreadable">The file could not be read.</string>
     <string name="common_settings_verify_not_a_file">This is not a regular file.</string>
     <string name="common_settings_verify_size">The file is %2$d bytes; %1$d was expected.</string>
     <string name="common_settings_verify_hash">The contents no longer match.</string>
     <string name="common_settings_verify_orphaned">This is not a journal file this app can read.</string>
     <string name="common_settings_verify_store_unreadable">This part of the library could not be read.</string>
-    <plurals name="common_settings_verify_notes">
-        <item quantity="one">%1$d superseded document still has its old file; a rescan removes it.</item>
-        <item quantity="other">%1$d superseded documents still have their old files; a rescan removes them.</item>
-    </plurals>
     <string name="common_settings_verify_copy">Copy report</string>
     <string name="common_settings_verify_close">Close</string>
     <string name="common_settings_verify_copied">Report copied.</string>
@@ -64,5 +62,4 @@
     <string name="common_settings_verify_more">%1$d more not shown.</string>
     <string name="common_settings_verify_report_title">Library check report</string>
     <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
-    <string name="common_settings_verify_note_superseded">%1$s (superseded document; expected)</string>
 </resources>

@@ -514,12 +514,18 @@ internal class JournalCoordinator(
     /**
      * What the live fold says of each of [docIds], read under the lock, for the cloud sync: where
      * its file is meant to be ([FoldedState.intendedPath]), its lifecycle, and what a relink made of
-     * it. The sync mirrors the journal's decisions, which the index rows only cache.
+     * it. The sync mirrors the journal's decisions, which the index rows only cache. With
+     * [everyNamed], every document the fold names ([FoldedState.namedDocs]) besides: for a library
+     * check, as the journal, not the index, says which documents the library should hold, and a row
+     * the index lost would otherwise hide a file lost with it.
      */
-    suspend fun syncView(docIds: Collection<String>): Map<String, JournalDocView> =
+    suspend fun syncView(
+        docIds: Collection<String>,
+        everyNamed: Boolean = false,
+    ): Map<String, JournalDocView> =
         locked {
             val state = foldedState()
-            docIds.associateWith { doc ->
+            (if (everyNamed) state.namedDocs() + docIds else docIds).associateWith { doc ->
                 JournalDocView(
                     intendedPath = state.intendedPath(doc),
                     deleted = state.isDeleted(doc),

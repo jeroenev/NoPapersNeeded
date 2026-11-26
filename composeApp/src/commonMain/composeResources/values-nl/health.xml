@@ -46,17 +46,15 @@
     </plurals>
     <string name="common_settings_verify_group_documents">Documenten</string>
     <string name="common_settings_verify_group_journal">Journaalbestanden</string>
+    <string name="common_settings_verify_group_missing">Ontbrekende documenten</string>
     <string name="common_settings_verify_missing">Het bestand ontbreekt.</string>
+    <string name="common_settings_verify_known_missing">De bibliotheek toont het al als ontbrekend.</string>
     <string name="common_settings_verify_unreadable">Het bestand kon niet worden gelezen.</string>
     <string name="common_settings_verify_not_a_file">Dit is geen gewoon bestand.</string>
     <string name="common_settings_verify_size">Het bestand is %2$d bytes; %1$d was verwacht.</string>
     <string name="common_settings_verify_hash">De inhoud komt niet meer overeen.</string>
     <string name="common_settings_verify_orphaned">Dit is geen journaalbestand dat deze app kan lezen.</string>
     <string name="common_settings_verify_store_unreadable">Dit deel van de bibliotheek kon niet worden gelezen.</string>
-    <plurals name="common_settings_verify_notes">
-        <item quantity="one">%1$d vervangen document heeft nog zijn oude bestand; een nieuwe scan verwijdert het.</item>
-        <item quantity="other">%1$d vervangen documenten hebben nog hun oude bestanden; een nieuwe scan verwijdert ze.</item>
-    </plurals>
     <string name="common_settings_verify_copy">Rapport kopiëren</string>
     <string name="common_settings_verify_close">Sluiten</string>
     <string name="common_settings_verify_copied">Rapport gekopieerd.</string>
@@ -64,5 +62,4 @@
     <string name="common_settings_verify_more">%1$d meer niet getoond.</string>
     <string name="common_settings_verify_report_title">Rapport van de bibliotheekcontrole</string>
     <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
-    <string name="common_settings_verify_note_superseded">%1$s (vervangen document; verwacht)</string>
 </resources>

@@ -248,8 +248,13 @@ after six rounds do not converge, which fails the run. Then:
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
   written, a document deleted for good). A trashed document's own bytes back at its path is no
   exception: the rescan shows it, and records its restore once both windows have passed.
-- Verification does not report an already-missing row as new damage or expose its internal sentinel
-  path in any problem or note, including after a synced deletion.
+- Verify library holds: it reports nothing but documents whose files are gone from the folder (a
+  document is missing only while no file at a document path there holds its bytes), and every
+  document the library lists as missing is among them, named by its library path, never its
+  internal sentinel. A document it reports missing that the index has no row of (the journal shows
+  it, the index lost it) is never one whose last copy in the folder the app took itself. The
+  outside world and the sync tool, carrying out another device's change, are the faults this
+  allows; after a full sync, no replica's folder holds a document any replica reports missing.
 - Every file in the trash holds the bytes of the document its name names (the hash prefix
   `NpnPaths.trashPath` gives it): one holding other bytes is a file the trash took under a
   document's name, hidden from the library for good, since no rescan indexes the trash and neither

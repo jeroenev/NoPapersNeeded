@@ -1,6 +1,8 @@
 package dev.npn.core.sim
 
 import dev.npn.core.app.LibrarySessionImpl
+import dev.npn.core.app.LibraryVerificationReport
+import dev.npn.core.app.VerificationProblemKind
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
@@ -12,6 +14,33 @@ import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import kotlin.random.Random
+
+/**
+ * After a full sync, a document Verify library reports missing on a replica is gone from every
+ * folder: one any replica's folder holds at a document path is one the sync tool has brought every
+ * replica, so a report of it missing is a false alarm. Returns the replica and why, or null.
+ */
+internal fun verifiedMissingButHeld(
+    replicas: List<Pair<String, Simulation>>,
+    folders: List<InMemoryLibraryFileSystem>,
+): Pair<String, String>? {
+    val held =
+        folders
+            .flatMap { fs -> fs.allFiles().filter { (path, _) -> NpnPaths.isDocumentPath(path) }.entries }
+            .associate { (path, bytes) -> sha256Bytes(bytes) to path }
+    return replicas.firstNotNullOfOrNull { (name, sim) ->
+        sim.lastVerification
+            ?.problems
+            ?.mapNotNull { it.docId }
+            ?.firstOrNull { it in held }
+            ?.let { docId ->
+                name to "verification on $name reports ${docId.take(VERIFY_ID)} missing after a full sync, " +
+                    "while a folder holds its bytes at '${held.getValue(docId)}'"
+            }
+    }
+}
+
+private const val VERIFY_ID = 10
 
 /** How one run is set up. Everything a seed decides is derived from it in [SimConfig.forSeed]. */
 data class SimConfig(
@@ -403,34 +432,76 @@ internal class Simulation(
         checkTrashEntries()
         world.read("the fold") { lingeringOriginals(fs, replica.indexDb.fold(), live) }?.let { fail(it) }
         checkRowStats()
-        checkVerificationOfKnownMissing()
+        checkVerification(live)
         rebuildOracle(live)
         replica.ocr.closeGate()
         trace += "   -- ${label}quiescent: ${live.live.size} live, ${live.hidden.size} hidden"
         return live
     }
 
-    /** Verification must not rediscover rows the index already knows are missing. */
-    private fun checkVerificationOfKnownMissing() {
-        val (missing, report) =
-            world.read("verify known missing") {
-                val ids =
-                    replica.indexDb
-                        .rows("SELECT docId FROM documents WHERE missing = 1")
-                        .map { it[0]!! }
-                        .toSet()
-                ids to session.maintenance.verifyLibrary()
+    /**
+     * The last report [checkVerification] read at rest, for the checks across replicas after a full
+     * sync ([SyncSimulation]).
+     */
+    var lastVerification: LibraryVerificationReport? = null
+        private set
+
+    /**
+     * Verify library holds at rest: nothing but documents whose files are gone from this folder, and
+     * every one of those. The journal objects are whole and the folder's documents hold their bytes,
+     * so any other problem is a false alarm. A document it reports missing is one no file at a
+     * document path here holds (a rescan would have found it), never under an internal name, and one
+     * the library lists as missing is always reported. A document the index has no row of that it
+     * reports missing must not be one whose last copy here the app took itself: the journal would
+     * then show a document the app removed (a split's part it took back, say). The outside world and
+     * the sync tool, carrying another device's change, are the injected faults this allows.
+     */
+    private fun checkVerification(view: LibraryView) {
+        val report = world.read("verify library") { session.maintenance.verifyLibrary() }
+        lastVerification = report
+        val wrong =
+            report.problems.filter {
+                it.kind != VerificationProblemKind.DOCUMENT_MISSING &&
+                    it.kind != VerificationProblemKind.DOCUMENT_KNOWN_MISSING
             }
-        report.documentProblems.firstOrNull { it.docId in missing }?.let {
-            fail("verification reported known missing document ${it.docId} at '${it.relPath}'")
+        if (wrong.isNotEmpty()) fail("verification found damage at rest:\n  " + wrong.joinToString("\n  "))
+        report.problems.firstOrNull { it.relPath.orEmpty().startsWith("${NpnPaths.NPN_DIR}/") }?.let {
+            fail("verification named a document by an internal path: $it")
         }
-        val sentinel = "${NpnPaths.NPN_DIR}/missing/"
-        if (report.problems.any { it.relPath.startsWith(sentinel) } ||
-            report.notes.any { it.relPath.startsWith(sentinel) }
-        ) {
-            fail("verification exposed an internal missing-document path")
+        val held =
+            fs
+                .allFiles()
+                .filter { (path, _) -> NpnPaths.isDocumentPath(path) }
+                .entries
+                .associate { (path, bytes) -> sha256Bytes(bytes) to path }
+        for (problem in report.problems) {
+            val docId = problem.docId ?: fail("verification reported a document with no id: $problem")
+            held[docId]?.let { fail("verification reports ${docId.take(ID)} missing while '$it' holds its bytes") }
+            if (problem.kind == VerificationProblemKind.DOCUMENT_MISSING && !problem.openable) {
+                fs.losses.recordsOf(docId).lastOrNull { it.lastHere }?.takeIf { it.loss == Loss.APP }?.let {
+                    fail(
+                        "verification reports ${docId.take(ID)} missing, which the journal shows but the " +
+                            "app took from '${it.path}' at t=${it.atMillis}",
+                    )
+                }
+            }
         }
+        val reported = report.problems.mapNotNullTo(HashSet()) { it.docId }
+        view.hidden
+            .filterValues { it == Hidden.MISSING }
+            .keys
+            .firstOrNull { it !in reported && it !in supersededDocs() }
+            ?.let { fail("verification passed over ${it.take(ID)}, which the library lists as missing") }
     }
+
+    /** Every document a relink superseded, as this replica's index recorded the events. */
+    private fun supersededDocs(): Set<String> =
+        world.read("superseded") {
+            replica.indexDb
+                .rows("SELECT DISTINCT documentId FROM metadata_events WHERE operation = 'relink'")
+                .mapNotNull { it[0] }
+                .toSet()
+        }
 
     private fun checkFilesHoldTheirHashes(view: LibraryView) {
         val wrong =

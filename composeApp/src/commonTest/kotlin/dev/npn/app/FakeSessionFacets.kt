@@ -11,6 +11,7 @@ import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryDiagnostics
 import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
+import dev.npn.core.app.LibraryVerificationRun
 import dev.npn.core.app.MailFacade
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.OcrFacade
@@ -54,11 +55,18 @@ import dev.npn.core.sync.SyncHealth
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
 // Test doubles for the session's own facets: ingest, OCR ops, review config, storage path,
@@ -397,6 +405,34 @@ class FakeMaintenanceFacade : MaintenanceFacade {
         verifyFailure?.invoke()
         verifyProgress.forEach(onProgress)
         return verificationReport
+    }
+
+    /** The session's check, run on its own scope as the real one is, so a screen can come and go. */
+    private val checkScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val check = MutableStateFlow(LibraryVerificationRun())
+    override val verification: StateFlow<LibraryVerificationRun> = check
+    private var checkJob: Job? = null
+
+    override fun startVerification(): Boolean {
+        if (check.value.running) return false
+        check.value = LibraryVerificationRun(running = true)
+        checkJob =
+            checkScope.launch {
+                check.value =
+                    runCatchingCancellable {
+                        verifyLibrary { progress -> check.update { it.copy(progress = progress) } }
+                    }.fold({ LibraryVerificationRun(report = it) }, { LibraryVerificationRun(failure = it) })
+            }
+        return true
+    }
+
+    override fun cancelVerification() {
+        checkJob?.cancel()
+        check.value = LibraryVerificationRun()
+    }
+
+    override fun clearVerification() {
+        check.update { if (it.running) it else LibraryVerificationRun() }
     }
 
     override suspend fun rebuildIndex(): RebuildOutcome {

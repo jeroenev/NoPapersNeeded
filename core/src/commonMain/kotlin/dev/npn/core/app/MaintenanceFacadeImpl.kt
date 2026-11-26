@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DuplicateResolver
@@ -17,10 +18,17 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /**
- * [MaintenanceFacade]: duplicates, relinks and splitting, each run as work the session owns. A
+ * [MaintenanceFacade]: duplicates, relinks, splitting and the library check, each run as work the session owns. A
  * relink rescans, and hands that rescan's report to the session ([rescanned]), which follows it up
  * as its own.
  */
@@ -71,16 +79,89 @@ internal class MaintenanceFacadeImpl(
     ): SplitOutcome = lifetime.owned { split(docId, segments) }
 
     override suspend fun verifyLibrary(onProgress: (LibraryVerificationProgress) -> Unit): LibraryVerificationReport =
-        lifetime.owned {
-            // The rows are the library's documents as the index shows them; the journal view says
-            // which a relink superseded, and the metadata sources are the objects the index applied.
-            verifier.verify(
-                rows = db.documentDao().getAllRows(),
-                metadataSources = db.metadataProjectionDao().allSources().map { it.path },
-                journalView = coordinator::syncView,
-                onProgress = onProgress,
-            )
+        lifetime.owned { verifier.verify(verificationSource, onProgress) }
+
+    /**
+     * What a check reads: the documents the journal shows, placed by the index's rows (a document
+     * whose row the index lost is still expected), and the objects the index applied.
+     */
+    private val verificationSource =
+        object : VerificationSource {
+            override suspend fun expectedDocuments(): List<ExpectedDocument> {
+                val rows = db.documentDao().getAllRows().associateBy { it.docId }
+                return coordinator.syncView(rows.keys, everyNamed = true).mapNotNull { (docId, folded) ->
+                    ExpectedDocument.of(docId, rows[docId], folded)
+                }
+            }
+
+            override suspend fun expectedDocument(docId: String): ExpectedDocument? =
+                ExpectedDocument.of(
+                    docId,
+                    db.documentDao().getByDocId(docId),
+                    coordinator.syncView(listOf(docId))[docId],
+                )
+
+            override suspend fun appliedSources(): List<String> =
+                db
+                    .metadataProjectionDao()
+                    .allSources()
+                    .filter { it.status == SourceStatus.APPLIED }
+                    .map { it.path }
+
+            override suspend fun unheldSources(
+                gone: List<String>,
+                listed: Set<String>,
+            ): Set<String> =
+                db
+                    .metadataProjectionDao()
+                    .eventHolders(gone)
+                    .groupBy { Triple(it.sourcePath, it.eventDeviceId, it.eventSequence) }
+                    .filterValues { holders -> holders.none { it.holderPath in listed } }
+                    .keys
+                    .mapTo(HashSet()) { it.first }
         }
+
+    private val runningCheck = MutableStateFlow(LibraryVerificationRun())
+    override val verification: StateFlow<LibraryVerificationRun> = runningCheck.asStateFlow()
+
+    /** The check [startVerification] launched last; only the main thread starts or cancels one. */
+    private var verificationJob: Job? = null
+
+    override fun startVerification(): Boolean {
+        val idle = runningCheck.value
+        if (idle.running) return false
+        val job =
+            lifetime.scope.launch(start = CoroutineStart.LAZY) {
+                runningCheck.value =
+                    runCatchingCancellable {
+                        verifyLibrary { progress -> runningCheck.update { it.copy(progress = progress) } }
+                    }.fold(
+                        onSuccess = { LibraryVerificationRun(report = it) },
+                        onFailure = {
+                            log.warn("Verifying the library failed", it)
+                            LibraryVerificationRun(failure = it)
+                        },
+                    )
+            }
+        if (!runningCheck.compareAndSet(idle, LibraryVerificationRun(running = true))) {
+            job.cancel()
+            return false
+        }
+        // Cancelled, or never started on a closed session: no run, so no result either.
+        job.invokeOnCompletion { runningCheck.update { run -> if (run.running) LibraryVerificationRun() else run } }
+        verificationJob = job
+        job.start()
+        return !job.isCancelled
+    }
+
+    override fun cancelVerification() {
+        verificationJob?.cancel()
+        runningCheck.value = LibraryVerificationRun()
+    }
+
+    override fun clearVerification() {
+        runningCheck.update { if (it.running) it else LibraryVerificationRun() }
+    }
 
     private suspend fun split(
         docId: String,

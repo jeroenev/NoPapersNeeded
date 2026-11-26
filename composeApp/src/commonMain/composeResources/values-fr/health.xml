@@ -46,17 +46,15 @@
     </plurals>
     <string name="common_settings_verify_group_documents">Documents</string>
     <string name="common_settings_verify_group_journal">Fichiers du journal</string>
+    <string name="common_settings_verify_group_missing">Documents manquants</string>
     <string name="common_settings_verify_missing">Le fichier est absent.</string>
+    <string name="common_settings_verify_known_missing">La bibliothèque l’indique déjà comme manquant.</string>
     <string name="common_settings_verify_unreadable">Le fichier n'a pas pu être lu.</string>
     <string name="common_settings_verify_not_a_file">Ce n'est pas un fichier ordinaire.</string>
     <string name="common_settings_verify_size">Le fichier fait %2$d octets ; %1$d étaient attendus.</string>
     <string name="common_settings_verify_hash">Le contenu ne correspond plus.</string>
     <string name="common_settings_verify_orphaned">Ce n'est pas un fichier du journal que cette application peut lire.</string>
     <string name="common_settings_verify_store_unreadable">Cette partie de la bibliothèque n'a pas pu être lue.</string>
-    <plurals name="common_settings_verify_notes">
-        <item quantity="one">%1$d document remplacé conserve encore son ancien fichier ; un nouveau scan l'enlève.</item>
-        <item quantity="other">%1$d documents remplacés conservent encore leurs anciens fichiers ; un nouveau scan les enlève.</item>
-    </plurals>
     <string name="common_settings_verify_copy">Copier le rapport</string>
     <string name="common_settings_verify_close">Fermer</string>
     <string name="common_settings_verify_copied">Rapport copié.</string>
@@ -64,5 +62,4 @@
     <string name="common_settings_verify_more">%1$d autres non affichés.</string>
     <string name="common_settings_verify_report_title">Rapport de vérification de la bibliothèque</string>
     <string name="common_settings_verify_problem_line">%1$s : %2$s</string>
-    <string name="common_settings_verify_note_superseded">%1$s (document remplacé ; attendu)</string>
 </resources>

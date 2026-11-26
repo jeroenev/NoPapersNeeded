@@ -421,14 +421,18 @@ internal class FoldedState {
      * relink, mapped to when it was deleted for good ([deletedAtMillis]), else trashed
      * ([trashedAtMillis]), or to null while it is neither.
      */
-    fun trashTimes(): Map<String, Long?> {
-        val named =
-            docsWithMetadata() + trash.keys + deleted.keys + undeleted.keys +
-                relinks.values.flatMap { it.map(RelinkClaim::newDoc) }
-        return named
+    fun trashTimes(): Map<String, Long?> =
+        namedDocs()
             .filter { isDeleted(it) || resolveDocId(it) == it }
             .associateWith { deletedAtMillis(it) ?: trashedAtMillis(it) }
-    }
+
+    /**
+     * Every document a per-document event names, but for one only a relink names as its source (a
+     * superseded document): one with metadata or a lifecycle event, and every relink's target.
+     */
+    fun namedDocs(): Set<String> =
+        docsWithMetadata() + trash.keys + deleted.keys + undeleted.keys +
+            relinks.values.flatMap { it.map(RelinkClaim::newDoc) }
 
     /**
      * Resolve the effective (current) document id by following the relink chain from [doc].

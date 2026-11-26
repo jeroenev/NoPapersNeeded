@@ -46,17 +46,15 @@
     </plurals>
     <string name="common_settings_verify_group_documents">Documentos</string>
     <string name="common_settings_verify_group_journal">Archivos del diario</string>
+    <string name="common_settings_verify_group_missing">Documentos que faltan</string>
     <string name="common_settings_verify_missing">Falta el archivo.</string>
+    <string name="common_settings_verify_known_missing">La biblioteca ya lo muestra como ausente.</string>
     <string name="common_settings_verify_unreadable">No se pudo leer el archivo.</string>
     <string name="common_settings_verify_not_a_file">Esto no es un archivo normal.</string>
     <string name="common_settings_verify_size">El archivo tiene %2$d bytes; se esperaban %1$d.</string>
     <string name="common_settings_verify_hash">El contenido ya no coincide.</string>
     <string name="common_settings_verify_orphaned">Este no es un archivo del diario que esta app pueda leer.</string>
     <string name="common_settings_verify_store_unreadable">No se pudo leer esta parte de la biblioteca.</string>
-    <plurals name="common_settings_verify_notes">
-        <item quantity="one">%1$d documento reemplazado aún conserva su archivo antiguo; un nuevo escaneo lo elimina.</item>
-        <item quantity="other">%1$d documentos reemplazados aún conservan sus archivos antiguos; un nuevo escaneo los elimina.</item>
-    </plurals>
     <string name="common_settings_verify_copy">Copiar informe</string>
     <string name="common_settings_verify_close">Cerrar</string>
     <string name="common_settings_verify_copied">Informe copiado.</string>
@@ -64,5 +62,4 @@
     <string name="common_settings_verify_more">%1$d más sin mostrar.</string>
     <string name="common_settings_verify_report_title">Informe de comprobación de la biblioteca</string>
     <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
-    <string name="common_settings_verify_note_superseded">%1$s (documento reemplazado; es de esperar)</string>
 </resources>

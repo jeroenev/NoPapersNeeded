@@ -46,17 +46,15 @@
     </plurals>
     <string name="common_settings_verify_group_documents">Documentos</string>
     <string name="common_settings_verify_group_journal">Arquivos do diário</string>
+    <string name="common_settings_verify_group_missing">Documentos ausentes</string>
     <string name="common_settings_verify_missing">O arquivo está ausente.</string>
+    <string name="common_settings_verify_known_missing">A biblioteca já o mostra como ausente.</string>
     <string name="common_settings_verify_unreadable">Não foi possível ler o arquivo.</string>
     <string name="common_settings_verify_not_a_file">Isto não é um arquivo comum.</string>
     <string name="common_settings_verify_size">O arquivo tem %2$d bytes; eram esperados %1$d.</string>
     <string name="common_settings_verify_hash">O conteúdo não corresponde mais.</string>
     <string name="common_settings_verify_orphaned">Este não é um arquivo do diário que este aplicativo consiga ler.</string>
     <string name="common_settings_verify_store_unreadable">Não foi possível ler esta parte da biblioteca.</string>
-    <plurals name="common_settings_verify_notes">
-        <item quantity="one">%1$d documento substituído ainda tem seu arquivo antigo; uma nova verificação da pasta o remove.</item>
-        <item quantity="other">%1$d documentos substituídos ainda têm seus arquivos antigos; uma nova verificação da pasta os remove.</item>
-    </plurals>
     <string name="common_settings_verify_copy">Copiar relatório</string>
     <string name="common_settings_verify_close">Fechar</string>
     <string name="common_settings_verify_copied">Relatório copiado.</string>
@@ -64,5 +62,4 @@
     <string name="common_settings_verify_more">%1$d mais não exibidos.</string>
     <string name="common_settings_verify_report_title">Relatório da verificação da biblioteca</string>
     <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
-    <string name="common_settings_verify_note_superseded">%1$s (documento substituído; esperado)</string>
 </resources>

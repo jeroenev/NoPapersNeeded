@@ -392,15 +392,23 @@ truth; the user just never picks it.
 
 ### 5.7 Library verification
 
-`MaintenanceFacade.verifyLibrary` is the read-only check behind Library settings' "Verify library":
-`LibraryVerifier` walks the live documents (a listed regular file, the stored size, and a SHA-256
-equal to the document id) and the journal object store (each object's bytes, a recognized conflict
-copy's included, against the hash its name carries), reports missing/unreadable/size/hash problems
-and a store file this build cannot read (another store version included) as orphaned, and reports a
-superseded document still on disk as a note, not damage. It never writes, repairs
-or deletes, never puts document bytes in its report, skips symlinks with the library walk, and is
-cancellable with progress. A listing it cannot do is one `STORE_UNREADABLE` finding, not a problem
-per item.
+`MaintenanceFacade.verifyLibrary` is the read-only check behind Library settings' "Verify library".
+The journal says which documents should have a file (`JournalCoordinator.syncView` with
+`everyNamed`: every document the fold names and shows), the index's rows only where each is: a document whose row the
+index lost is still expected, at its storage path. `LibraryVerifier` checks each (a listed regular
+file, the stored size, and a SHA-256 equal to the document id) and the journal object store (each
+object's bytes, a recognized conflict copy's included, against the hash its name carries). It
+reports missing/unreadable/size/hash problems, a document the library already lists as missing as
+its own kind (`DOCUMENT_KNOWN_MISSING`: a loss, so the report is not clean, named by its library
+path, never its internal sentinel), a misnamed file in one of this build's object buckets as
+orphaned, and an applied object that is gone with an event no other object holds as missing (as
+reconcile judges it; a newer build's store is no damage). The walk holds no lock and takes minutes,
+so a document problem is reported only once it holds against a fresh read of the document and a
+fresh listing. It never writes, repairs or deletes, never puts document bytes in its report, skips
+symlinks with the library walk, and is cancellable with progress (between files, not within one).
+A listing it cannot do is one `STORE_UNREADABLE` finding, not a problem per item. The settings
+screen runs it as the session's own work (`startVerification`, `verification`), so it outlives the
+screen, and its result waits until dismissed.
 
 ## 6. Rules by concept
 

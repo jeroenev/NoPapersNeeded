@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.core.app.LibraryVerificationProblem
@@ -19,6 +20,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -93,6 +95,28 @@ class SettingsViewModelVerificationTest : MainDispatcherTest() {
             state.running shouldBe false
             state.progress.shouldBeNull()
             state.report shouldBe session.maintenance.verificationReport
+        }
+
+    @Test
+    fun aCheckOutlivesTheScreenThatStartedItAndItsResultWaitsForTheNext() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val gate = CompletableDeferred<Unit>()
+            session.maintenance.verifyGate = gate
+            session.maintenance.verificationReport = report()
+            val first = vm(session)
+            first.verifyLibrary()
+            runCurrent()
+            // The screen goes away, as navigating off settings clears its viewmodel.
+            first.viewModelScope.cancel()
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            val next = vm(session)
+            advanceUntilIdle()
+
+            session.maintenance.verificationRuns shouldBe 1
+            next.paneState.value.verification.report shouldBe session.maintenance.verificationReport
         }
 
     @Test
