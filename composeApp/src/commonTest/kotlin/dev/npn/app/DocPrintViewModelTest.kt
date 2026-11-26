@@ -22,38 +22,59 @@ import kotlin.test.Test
 
 /** The document's print action: what reaches the platform, and what it tells the user. */
 class DocPrintViewModelTest : MainDispatcherTest() {
-    /** A print sends the document's own bytes, never a baked copy, and says it started. */
+    /**
+     * A print sends the document's own bytes, never a baked copy, and says it started. The bytes are
+     * streamed from the library chunk by chunk when the platform reads them.
+     */
     @Test
-    fun printSendsTheDocumentBytesToThePrinter() =
+    fun printStreamsTheDocumentToThePrinter() =
         runTest(dispatcher) {
-            val bytes = byteArrayOf(1, 2, 3)
+            val bytes = byteArrayOf(1, 2, 3, 4, 5)
             val session =
                 FakeLibrarySession().apply {
                     documents.singleDoc.value = listItem("doc-1")
                     content.documentBytesValue = bytes
+                    content.streamChunkSize = 2
                     content.pageCountValue = 4
                 }
-            var printed: Triple<String, ByteArray, Int?>? = null
-            val model =
-                liveDocDetailVm(
-                    session = session,
-                    printer =
-                        PdfPrinter { fileName, data, pages ->
-                            printed = Triple(fileName, data, pages)
-                            PrintOutcome.Started
-                        },
-                )
+            var printed: Triple<String, List<List<Byte>>, Int?>? = null
+            val printer =
+                PdfPrinter { fileName, source, pages ->
+                    val chunks = mutableListOf<List<Byte>>()
+                    source.stream { chunk, length -> chunks += chunk.take(length) } shouldBe true
+                    printed = Triple(fileName, chunks, pages)
+                    PrintOutcome.Started
+                }
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
-            model.printDocument()
+            model.printDocument(printer)
             advanceUntilIdle()
 
             printed?.first shouldBe "doc-1.pdf"
-            printed?.second shouldBe bytes
+            printed?.second shouldBe listOf(listOf<Byte>(1, 2), listOf<Byte>(3, 4), listOf<Byte>(5))
             printed?.third shouldBe 4
             messages shouldContainExactly listOf(uiText(Res.string.detail_print_started))
             model.ui.value.printing shouldBe false
+        }
+
+    /** Nothing reads the document until the platform asks for it: Android only does once a printer is picked. */
+    @Test
+    fun theDocumentIsReadOnlyWhenThePlatformAsksForIt() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = listItem("doc-1")
+                    content.documentBytesValue = byteArrayOf(1)
+                }
+            val model = liveDocDetailVm(session = session)
+            advanceUntilIdle()
+
+            model.printDocument { _, _, _ -> PrintOutcome.Started }
+            advanceUntilIdle()
+
+            session.content.documentStreams shouldBe 0
         }
 
     /** The action is busy for as long as the platform's print call runs. */
@@ -67,20 +88,17 @@ class DocPrintViewModelTest : MainDispatcherTest() {
                 }
             val entered = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
-            val model =
-                liveDocDetailVm(
-                    session = session,
-                    printer =
-                        PdfPrinter { _, _, _ ->
-                            entered.complete(Unit)
-                            release.await()
-                            PrintOutcome.Started
-                        },
-                )
+            val printer =
+                PdfPrinter { _, _, _ ->
+                    entered.complete(Unit)
+                    release.await()
+                    PrintOutcome.Started
+                }
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
-            model.printDocument()
+            model.printDocument(printer)
             advanceUntilIdle()
             entered.isCompleted shouldBe true
             model.ui.value.printing shouldBe true
@@ -92,35 +110,30 @@ class DocPrintViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun repeatedPrintWhileLoadingStartsOnlyOneJob() =
+    fun repeatedPrintWhileThePlatformTakesTheJobStartsOnlyOneJob() =
         runTest(dispatcher) {
             val entered = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
             val session =
                 FakeLibrarySession().apply {
                     documents.singleDoc.value = listItem("doc-1")
-                    content.readDocumentBytes = {
-                        entered.complete(Unit)
-                        release.await()
-                        byteArrayOf(1)
-                    }
+                    content.documentBytesValue = byteArrayOf(1)
                 }
             var calls = 0
-            val model =
-                liveDocDetailVm(
-                    session,
-                    printer =
-                        PdfPrinter { _, _, _ ->
-                            calls++
-                            PrintOutcome.Started
-                        },
-                )
+            val printer =
+                PdfPrinter { _, _, _ ->
+                    calls++
+                    entered.complete(Unit)
+                    release.await()
+                    PrintOutcome.Started
+                }
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
-            model.printDocument()
+            model.printDocument(printer)
             advanceUntilIdle()
             entered.isCompleted shouldBe true
             model.ui.value.printing shouldBe true
-            model.printDocument()
+            model.printDocument(printer)
             advanceUntilIdle()
             release.complete(Unit)
             advanceUntilIdle()
@@ -128,7 +141,7 @@ class DocPrintViewModelTest : MainDispatcherTest() {
             model.ui.value.printing shouldBe false
         }
 
-    /** A document whose bytes cannot be read says so instead of opening an empty print dialog. */
+    /** A document whose bytes cannot be read when the platform asks for them says so. */
     @Test
     fun printWithoutReadableBytesSaysWhy() =
         runTest(dispatcher) {
@@ -137,23 +150,21 @@ class DocPrintViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                     content.documentBytesValue = null
                 }
-            var calls = 0
-            val model =
-                liveDocDetailVm(
-                    session = session,
-                    printer =
-                        PdfPrinter { _, _, _ ->
-                            calls++
-                            PrintOutcome.Started
-                        },
-                )
+            val printer =
+                PdfPrinter { _, source, _ ->
+                    if (source.stream { _, _ -> }) {
+                        PrintOutcome.Started
+                    } else {
+                        PrintOutcome.Failed(PrintFailure.DOCUMENT_UNAVAILABLE)
+                    }
+                }
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
-            model.printDocument()
+            model.printDocument(printer)
             advanceUntilIdle()
 
-            calls shouldBe 0
             messages shouldContainExactly listOf(uiText(Res.string.detail_print_failed_unavailable))
             model.ui.value.printing shouldBe false
         }
@@ -169,19 +180,14 @@ class DocPrintViewModelTest : MainDispatcherTest() {
                     content.documentBytesValue = byteArrayOf(1)
                 }
             var calls = 0
-            val model =
-                liveDocDetailVm(
-                    session = session,
-                    printer =
-                        PdfPrinter { _, _, _ ->
-                            calls++
-                            PrintOutcome.Started
-                        },
-                )
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
-            model.printDocument()
+            model.printDocument { _, _, _ ->
+                calls++
+                PrintOutcome.Started
+            }
             advanceUntilIdle()
 
             calls shouldBe 0
@@ -196,11 +202,11 @@ class DocPrintViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                     content.documentBytesValue = byteArrayOf(1)
                 }
-            val model = liveDocDetailVm(session, printer = PdfPrinter { _, _, _ -> PrintOutcome.Cancelled })
+            val model = liveDocDetailVm(session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
-            model.printDocument()
+            model.printDocument { _, _, _ -> PrintOutcome.Cancelled }
             advanceUntilIdle()
 
             messages shouldContainExactly listOf(uiText(Res.string.detail_print_cancelled))
@@ -218,15 +224,11 @@ class DocPrintViewModelTest : MainDispatcherTest() {
                     content.documentBytesValue = byteArrayOf(1)
                     log = NpnLog { _, _, error -> logged += error }
                 }
-            val model =
-                liveDocDetailVm(
-                    session = session,
-                    printer = PdfPrinter { _, _, _ -> PrintOutcome.Failed(PrintFailure.PRINT_FAILED, cause) },
-                )
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
-            model.printDocument()
+            model.printDocument { _, _, _ -> PrintOutcome.Failed(PrintFailure.PRINT_FAILED, cause) }
             advanceUntilIdle()
 
             messages shouldContainExactly listOf(uiText(Res.string.detail_print_failed_job))

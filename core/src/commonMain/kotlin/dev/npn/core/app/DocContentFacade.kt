@@ -16,8 +16,17 @@ interface DocContentFacade {
 
     suspend fun renderPage(docId: String, pageIndex: Int, maxDim: Int): ByteArray? // png
 
-    /** The document's library bytes, exactly as stored (never baked): what a print job sends. */
-    suspend fun documentBytes(docId: String): ByteArray?
+    /**
+     * Stream the document's library bytes, exactly as stored (never baked), into [sink] chunk by
+     * chunk as the file is read, never holding it whole: what a print job sends. True when they were
+     * the document's own; false when there is no such document, its file could not be read, or the
+     * file now holds other bytes (written over since the index looked), and what [sink] got must
+     * then be thrown away. A [sink] that throws stops the read; its exception propagates.
+     */
+    suspend fun streamDocument(
+        docId: String,
+        sink: (ByteArray, Int) -> Unit,
+    ): Boolean
 
     suspend fun bakedCopyBytes(docId: String): ByteArray? // export/share with XMP baked
 

@@ -13,18 +13,18 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle
 import java.awt.print.Pageable
 import java.awt.print.PrinterAbortException
 import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.AfterTest
 import kotlin.test.Test
 
 class DesktopPdfPrinterTest {
     /** Stands in for AWT's print dialog: records what it was asked to print, touches no printer. */
     private class RecordingSurface(
         private val outcome: PrintOutcome = PrintOutcome.Started,
-        private val printers: Boolean = true,
     ) : PrinterSurface {
         var fileName: String? = null
         var pages: Pageable? = null
-
-        override fun hasPrinters(): Boolean = printers
 
         override suspend fun print(
             fileName: String,
@@ -46,21 +46,93 @@ class DesktopPdfPrinterTest {
             }
         }
 
-    private fun printer(surface: PrinterSurface) = DesktopPdfPrinter(surface)
+    /** This test's own temporary folder, so no other run's print files are counted. */
+    private val tempDir: Path = Files.createTempDirectory("npn-print-test-")
+
+    @AfterTest
+    fun removeTempDir() {
+        Files.list(tempDir).use { files -> files.forEach(Files::delete) }
+        Files.delete(tempDir)
+    }
+
+    private fun printer(surface: PrinterSurface) = DesktopPdfPrinter(surface, tempDir)
+
+    /** The library's bytes, streamed [chunk] bytes at a time as the facade does. */
+    private fun ByteArray.asSource(chunk: Int = 1024) =
+        PrintSource { sink ->
+            for (offset in indices step chunk) {
+                val part = copyOfRange(offset, minOf(offset + chunk, size))
+                sink(part, part.size)
+            }
+            true
+        }
+
+    private suspend fun DesktopPdfPrinter.print(
+        fileName: String,
+        bytes: ByteArray,
+    ) = print(fileName, bytes.asSource(), Dispatchers.Unconfined)
 
     @Test
     fun aPdfBecomesAPrintableWithItsPageCount() {
-        pdfPrintJob(twoPagePdf()).use { job ->
-            job.pageCount shouldBe 2
-            job.pages.numberOfPages shouldBe 2
+        val file = Files.createTempFile("npn-test-", ".pdf")
+        try {
+            Files.write(file, twoPagePdf())
+            pdfPrintJob(file).use { job ->
+                job.pageCount shouldBe 2
+                job.pages.numberOfPages shouldBe 2
+            }
+        } finally {
+            Files.deleteIfExists(file)
         }
     }
+
+    /** The streamed document is printed from a temporary file, which is gone once the job is. */
+    @Test
+    fun theStreamedDocumentIsPrintedAndItsTemporaryFileRemoved() =
+        runTest {
+            var printedFrom: List<Path> = emptyList()
+            val surface =
+                object : PrinterSurface {
+                    override suspend fun print(
+                        fileName: String,
+                        pages: Pageable,
+                        io: CoroutineDispatcher,
+                    ): PrintOutcome {
+                        printedFrom = npnPrintFiles()
+                        pages.numberOfPages shouldBe 2
+                        return PrintOutcome.Started
+                    }
+                }
+            val before = npnPrintFiles()
+
+            printer(surface).print("invoice.pdf", twoPagePdf().asSource(chunk = 100), Dispatchers.Unconfined) shouldBe
+                PrintOutcome.Started
+
+            (printedFrom - before.toSet()).size shouldBe 1
+            npnPrintFiles() shouldBe before
+        }
+
+    /** A document whose file is no longer its own fails before any printer is asked. */
+    @Test
+    fun aDocumentThatCannotBeReadIsUnavailable() =
+        runTest {
+            val surface = RecordingSurface()
+            val before = npnPrintFiles()
+
+            val outcome = printer(surface).print("invoice.pdf", PrintSource { false }, Dispatchers.Unconfined)
+
+            (outcome as PrintOutcome.Failed).reason shouldBe PrintFailure.DOCUMENT_UNAVAILABLE
+            surface.pages shouldBe null
+            npnPrintFiles() shouldBe before
+        }
+
+    private fun npnPrintFiles(): List<Path> = Files.list(tempDir).use { files -> files.toList() }
 
     @Test
     fun printingHandsThePdfPagesToThePrinter() =
         runTest {
             val surface = RecordingSurface()
-            val outcome = printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
+            val outcome = printer(surface).print("invoice.pdf", twoPagePdf())
 
             outcome shouldBe PrintOutcome.Started
             surface.fileName shouldBe "invoice.pdf"
@@ -72,8 +144,7 @@ class DesktopPdfPrinterTest {
         runTest {
             val surface = RecordingSurface(outcome = PrintOutcome.Cancelled)
 
-            printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined) shouldBe
-                PrintOutcome.Cancelled
+            printer(surface).print("invoice.pdf", twoPagePdf()) shouldBe PrintOutcome.Cancelled
         }
 
     @Test
@@ -88,8 +159,7 @@ class DesktopPdfPrinterTest {
                     ): PrintOutcome = throw PrinterAbortException()
                 }
 
-            printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined) shouldBe
-                PrintOutcome.Cancelled
+            printer(surface).print("invoice.pdf", twoPagePdf()) shouldBe PrintOutcome.Cancelled
         }
 
     /**
@@ -109,7 +179,7 @@ class DesktopPdfPrinterTest {
                 }
 
             shouldThrow<CancellationException> {
-                printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
+                printer(surface).print("invoice.pdf", twoPagePdf())
             }
         }
 
@@ -118,27 +188,16 @@ class DesktopPdfPrinterTest {
         runTest {
             val surface = RecordingSurface(outcome = PrintOutcome.Failed(PrintFailure.PRINT_FAILED))
 
-            val outcome = printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
+            val outcome = printer(surface).print("invoice.pdf", twoPagePdf())
 
             (outcome as PrintOutcome.Failed).reason shouldBe PrintFailure.PRINT_FAILED
-        }
-
-    @Test
-    fun noPrinterAtAllIsUnsupported() =
-        runTest {
-            val surface = RecordingSurface(printers = false)
-
-            val outcome = printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
-
-            (outcome as PrintOutcome.Failed).reason shouldBe PrintFailure.UNSUPPORTED
-            surface.pages shouldBe null
         }
 
     @Test
     fun bytesThatAreNotAPdfFailBeforeAnyPrinterIsAsked() =
         runTest {
             val surface = RecordingSurface()
-            val outcome = printer(surface).print("notes.pdf", "not a PDF".encodeToByteArray(), Dispatchers.Unconfined)
+            val outcome = printer(surface).print("notes.pdf", "not a PDF".encodeToByteArray())
 
             (outcome as PrintOutcome.Failed).reason shouldBe PrintFailure.UNREADABLE_PDF
             surface.pages shouldBe null

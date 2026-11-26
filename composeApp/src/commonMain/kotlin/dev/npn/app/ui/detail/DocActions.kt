@@ -20,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import dev.npn.app.platform.PdfPrinter
+import dev.npn.app.platform.rememberPdfPrinter
 import dev.npn.app.platform.sharePdfBytes
 import dev.npn.app.platform.supportsSharing
 import dev.npn.app.ui.common.ConfirmDialog
@@ -94,8 +96,8 @@ interface DocumentActions {
     /** Hand a copy carrying the document's metadata to the platform's share sheet through [share]. */
     fun shareBakedCopy(share: suspend (ByteArray) -> Unit)
 
-    /** Print the document's own bytes through the platform's print service. */
-    fun printDocument()
+    /** Print the document's own bytes through the platform's print service, [printer]. */
+    fun printDocument(printer: PdfPrinter)
 
     /** Move the document to the trash. */
     fun trash()
@@ -149,6 +151,8 @@ fun DocActions(
     compact: Boolean,
 ) {
     var dialog by rememberSaveable { mutableStateOf<DocActionDialog?>(null) }
+    val printer = rememberPdfPrinter()
+    val print = { actions.printDocument(printer) }
 
     // A wide bar offers print beside share/export; a compact one keeps it in the overflow menu with
     // the rest, so the few icons that fit are not crowded out.
@@ -156,7 +160,7 @@ fun DocActions(
         TooltipIconButton(
             icon = Icons.Filled.Print,
             label = stringResource(Res.string.detail_print),
-            onClick = actions::printDocument,
+            onClick = print,
             enabled = item.doc.isPrintable && !state.printing,
         )
     }
@@ -170,6 +174,7 @@ fun DocActions(
         state = state,
         printable = item.doc.isPrintable,
         actions = actions,
+        onPrint = print,
         onOpenDialog = { dialog = it },
     )
     DocActionDialogs(
@@ -217,6 +222,7 @@ private fun DocActionsMenu(
     state: DetailUiState,
     printable: Boolean,
     actions: DocumentActions,
+    onPrint: () -> Unit,
     onOpenDialog: (DocActionDialog) -> Unit,
 ) {
     val reindexing = state.reindexing
@@ -284,7 +290,7 @@ private fun DocActionsMenu(
         TopBarAction(
             icon = Icons.Filled.Print,
             label = stringResource(Res.string.detail_print),
-            onClick = actions::printDocument,
+            onClick = onPrint,
             enabled = printable && !state.printing,
         )
     // A wide bar promotes the direct document edits to icons; AI OCR and bake-in-place stay one tap

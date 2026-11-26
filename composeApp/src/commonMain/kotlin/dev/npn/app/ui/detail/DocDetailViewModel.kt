@@ -4,7 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.PdfPrinter
 import dev.npn.app.platform.PrintFailure
 import dev.npn.app.platform.PrintOutcome
-import dev.npn.app.platform.printPdf
+import dev.npn.app.platform.PrintSource
 import dev.npn.app.ui.common.MessageSink
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
@@ -172,8 +172,6 @@ class DocDetailViewModel private constructor(
     /** Where a result that outlives this document's screen is reported. */
     notices: DocumentNotices?,
     private val aiSuggestions: DocAiSuggestions = DocAiSuggestions(docId, session, scope, sink, metadataMutex),
-    /** How a print job reaches the platform; tests inject a recording fake. */
-    private val printer: PdfPrinter = PdfPrinter { fileName, bytes, pageCount -> printPdf(fileName, bytes, pageCount) },
 ) : MessagesViewModel(scope, sink),
     DocumentWrites,
     AiSuggestionActions by aiSuggestions,
@@ -201,8 +199,6 @@ class DocDetailViewModel private constructor(
          * and its Undo) once the screen is gone. Null reports it through this viewmodel's own messages.
          */
         notices: DocumentNotices? = null,
-        /** How a print job reaches the platform; tests inject a recording fake. */
-        printer: PdfPrinter = PdfPrinter { fileName, bytes, pageCount -> printPdf(fileName, bytes, pageCount) },
     ) : this(
         docId,
         session,
@@ -216,7 +212,6 @@ class DocDetailViewModel private constructor(
         initialPage,
         Mutex(),
         notices,
-        printer = printer,
     )
 
     /** The library's notices when given one, else this viewmodel's own messages. */
@@ -638,11 +633,12 @@ class DocDetailViewModel private constructor(
     private val printMutex = kotlinx.coroutines.sync.Mutex()
 
     /**
-     * Send this document's library bytes to the platform's print service: no copy is baked and the
-     * file is untouched. A document whose bytes cannot be read, or that is not a PDF, says so rather
-     * than opening an empty print dialog; the menu disables the action in that case.
+     * Send this document's library bytes to the platform's print service through [printer]: no copy
+     * is baked and the file is untouched. The bytes are streamed from the library when the platform
+     * asks for them, never read whole into memory here. A document that is not a printable PDF says
+     * so rather than opening an empty print dialog; the menu disables the action in that case.
      */
-    override fun printDocument() =
+    override fun printDocument(printer: PdfPrinter) =
         launchReporting(Res.string.detail_print_failed) {
             if (!printMutex.tryLock()) return@launchReporting
             try {
@@ -652,15 +648,11 @@ class DocDetailViewModel private constructor(
                         message(uiText(Res.string.detail_print_failed_unavailable))
                         return@busy
                     }
-                    val bytes = content.documentBytes(docId)
-                    if (bytes == null) {
-                        message(uiText(Res.string.detail_print_failed_unavailable))
-                        return@busy
-                    }
                     val pageCount =
                         _ui.value.pageCount.count
                             .takeIf { it > 0 } ?: item.doc.pageCount
-                    val outcome = printer.print(item.doc.fileName, bytes, pageCount)
+                    val source = PrintSource { sink -> content.streamDocument(docId, sink) }
+                    val outcome = printer.print(item.doc.fileName, source, pageCount)
                     when (outcome) {
                         PrintOutcome.Started -> {
                             message(uiText(Res.string.detail_print_started))
@@ -709,6 +701,7 @@ private fun SplitFailure.text(): UiText =
 private fun PrintFailure.text(): UiText =
     when (this) {
         PrintFailure.UNSUPPORTED -> uiText(Res.string.detail_print_failed_unsupported)
+        PrintFailure.DOCUMENT_UNAVAILABLE -> uiText(Res.string.detail_print_failed_unavailable)
         PrintFailure.UNREADABLE_PDF -> uiText(Res.string.detail_print_failed_unreadable)
         PrintFailure.PRINT_FAILED -> uiText(Res.string.detail_print_failed_job)
     }

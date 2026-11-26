@@ -4,7 +4,9 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.Sha256Digest
 import dev.npn.core.fs.readDocument
+import dev.npn.core.fs.toHexLower
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
@@ -16,8 +18,6 @@ import dev.npn.core.util.warn
 import dev.npn.core.xmp.BakeRefusedException
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.withContext
 
 /**
  * Document-as-bytes facade: thumbnails, page rendering, and XMP baking.
@@ -52,7 +52,6 @@ internal class DocContentFacadeImpl(
      */
     private val bakes: BakeLock,
     private val log: NpnLog,
-    private val computation: CoroutineDispatcher,
 ) : DocContentFacade {
     private val documentDao get() = db.documentDao()
 
@@ -95,13 +94,20 @@ internal class DocContentFacadeImpl(
     override suspend fun extractedText(docId: String): String? =
         log.runLogged("Reading the text of $docId") { db.ftsDao().textOf(docId) }
 
-    override suspend fun documentBytes(docId: String): ByteArray? =
-        log.runLogged("Reading the bytes of $docId") {
-            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
-            // The read switches to IO itself; keep the full-file SHA-256 check off the caller's
-            // thread, which for a print is the UI's.
-            withContext(computation) { fs.readDocument(doc.relPath, docId) }
-        }
+    override suspend fun streamDocument(
+        docId: String,
+        sink: (ByteArray, Int) -> Unit,
+    ): Boolean =
+        log.runLogged("Streaming the bytes of $docId") {
+            val doc = documentDao.getByDocId(docId) ?: return@runLogged false
+            // Hashed as it streams, so the bytes are proven the document's without a second read.
+            val digest = Sha256Digest()
+            fs.readChunked(doc.relPath) { bytes, length ->
+                digest.update(bytes, 0, length)
+                sink(bytes, length)
+            }
+            digest.digest().toHexLower() == docId
+        } ?: false
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? =
         log.runLogged("Baking a copy of $docId") {

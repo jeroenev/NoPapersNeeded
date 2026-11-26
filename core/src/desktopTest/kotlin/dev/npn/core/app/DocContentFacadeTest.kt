@@ -4,28 +4,31 @@ import dev.npn.core.index.requireByDocId
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.nulls.shouldBeNull
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 
 /** What the content facade makes of a document's bytes, it makes of the document's own bytes only. */
 class DocContentFacadeTest {
-    /** Printing reads the document's own bytes, and none of another file written over it. */
+    /**
+     * Printing streams the document's own bytes, as the file is read, and says when the file at its
+     * path is another one written over it.
+     */
     @Test
-    fun documentBytesAreTheDocumentAndNeverAFileWrittenOverIt() =
+    fun aStreamedDocumentIsTheDocumentAndNeverAFileWrittenOverIt() =
         appSessionTest { rig ->
-            rig.writePdf("doc.pdf", PdfFixtures.imageOnlyPdf(pages = 1))
+            val pdf = PdfFixtures.imageOnlyPdf(pages = 1)
+            rig.writePdf("doc.pdf", pdf)
             rig.session.rescan()
             val id = rig.docId("doc.pdf")
 
-            rig.session.content
-                .documentBytes(id)
-                .shouldNotBeNull()
+            val streamed = ByteArrayOutputStream()
+            rig.session.content.streamDocument(id) { bytes, length -> streamed.write(bytes, 0, length) } shouldBe true
+            streamed.toByteArray() shouldBe pdf
 
             rig.writePdf("doc.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
-            rig.session.content
-                .documentBytes(id)
-                .shouldBeNull()
+            rig.session.content.streamDocument(id) { _, _ -> } shouldBe false
+            rig.session.content.streamDocument("no-such-document") { _, _ -> } shouldBe false
         }
 
     /**
@@ -55,7 +58,7 @@ class DocContentFacadeTest {
 
             val content = rig.session.content
             content.pageCount(id) shouldBe null
-            content.documentBytes(id) shouldBe null
+            content.streamDocument(id) { _, _ -> } shouldBe false
             content.bakedCopyBytes(id) shouldBe null
 
             rig.db
