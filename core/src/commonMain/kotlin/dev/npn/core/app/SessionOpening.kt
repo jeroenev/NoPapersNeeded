@@ -113,17 +113,20 @@ private suspend fun createCoordinator(
     deps: SessionDeps,
     indexer: Indexer,
     writeUndelete: Boolean,
-): JournalCoordinator =
-    JournalCoordinator(
+): JournalCoordinator {
+    // One for the session, so it prunes its record every so many writes rather than on each.
+    val actors = LocalJournalActors(deps.deviceDb.keyValueDao())
+    return JournalCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
         accumulator = MetadataAccumulator(deps.fs, deps.db),
         dispatcher = deps.computation,
         clock = deps.clock,
         log = deps.log,
-        recordPublished = { events -> LocalJournalActors(deps.deviceDb.keyValueDao()).record(events) },
+        recordPublished = actors::record,
         writeUndelete = writeUndelete,
     )
+}
 
 /**
  * Fold the journal, so the documents are there before the caller's initial rescan, and bring the

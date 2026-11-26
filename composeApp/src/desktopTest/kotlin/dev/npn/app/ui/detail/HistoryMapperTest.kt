@@ -103,7 +103,10 @@ class HistoryMapperTest {
                 listOf("Set the text source to Embedded text", "Set the text source to future")
         }
 
-    /** Provenance is said in the user's terms: this device, or another one, never a journal device id. */
+    /**
+     * Provenance is said in the user's terms: this device, another one, or neither claimed for a
+     * change older than this device's record of its own; never a journal device id.
+     */
     @Test
     fun provenanceNamesTheDeviceInTheUsersTerms() =
         runTest {
@@ -113,11 +116,12 @@ class HistoryMapperTest {
                         listOf(
                             record(HistoryEntry.Restored, origin = HistoryOrigin.THIS_DEVICE),
                             record(HistoryEntry.Restored, origin = HistoryOrigin.ANOTHER_DEVICE),
+                            record(HistoryEntry.Restored, origin = HistoryOrigin.UNKNOWN),
                         ),
                     ).items
 
             items.map { it.origin.english() } shouldContainExactly
-                listOf("This device", "Another device")
+                listOf("This device", "Another device", "Origin not recorded")
         }
 
     @Test

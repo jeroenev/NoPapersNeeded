@@ -15,21 +15,14 @@ data class DocumentHistoryRecord(
 )
 
 /**
- * Who made a history change, as the user may learn it: this installation, or one this library syncs
- * with. The journal's raw device ids stay in `core`; the timeline labels the origin.
+ * Who made a history change, as the user may learn it: this installation, one this library syncs
+ * with, or [UNKNOWN] for a change older than this installation's record of its own writes
+ * ([LocalJournalActors]), which may be either. The journal's raw device ids stay in `core`.
  */
 enum class HistoryOrigin {
     THIS_DEVICE,
     ANOTHER_DEVICE,
-    ;
-
-    companion object {
-        /** The origin of a change recorded by [author], this installation's journal device id. */
-        fun of(
-            author: String,
-            thisDeviceId: String,
-        ): HistoryOrigin = if (author == thisDeviceId) THIS_DEVICE else ANOTHER_DEVICE
-    }
+    UNKNOWN,
 }
 
 /**

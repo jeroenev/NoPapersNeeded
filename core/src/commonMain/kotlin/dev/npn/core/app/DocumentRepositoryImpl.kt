@@ -8,6 +8,7 @@ import dev.npn.core.db.defs
 import dev.npn.core.db.isLive
 import dev.npn.core.index.DuplicateReport
 import dev.npn.core.journal.EventDecoderRegistry
+import dev.npn.core.journal.Hlc
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
@@ -80,8 +81,10 @@ internal class DocumentRepositoryImpl(
     private val db: NpnDatabase,
     /** Where a query's rows are turned into list items. */
     private val mapping: CoroutineDispatcher = Dispatchers.Default,
-    /** Which journal authors this installation published, for a history row's origin. */
-    private val localActors: suspend (Collection<String>) -> Set<String> = { emptySet() },
+    /** Where each history row (its actor and HLC) came from ([LocalJournalActors.origins]). */
+    private val origins: suspend (List<Pair<String, Hlc>>) -> List<HistoryOrigin> = { rows ->
+        rows.map { HistoryOrigin.UNKNOWN }
+    },
 ) : DocumentRepository {
     private val documentDao get() = db.documentDao()
     private val tagDao get() = db.tagDao()
@@ -215,14 +218,14 @@ internal class DocumentRepositoryImpl(
         val rows = dao.eventsForDocument(docId)
         // Journal events carry a fresh actor per transaction, not the device id, so this device's
         // own writes are known only by the actors its commits recorded (LocalJournalActors).
-        val local = localActors(rows.mapTo(LinkedHashSet()) { it.deviceId })
+        val origin = origins(rows.map { it.deviceId to Hlc(it.hlcPhysical, it.hlcCounter, it.hlcDevice) })
         // In HLC order, as the query sorts them.
-        return rows.map { row ->
+        return rows.mapIndexed { index, row ->
             // A row an older build recorded may hold what this one cannot read.
             val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
             DocumentHistoryRecord(
                 timeMillis = row.hlcPhysical,
-                origin = if (row.deviceId in local) HistoryOrigin.THIS_DEVICE else HistoryOrigin.ANOTHER_DEVICE,
+                origin = origin[index],
                 entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation),
             )
         }

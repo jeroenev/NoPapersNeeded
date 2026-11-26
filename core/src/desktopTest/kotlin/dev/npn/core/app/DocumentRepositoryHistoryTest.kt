@@ -56,7 +56,7 @@ class DocumentRepositoryHistoryTest {
                 )
             dao.ingest(source, events)
 
-            val repo = DocumentRepositoryImpl(db, localActors = { actors -> actors intersect setOf("dev-a") })
+            val repo = DocumentRepositoryImpl(db, origins = ::devAIsThisDevice)
             val history = repo.history(docId)
 
             history.map { it.entry } shouldContainExactly
@@ -97,7 +97,7 @@ class DocumentRepositoryHistoryTest {
             )
 
             val history =
-                DocumentRepositoryImpl(db, localActors = { actors -> actors intersect setOf("dev-a") }).history(docId)
+                DocumentRepositoryImpl(db, origins = ::devAIsThisDevice).history(docId)
 
             history.map { it.origin } shouldContainExactly
                 listOf(HistoryOrigin.THIS_DEVICE, HistoryOrigin.ANOTHER_DEVICE)
@@ -191,4 +191,7 @@ class DocumentRepositoryHistoryTest {
             operation = op.wire,
         )
     }
+
+    private fun devAIsThisDevice(rows: List<Pair<String, Hlc>>): List<HistoryOrigin> =
+        rows.map { (actor, _) -> if (actor == "dev-a") HistoryOrigin.THIS_DEVICE else HistoryOrigin.ANOTHER_DEVICE }
 }

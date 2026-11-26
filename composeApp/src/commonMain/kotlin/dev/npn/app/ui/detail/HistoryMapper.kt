@@ -29,6 +29,7 @@ import no_papers_needed.composeapp.generated.resources.detail_history_tag_remove
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_renamed
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_styled
 import no_papers_needed.composeapp.generated.resources.detail_history_this_device
+import no_papers_needed.composeapp.generated.resources.detail_history_unknown_origin
 
 /**
  * One human-readable entry in the document history timeline.
@@ -89,6 +90,7 @@ object HistoryMapper {
         when (origin) {
             HistoryOrigin.THIS_DEVICE -> uiText(Res.string.detail_history_this_device)
             HistoryOrigin.ANOTHER_DEVICE -> uiText(Res.string.detail_history_another_device)
+            HistoryOrigin.UNKNOWN -> uiText(Res.string.detail_history_unknown_origin)
         }
 
     /**

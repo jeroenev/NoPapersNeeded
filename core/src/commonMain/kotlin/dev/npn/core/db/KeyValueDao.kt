@@ -40,4 +40,22 @@ interface KeyValueDao {
 
     @Query("DELETE FROM kv WHERE key = :key")
     suspend fun delete(key: String)
+
+    /** How many keys start with [prefix] (which holds no LIKE wildcard). */
+    @Query("SELECT COUNT(*) FROM kv WHERE key LIKE :prefix || '%'")
+    suspend fun countWithPrefix(prefix: String): Int
+
+    /** The value [offset] places from the greatest among the keys starting with [prefix]. */
+    @Query("SELECT value FROM kv WHERE key LIKE :prefix || '%' ORDER BY value DESC LIMIT 1 OFFSET :offset")
+    suspend fun valueWithPrefixFromNewest(
+        prefix: String,
+        offset: Int,
+    ): String?
+
+    /** Delete every key starting with [prefix] whose value sorts below [value]. */
+    @Query("DELETE FROM kv WHERE key LIKE :prefix || '%' AND value < :value")
+    suspend fun deleteWithPrefixBelow(
+        prefix: String,
+        value: String,
+    )
 }
