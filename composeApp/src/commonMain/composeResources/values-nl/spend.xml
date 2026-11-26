@@ -4,14 +4,14 @@
     <string name="common_settings_ai_spend_last30">Afgelopen 30 dagen</string>
     <string name="common_settings_ai_spend_all_time">Totaal</string>
     <string name="common_settings_ai_spend_empty">Nog geen aanvragen vastgelegd.</string>
-    <string name="common_settings_ai_spend_estimated">Kosten zijn schattingen op basis van lijstprijzen. Als een provider het gebruik niet meldt, zijn de tokenaantallen ook een schatting. Alleen op dit apparaat opgeslagen.</string>
+    <string name="common_settings_ai_spend_estimated">Kosten zijn schattingen op basis van lijstprijzen. Als een provider het gebruik niet meldt, zijn de tokenaantallen ook een schatting. Vastgelegd voor deze bibliotheek, alleen op dit apparaat.</string>
     <string name="common_settings_ai_spend_model_line">%1$s · %2$s — aanvragen: %3$s · %4$s in / %5$s uit · %6$s</string>
     <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — aanvragen: %3$s · %4$s in / %5$s uit (prijs onbekend)</string>
     <string name="common_settings_ai_spend_total">Aanvragen totaal: %1$s · %2$s in / %3$s uit · %4$s</string>
     <string name="common_settings_ai_spend_total_unpriced">Aanvragen totaal: %1$s · %2$s in / %3$s uit (voor sommige modellen is geen prijs bekend)</string>
     <string name="common_settings_ai_spend_reset">Kostengeschiedenis wissen</string>
     <string name="common_settings_ai_spend_reset_title">AI-kostengeschiedenis wissen?</string>
-    <string name="common_settings_ai_spend_reset_message">Elke vastgelegde aanvraag wordt van dit apparaat verwijderd. Dit kan niet ongedaan worden gemaakt.</string>
+    <string name="common_settings_ai_spend_reset_message">Elke aanvraag die dit apparaat voor deze bibliotheek heeft vastgelegd, wordt verwijderd. Dit kan niet ongedaan worden gemaakt.</string>
     <string name="common_settings_ai_spend_reset_confirm">Wissen</string>
     <string name="common_settings_ai_spend_reset_done">AI-kostengeschiedenis gewist.</string>
     <string name="common_settings_ai_spend_reset_failed">Kon de AI-kostengeschiedenis niet wissen: %1$s</string>

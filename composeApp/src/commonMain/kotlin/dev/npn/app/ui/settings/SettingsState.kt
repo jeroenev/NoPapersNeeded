@@ -42,7 +42,7 @@ data class SettingsUiState(
     val reminderNotifiesHere: Boolean = true,
     /** The library's E-invoice fields setting ([dev.npn.core.app.FieldRegistry.eInvoiceFields]). */
     val eInvoiceFields: Boolean = false,
-    /** The two spend windows the AI pane shows, read from this device's ledger. */
+    /** The two spend windows the AI pane shows, read from this library's ledger on this device. */
     val aiSpend: AiSpendSummary = AiSpendSummary.EMPTY,
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
@@ -238,7 +238,7 @@ interface SettingsActions : ProblemReportActions {
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
     fun clearThumbnailCache()
 
-    /** Delete this device's AI spend ledger after the user confirms it. */
+    /** Delete this library's AI spend ledger on this device after the user confirms it. */
     fun resetAiSpend()
 
     /** Ask the transfer engine whether it is usable; the pane asks when it opens. Only the latest probe answers. */

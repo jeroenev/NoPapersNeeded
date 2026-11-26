@@ -569,7 +569,7 @@ private fun AiTagCapDefaults(
 }
 
 /**
- * The device-local spend ledger, as two windows: the rolling last 30 days and everything ever
+ * This library's spend ledger on this device, as two windows: the rolling last 30 days and everything ever
  * recorded here. Per provider and model, so a switch of model is visible, with tokens only where a
  * model has no list price. Reset asks first; the ledger is not synced and cannot be recovered.
  */

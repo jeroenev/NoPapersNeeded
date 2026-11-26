@@ -4,14 +4,14 @@
     <string name="common_settings_ai_spend_last30">30 derniers jours</string>
     <string name="common_settings_ai_spend_all_time">Total</string>
     <string name="common_settings_ai_spend_empty">Aucune requête enregistrée pour l’instant.</string>
-    <string name="common_settings_ai_spend_estimated">Les coûts sont estimés à partir des tarifs publics. Quand un fournisseur ne signale pas l’usage, les jetons sont aussi une estimation. Stocké uniquement sur cet appareil.</string>
+    <string name="common_settings_ai_spend_estimated">Les coûts sont estimés à partir des tarifs publics. Quand un fournisseur ne signale pas l’usage, les jetons sont aussi une estimation. Enregistré pour cette bibliothèque, uniquement sur cet appareil.</string>
     <string name="common_settings_ai_spend_model_line">%1$s · %2$s — requêtes : %3$s · %4$s en entrée / %5$s en sortie · %6$s</string>
     <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — requêtes : %3$s · %4$s en entrée / %5$s en sortie (prix inconnu)</string>
     <string name="common_settings_ai_spend_total">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie · %4$s</string>
     <string name="common_settings_ai_spend_total_unpriced">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie (certains modèles n’ont pas de prix)</string>
     <string name="common_settings_ai_spend_reset">Effacer l’historique des dépenses</string>
     <string name="common_settings_ai_spend_reset_title">Effacer l’historique des dépenses IA ?</string>
-    <string name="common_settings_ai_spend_reset_message">Toutes les requêtes enregistrées seront supprimées de cet appareil. Cette action est irréversible.</string>
+    <string name="common_settings_ai_spend_reset_message">Toutes les requêtes que cet appareil a enregistrées pour cette bibliothèque seront supprimées. Cette action est irréversible.</string>
     <string name="common_settings_ai_spend_reset_confirm">Effacer</string>
     <string name="common_settings_ai_spend_reset_done">Historique des dépenses IA effacé.</string>
     <string name="common_settings_ai_spend_reset_failed">Impossible d’effacer l’historique des dépenses IA : %1$s</string>

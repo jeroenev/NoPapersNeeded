@@ -4,14 +4,14 @@
     <string name="common_settings_ai_spend_last30">Últimos 30 dias</string>
     <string name="common_settings_ai_spend_all_time">Total</string>
     <string name="common_settings_ai_spend_empty">Ainda não há pedidos registados.</string>
-    <string name="common_settings_ai_spend_estimated">Os custos são estimativas com base nos preços de tabela. Quando um fornecedor não comunica o uso, os tokens também são uma estimativa. Guardado apenas neste dispositivo.</string>
+    <string name="common_settings_ai_spend_estimated">Os custos são estimativas com base nos preços de tabela. Quando um fornecedor não comunica o uso, os tokens também são uma estimativa. Registado para esta biblioteca, apenas neste dispositivo.</string>
     <string name="common_settings_ai_spend_model_line">%1$s · %2$s — pedidos: %3$s · %4$s de entrada / %5$s de saída · %6$s</string>
     <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — pedidos: %3$s · %4$s de entrada / %5$s de saída (preço desconhecido)</string>
     <string name="common_settings_ai_spend_total">Total de pedidos: %1$s · %2$s de entrada / %3$s de saída · %4$s</string>
     <string name="common_settings_ai_spend_total_unpriced">Total de pedidos: %1$s · %2$s de entrada / %3$s de saída (alguns modelos não têm preço)</string>
     <string name="common_settings_ai_spend_reset">Limpar histórico de gastos</string>
     <string name="common_settings_ai_spend_reset_title">Limpar o histórico de gastos de IA?</string>
-    <string name="common_settings_ai_spend_reset_message">Todos os pedidos registados serão removidos deste dispositivo. Não é possível desfazer.</string>
+    <string name="common_settings_ai_spend_reset_message">Todos os pedidos que este dispositivo registou para esta biblioteca serão removidos. Não é possível desfazer.</string>
     <string name="common_settings_ai_spend_reset_confirm">Limpar</string>
     <string name="common_settings_ai_spend_reset_done">Histórico de gastos de IA limpo.</string>
     <string name="common_settings_ai_spend_reset_failed">Não foi possível limpar o histórico de gastos de IA: %1$s</string>

@@ -15,9 +15,10 @@ enum class AiUsageKind {
 }
 
 /**
- * One recorded AI request in the device-local spend ledger: which endpoint and model answered,
- * what it was asked to do, the token usage the provider reported (or this device estimated when the
- * provider reported none), the cost worked out from [AiPricing], and which run it belonged to.
+ * One recorded AI request in the spend ledger, which this device keeps per library in its
+ * `device.db`: which endpoint and model answered, what it was asked to do, the token usage the
+ * provider reported (or this device estimated when the provider reported none), the cost worked
+ * out from [AiPricing], and which run it belonged to.
  *
  * It deliberately carries no prompt, document text or answer: the ledger says what was spent, not
  * what was said.
@@ -58,7 +59,7 @@ fun List<AiUsageTotals>.completeCostUsd(): Double? =
         sumOf { it.estimatedCostUsd ?: 0.0 }
     }
 
-/** The spend ledger's totals: the rolling last 30 days and everything ever recorded on this device. */
+/** The spend ledger's totals: the rolling last 30 days and everything this device recorded for the library. */
 data class AiSpendSummary(
     val last30Days: List<AiUsageTotals> = emptyList(),
     val allTime: List<AiUsageTotals> = emptyList(),
@@ -328,7 +329,8 @@ class AiRunBudget(
 }
 
 /**
- * The spend ledger of this device. Implementations are main-safe and never throw for a storage
+ * The spend ledger this device keeps for one library (it lives in that library's `device.db`, as
+ * the AI configuration it records under is device-wide). Implementations are main-safe and never throw for a storage
  * failure the caller could do nothing about: recording is best effort, and the caller's AI call has
  * already succeeded by the time it is recorded.
  */

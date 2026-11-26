@@ -16,7 +16,7 @@ data class AiUsageAggregate(
     val unpricedRequests: Int,
 )
 
-/** The device-local AI spend ledger: what was spent, never what was said. */
+/** This library's AI spend ledger on this device: what was spent, never what was said. */
 @Dao
 interface AiUsageDao {
     @Insert

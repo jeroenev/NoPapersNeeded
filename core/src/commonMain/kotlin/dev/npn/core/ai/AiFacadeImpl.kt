@@ -39,7 +39,7 @@ internal class AiFacadeImpl(
     private val clock: EpochClock = SystemEpochClock,
     /** The library's review workflow, read per turn so a mode change applies without reopening. */
     private val reviewModeProvider: suspend () -> ReviewMode = { ReviewMode.DEFAULT },
-    /** Where every paid request is recorded; the device-local ledger, or [AiLedger.None] in tests. */
+    /** Where every paid request is recorded; this library's ledger on this device, or [AiLedger.None] in tests. */
     private val ledger: AiLedger = AiLedger.None,
     private val log: NpnLog = NpnLog.None,
     private val configProvider: suspend () -> AiConfig,
@@ -253,7 +253,7 @@ internal class AiFacadeImpl(
     suspend fun close() = runtimes.close()
 
     /**
-     * Record one request in the device-local ledger. Best effort: the call has already been paid
+     * Record one request in this library's ledger on this device. Best effort: the call has already been paid
      * for, and a ledger write that fails must not turn a successful answer into an error.
      */
     private suspend fun record(

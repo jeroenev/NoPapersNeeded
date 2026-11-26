@@ -19,15 +19,16 @@ import kotlinx.coroutines.flow.map
 const val AI_SPEND_WINDOW_MS: Long = 30L * 24 * 60 * 60 * 1000
 
 /**
- * The AI spend view of one library's session: the device-local ledger's totals and a pre-flight
- * estimate for a bulk run. Recording is not here — the AI facade records each request as it
- * happens — so a caller showing a confirmation or the settings pane only reads.
+ * The AI spend view of one library's session: the totals of the spend ledger this device keeps for
+ * the library, and a pre-flight estimate for a bulk run. Recording is not here — the AI facade
+ * records each request as it happens — so a caller showing a confirmation or the settings pane
+ * only reads.
  */
 interface AiSpendFacade {
     /** Ledger totals, refreshed whenever a request is recorded. */
     val summary: Flow<AiSpendSummary>
 
-    /** Delete every recorded request on this device. */
+    /** Delete every request this device recorded for this library. */
     suspend fun reset()
 
     /** What a suggestion run over [docIds] with [request] would cost, before any call is made. */

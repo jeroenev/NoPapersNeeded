@@ -56,7 +56,7 @@ internal class SessionGraph(
     /** The journal actors this installation published, which history labels "This device". */
     private val localActors = LocalJournalActors(deps.deviceDb.keyValueDao())
 
-    /** Every paid AI request this device makes is recorded here; never synced. */
+    /** Every paid AI request this device makes for this library is recorded here; never synced. */
     private val aiLedger = RoomAiLedger(deps.deviceDb.aiUsageDao())
 
     val aiSpend: AiSpendFacade =
