@@ -143,3 +143,54 @@ internal fun <M> revertedSeeds(
     }
     return null
 }
+
+/**
+ * After a full sync, what the replicas of [views] keep apart from convergence: the first finding of
+ * [strandedInTrash], else of [revertedSeeds], or null.
+ */
+internal fun <M> afterFullSync(
+    world: SimWorld,
+    views: Map<M, LibraryView>,
+    replica: (M) -> SimReplica,
+    name: (M) -> String,
+): Pair<M, String>? =
+    strandedInTrash(world, views.keys.toList(), replica, name) ?: revertedSeeds(world.customizedSeeds, views, name)
+
+/**
+ * After a full sync: the first of [members] whose index has a live document missing while the
+ * trash of some member's folder holds its bytes, and why, or null. Such a document's bytes are only
+ * in the trash, which a device that has not seen the document come back purges by the retention,
+ * taking the last copy: a restore that kept a file a sync tool was still to take away as the other
+ * half of another device's trash, or a trash whose file stayed in the trash with no event.
+ */
+internal fun <M> strandedInTrash(
+    world: SimWorld,
+    members: List<M>,
+    replica: (M) -> SimReplica,
+    name: (M) -> String,
+): Pair<M, String>? {
+    val inTrash =
+        members.flatMapTo(HashSet()) { member ->
+            replica(member)
+                .fs
+                .allFiles()
+                .filterKeys { it.startsWith(NpnPaths.TRASH_DIR + "/") }
+                .values
+                .map(::sha256Bytes)
+        }
+    for (member in members) {
+        val stranded =
+            world
+                .read("the missing live documents of ${name(member)}") {
+                    replica(member)
+                        .indexDb
+                        .rows("SELECT docId FROM documents WHERE trashed = 0 AND deleted = 0 AND missing = 1")
+                }.mapNotNull { it[0] }
+                .filter { it in inTrash }
+        if (stranded.isNotEmpty()) {
+            val docs = stranded.joinToString { it.take(10) }
+            return member to "${name(member)} shows $docs live and missing while a trash holds its bytes"
+        }
+    }
+    return null
+}

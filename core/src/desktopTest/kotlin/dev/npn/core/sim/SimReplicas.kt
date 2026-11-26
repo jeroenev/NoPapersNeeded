@@ -725,7 +725,7 @@ internal class SyncSimulation(
             verifiedMissingButHeld(present.map { it.name to it.sim }, present.map { it.fs })?.let { (name, why) ->
                 fail(present.first { it.name == name }, why)
             }
-            revertedSeeds(world.customizedSeeds, views) { it.name }?.let { (member, why) -> fail(member, why) }
+            afterFullSync(world, views, { it.replica }) { it.name }?.let { (member, why) -> fail(member, why) }
         }
         // What the rebuild oracles logged: after the run's last rest no step checks it.
         present.forEach { it.sim.checkLog() }

@@ -309,6 +309,10 @@ cloud, eight) do not converge, which fails the run. Then:
   index and in a rebuild alike, so the rebuild oracle cannot see it.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
   same comparison, a row only one of them remembers for a document neither shows excepted.
+- After a full sync, no replica shows a live document as missing while a folder's trash holds its
+  bytes: a restore claimed a file at its path that a sync tool was still to take away as the other
+  half of another device's trash, and a purge on a device that had not seen the restore yet takes
+  that last copy.
 - After a full sync, no seeded field a user relabelled or removed shows its seed's label again on
   any replica (no step writes a seed's label, so one back took a seed over the user's change).
 - Last, the log and the scope handlers once more: the rebuild oracles log into the same world, and
