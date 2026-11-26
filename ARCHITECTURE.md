@@ -29,7 +29,7 @@ Four kinds of state, and who owns each:
 | `.npn/journal/` | Every metadata change as an immutable, content-addressed transaction. Tags, fields, settings, trash, relinks. | Truth for metadata | In the library | Yes |
 | `.npn/ocr/` and `.npn/devices/` | OCR sidecars keyed by document hash and writer; device-identity markers. Write-once. | Truth | In the library | Yes |
 | `index.db` | The Room index: the journal folded onto the documents the folder holds, plus FTS. Disposable; a dropped index rebuilds from the folder. | Cache | Device-local, outside the library | Never |
-| `device.db` | What only this device knows and nothing could rebuild: its journal device id, the OCR and AI queues, enrichment marks, chats, whether it shows reminder notifications and which it already showed. Real migrations only. | Truth, device-owned | Device-local, beside the index | Never |
+| `device.db` | What only this device knows and nothing could rebuild: its journal device id, the journal actors it published under (history's "This device"), the OCR and AI queues, enrichment marks, chats, whether it shows reminder notifications and which it already showed, how far it read each mail folder, its AI spend ledger, and the library's cloud remote with what the cloud sync knows of it. Real migrations only. | Truth, device-owned | Device-local, beside the index | Never |
 | Thumbnails | Rendered pages. | Cache | Device-local | Never |
 
 Merge rules are fixed: tags are an OR-set; single-value fields, system properties, settings, field
@@ -719,6 +719,11 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
   and the others get the result through the journal. A rule that arrives after a document's text was
   read reaches it only when a rule is saved or enabled, and a rule edited later does not rewrite
   what its earlier version filled in.
+- A tag the user creates on the Tags screen, which no document carries yet, is kept by a per-tag
+  setting (`LibrarySettingKeys.KEPT_TAG_PREFIX`, `TagRetention`), not by a style: the fold's
+  `retainedTags` keeps its row while the projection prunes every other tag nothing carries. A
+  delete clears the marker; a rename moves it, a merge into a tag documents carry drops it, and the
+  fold carries a marker along a 0.1.0 rename that left it behind.
 - A storage-path template that cannot expand says why with a `StoragePathError`; its context always
   carries the registry's field types, which decide which fields take a date pattern.
 - A watched inbox folder at or inside the library (`liesInLibrary`) is never swept, and Settings
@@ -912,7 +917,10 @@ once per version; `settings/` owns the About pane's diagnostics report through `
 
 One-shot messages have one path. A `MessagesViewModel` sends `UiMessage`s into an unbounded channel
 with `message` or `launchReporting`; `forEachReporting` and `countReporting` report bulk writes; the
-screen's one `SnackbarMessages` shows them one at a time, in order. A message's `UiText` names a
+screen's one `SnackbarMessages` takes them one at a time, as each gets its turn, and shows them in
+order, so what has not shown yet stays with the viewmodel when the screen goes. An Undo
+(`undoAction`) is the one exception: a newer one supersedes the Undo still offered, so Undo always
+acts on the latest write. A message's `UiText` names a
 whole-sentence resource and its arguments and is resolved in the composition's resource environment,
 so it follows the app's language. Never raise a snackbar from a composable.
 
@@ -924,7 +932,11 @@ navigates once. A `TopLevelDestination` is on the rail on wide layouts and in th
 More sheet on compact ones; its label is the window title, and other screens name theirs in
 `windowTitle`. The assistant is one shell item (`AssistantDestination`) over two routes, the chat
 and bulk edit, with a segmented control between them. Activity (`Route.Queue`) carries the shell's
-one background-work indicator. On desktop `?` and Ctrl+/ open the keyboard shortcut list
+one background-work indicator; work blocked on a fix (Auto-organize with no assistant) is not
+counted as running, and Activity shows it as one problem row per `WorkBlock`. The command palette
+(`ui/palette`, Ctrl/Cmd+K) is an overlay `MainNav` hosts over every screen: its viewmodel lives in
+the library's store, searches through `DocumentRepository.searchDocuments` (bounded), runs a choice
+through the screens' own navigation and facades, and reports on the shell's snackbar. On desktop `?` and Ctrl+/ open the keyboard shortcut list
 (`ShortcutsDialog.kt`), which names the keys the screens bind: a key added to a screen goes there too.
 
 ### 7.6 Resources
