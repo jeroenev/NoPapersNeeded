@@ -386,7 +386,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 FakeLibrarySession().apply {
                     documents.singleDoc.value = listItem(doc("doc-1", reviewed = true), listOf("finance"))
                     fieldRegistry.values.value =
-                        mapOf(FieldKeys.CORRESPONDENT to listOf("ACME"), FieldKeys.DOC_TYPE to listOf("invoice"))
+                        mapOf(FieldKeys.CORRESPONDENT to listOf("ACME"))
                     fieldRegistry.orphans.value = listOf("amount")
                     tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 1))
                     reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
@@ -407,10 +407,9 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             state.vocabulary.fieldValues shouldBe
                 mapOf(
                     FieldKeys.CORRESPONDENT to listOf("ACME"),
-                    FieldKeys.DOC_TYPE to listOf("invoice"),
-                    // A seeded vocabulary field with no values yet still joins the map; the filter
-                    // simply offers nothing for it.
-                    FieldKeys.INVOICE_CURRENCY to emptyList(),
+                    // A vocabulary field with no values yet still joins the map; the filter simply
+                    // offers nothing for it.
+                    FieldKeys.DOC_TYPE to emptyList(),
                 )
             state.vocabulary.orphanKeys shouldContainExactly listOf("amount")
             state.vocabulary.allTagNames shouldContainExactly listOf("finance")

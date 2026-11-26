@@ -73,7 +73,7 @@ object PdfFixtures {
                             embeddedFile = embedded
                             attachment.relationship?.let { cosObject.setName("AFRelationship", it) }
                         }
-                    "%04d".format(index) to spec
+                    index.toString().padStart(4, '0') to spec
                 }
             doc.documentCatalog.names =
                 PDDocumentNameDictionary(doc.documentCatalog).apply {
