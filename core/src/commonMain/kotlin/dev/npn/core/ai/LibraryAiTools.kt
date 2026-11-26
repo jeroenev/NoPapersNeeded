@@ -969,8 +969,10 @@ internal object LibraryAiTools {
                         ?: "field \"${q(entry.key)}\" cleared"
                 }
 
+                // The location it was trashed from stays hidden, as in trash discovery
+                // (docs/AI_TOOL_DATA_GAPS.md): a trashed document's folder is not the model's to read.
                 is HistoryEntry.Trashed -> {
-                    "moved to trash from \"${q(entry.path)}\""
+                    "moved to trash"
                 }
 
                 HistoryEntry.Restored -> {

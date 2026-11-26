@@ -354,6 +354,24 @@ class LibraryStatsAndLifecycleToolsTest {
         }
 
     @Test
+    fun historyOfATrashedDocumentKeepsItsOriginalLocationHidden() =
+        runTest {
+            db.metadataProjectionDao().ingest(
+                MetadataSourceEntity("src", SourceKind.SNAPSHOT, SourceFingerprint("fp"), null, SourceStatus.APPLIED),
+                listOf(event(live1, 1, Hlc(1_000, 0, "dev-a"), JournalOp.DocTrash("Private/Medical/scan.pdf"))),
+            )
+
+            val out =
+                LibraryAiTools
+                    .GetDocumentHistoryTool(
+                        db,
+                    ).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
+
+            out shouldContain "moved to trash"
+            out shouldNotContain "Private/Medical"
+        }
+
+    @Test
     fun getDocumentReportsTheAddedDate() =
         runTest {
             seedLifecycle()
