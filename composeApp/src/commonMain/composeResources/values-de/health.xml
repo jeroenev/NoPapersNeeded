@@ -14,7 +14,7 @@
         <item quantity="one">%1$d Synchronisierung in Folge ist fehlgeschlagen.</item>
         <item quantity="other">%1$d Synchronisierungen in Folge sind fehlgeschlagen.</item>
     </plurals>
-    <string name="common_sync_health_next">Die automatische Synchronisierung ist bis %1$s fällig.</string>
+    <string name="common_sync_health_not_yet">Einige Änderungen warten noch auf die Synchronisierung; die nächste Synchronisierung macht weiter.</string>
     <string name="common_sync_health_pending">Letzte Prüfung: %1$d hochzuladen, %2$d herunterzuladen (Stand %3$s).</string>
     <string name="common_sync_health_pending_none">Bei der letzten Prüfung war nichts mehr zu übertragen (%1$s).</string>
     <string name="common_sync_health_never_checked">Diese Bibliothek wurde noch nicht synchronisiert.</string>

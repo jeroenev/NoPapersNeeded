@@ -137,8 +137,9 @@ the domain vocabulary.
   name). It reports problems, a document the library already lists as missing among them, and
   changes nothing. It runs as the session's work, so it outlives the settings screen.
 - **Sync health** — how cloud sync is doing without a live remote reading: the last success and its
-  date, the consecutive-failure streak, the next scheduled pass, the typed last failure, and the
-  pending uploads/downloads the last plan found and did not finish ("as of the last check").
+  date, the consecutive-failure streak, the typed last failure, and the pending uploads/downloads the
+  last plan found and did not settle ("as of the last check"). "In sync" means the last pass synced
+  documents and left nothing to look at and nothing owed.
 
 ## Library session facets
 

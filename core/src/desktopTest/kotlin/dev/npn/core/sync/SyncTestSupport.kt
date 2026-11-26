@@ -7,6 +7,7 @@ import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.first
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -332,7 +333,9 @@ internal class SyncCluster private constructor(
  * Run a pass on each of [members] in order, again until a whole round changes nothing. Returns the
  * number of rounds taken. A remote-backed pass reaches quiescence once every replica has seen the
  * others' metadata. A pass with an error, or (unless [allowConflicts]) a conflict, is not quiescent:
- * a scenario that promises clean convergence must not pass over failed or stuck work.
+ * a scenario that promises clean convergence must not pass over failed or stuck work. Once a round
+ * changes nothing, no replica's last pass owes anything, and (unless [allowConflicts]) each one's
+ * health says it is in sync, as the settings screen would.
  */
 internal suspend fun SyncCluster.converge(
     members: List<AppSessionRig> = rigs,
@@ -341,13 +344,27 @@ internal suspend fun SyncCluster.converge(
 ): Int {
     repeat(maxRounds) { round ->
         var changed = false
-        for (rig in members.toList()) {
-            val report = rig.session.syncCompleted()
-            if (report.changedAnything) changed = true
-            check(report.errors.isEmpty()) { "pass failed: ${report.errors}" }
-            check(allowConflicts || report.conflicts.isEmpty()) { "unexpected conflicts: ${report.conflicts}" }
+        val reports =
+            members.toList().map { rig ->
+                val report = rig.session.syncCompleted()
+                if (report.changedAnything) changed = true
+                check(report.errors.isEmpty()) { "pass failed: ${report.errors}" }
+                check(allowConflicts || report.conflicts.isEmpty()) { "unexpected conflicts: ${report.conflicts}" }
+                rig to report
+            }
+        if (!changed) {
+            for ((rig, report) in reports) {
+                check(report.pendingUploads == 0 && report.pendingDownloads == 0) {
+                    val owed = "${report.pendingUploads} uploads and ${report.pendingDownloads} downloads"
+                    "a quiescent pass still owes $owed"
+                }
+                val health =
+                    rig.session.sync.health
+                        .first()
+                check(allowConflicts || health.healthy) { "a quiescent replica is not healthy: $health" }
+            }
+            return round + 1
         }
-        if (!changed) return round + 1
     }
     error("replicas did not converge in $maxRounds rounds")
 }

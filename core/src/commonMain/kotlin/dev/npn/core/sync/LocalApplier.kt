@@ -41,6 +41,12 @@ class LocalApplier(
                     changed++
                     report.appliedLocally++
                 }
+                // Installed, or found in place already: either way nothing is owed for it.
+                if (action is SyncAction.PublishDocument ||
+                    action is SyncAction.DownloadTrash
+                ) {
+                    report.settledDownloads++
+                }
             }
         }
         return changed

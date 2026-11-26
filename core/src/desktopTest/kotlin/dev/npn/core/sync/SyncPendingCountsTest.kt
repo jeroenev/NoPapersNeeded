@@ -3,7 +3,7 @@ package dev.npn.core.sync
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
-/** Pending counts: what the plan found, less what the pass actually finished. */
+/** Pending counts: what the plan found, less what the pass settled. */
 class SyncPendingCountsTest {
     private val plan =
         SyncPlan(
@@ -33,11 +33,10 @@ class SyncPendingCountsTest {
     @Test
     fun whatThePassFinishedIsNotPending() {
         val builder = SyncReportBuilder(startedAt = 1_000)
-        builder.uploadedDocuments = 1
-        // One journal object and one trash marker, the plan's only other uploads.
-        builder.uploadedObjects = 2
-        builder.downloadedDocuments = 1
-        builder.downloadedTrash = 1
+        // A document, a journal object and a trash marker: one of them found up already.
+        builder.settledUploads = 3
+        // A document and a trash copy, one of them found in place already.
+        builder.settledDownloads = 2
 
         val report = builder.build(nowMillis = 2_000, plan = this.plan, planCheckedAt = 1_500)
 
@@ -59,9 +58,9 @@ class SyncPendingCountsTest {
 
     @Test
     fun trashUploadsDoNotMakeABlockedDocumentsPendingCountDisappear() {
-        // Metadata and a trash marker succeeded, but the document upload failed.
+        // Metadata and a trash marker settled, but the document upload failed.
         val builder = SyncReportBuilder(startedAt = 1_000)
-        builder.uploadedObjects = 2
+        builder.settledUploads = 2
         builder.error("b.pdf", IllegalStateException("remote closed"))
 
         builder.build(nowMillis = 2_000, plan = plan).pendingUploads shouldBe 1

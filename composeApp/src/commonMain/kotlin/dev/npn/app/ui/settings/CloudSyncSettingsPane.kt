@@ -98,7 +98,7 @@ import no_papers_needed.composeapp.generated.resources.common_sync_health_last_s
 import no_papers_needed.composeapp.generated.resources.common_sync_health_more
 import no_papers_needed.composeapp.generated.resources.common_sync_health_never_checked
 import no_papers_needed.composeapp.generated.resources.common_sync_health_never_success
-import no_papers_needed.composeapp.generated.resources.common_sync_health_next
+import no_papers_needed.composeapp.generated.resources.common_sync_health_not_yet
 import no_papers_needed.composeapp.generated.resources.common_sync_health_open_document
 import no_papers_needed.composeapp.generated.resources.common_sync_health_pending
 import no_papers_needed.composeapp.generated.resources.common_sync_health_pending_none
@@ -405,13 +405,18 @@ private fun healthHeadline(
             )
         }
 
-        else -> {
+        // "In sync" only by the one rule that says so; what is left is work the last pass still owes.
+        health.healthy -> {
             stringResource(Res.string.common_sync_health_healthy)
+        }
+
+        else -> {
+            stringResource(Res.string.common_sync_health_not_yet)
         }
     }
 }
 
-/** The last success, the failure streak, the next automatic pass, and what the last plan left. */
+/** The last success, the failure streak, and what the last plan left. */
 @Composable
 private fun HealthDetails(health: SyncHealth) {
     if (!health.configured) return
@@ -426,9 +431,6 @@ private fun HealthDetails(health: SyncHealth) {
                 health.consecutiveFailures,
             ),
         )
-    }
-    health.nextAutomaticAt?.let {
-        HelpText(stringResource(Res.string.common_sync_health_next, formatEpochDateTime(it)))
     }
     // The counts are what the last pass's plan saw, not a live remote reading; the label says so.
     health.pendingAsOf?.let { checkedAt ->

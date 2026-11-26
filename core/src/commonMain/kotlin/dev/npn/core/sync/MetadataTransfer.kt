@@ -59,6 +59,7 @@ class MetadataTransfer(
             report.attempt(action.relPath) {
                 uploaded.getOrThrow()
                 report.uploadedObjects++
+                report.settledUploads++
             }
             onProgress(++done, actions.size)
         }

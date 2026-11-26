@@ -192,6 +192,15 @@ class SyncReportBuilder(
     var movedRemote = 0
     var deletedRemote = 0
     var appliedLocally = 0
+
+    /**
+     * Planned uploads ([SyncPlan.plannedUploads]) this pass settled: put up, or found up already
+     * (another device's trash entry). What the plan found less these is what is still owed.
+     */
+    var settledUploads = 0
+
+    /** Planned downloads ([SyncPlan.plannedDownloads]) this pass settled: installed, or found in place already. */
+    var settledDownloads = 0
     val conflicts = ArrayList<SyncConflict>()
     val errors = ArrayList<SyncError>()
 
@@ -207,13 +216,12 @@ class SyncReportBuilder(
         nowMillis: Long,
         plan: SyncPlan? = null,
         planCheckedAt: Long? = null,
+        documentsSynced: Boolean = true,
     ): SyncReport {
-        // What the plan found, less what this pass finished: the rest waits for the next one. A
-        // count is never negative (a plan may be re-checked after a retry inside a transfer).
-        val pendingUploads =
-            ((plan?.plannedUploads ?: 0) - uploadedDocuments - uploadedObjects).coerceAtLeast(0)
-        val pendingDownloads =
-            ((plan?.plannedDownloads ?: 0) - downloadedDocuments - downloadedTrash).coerceAtLeast(0)
+        // What the plan found, less what this pass settled, transferred or found done already: the
+        // rest waits for the next one. Never negative.
+        val pendingUploads = ((plan?.plannedUploads ?: 0) - settledUploads).coerceAtLeast(0)
+        val pendingDownloads = ((plan?.plannedDownloads ?: 0) - settledDownloads).coerceAtLeast(0)
         return SyncReport(
             startedAt = startedAt,
             durationMillis = nowMillis - startedAt,
@@ -229,6 +237,7 @@ class SyncReportBuilder(
             pendingCheckedAt = plan?.let { planCheckedAt },
             conflicts = conflicts.toList(),
             errors = errors.toList(),
+            documentsSynced = documentsSynced,
         )
     }
 }

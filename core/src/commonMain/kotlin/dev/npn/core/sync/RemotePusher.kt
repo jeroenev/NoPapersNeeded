@@ -150,6 +150,7 @@ class RemotePusher(
                             nowMillis,
                         )
                         report.uploadedDocuments++
+                        report.settledUploads++
                     }
                 }
             }
@@ -157,7 +158,9 @@ class RemotePusher(
             is SyncAction.UploadTrash -> {
                 when (uploaded) {
                     // Another device put the entry up first: it is there, which is all the trash needs.
-                    Uploaded.Occupied -> {}
+                    Uploaded.Occupied -> {
+                        report.settledUploads++
+                    }
 
                     Uploaded.LocalChanged -> {
                         action.docId?.let {
@@ -177,6 +180,7 @@ class RemotePusher(
                             nowMillis,
                         )
                         report.uploadedObjects++
+                        report.settledUploads++
                     }
                 }
             }

@@ -38,7 +38,10 @@ mise sync-scenarios
 The suite uses `SyncEngineTestBase`, `SyncTestSupport`'s `DirectoryRemoteStore`/`DirectoryTransport`
 and `SyncCluster`: real `LibrarySessionImpl` sessions, real journal, real Room index and device
 databases, one library folder per device, and one directory standing in for the remote. No network
-call, no rclone process, no credentials.
+call, no rclone process, no credentials. A scenario that converges (`SyncCluster.converge`) also
+proves what the settings screen would say: once a round changes nothing, no replica's last pass
+owes an upload or a download, and each replica's `SyncHealth.healthy` holds (unless the scenario
+expects conflicts).
 
 | Test | Scenario |
 | --- | --- |

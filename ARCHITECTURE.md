@@ -382,12 +382,18 @@ truth; the user just never picks it.
   documents under other file names. The library simulation compares cloud replicas without paths
   for now (`KnownIssues.CLOUD_NAMES_MAY_DIFFER`).
 - The settings screen reads the pass as `SyncHealth` (`SyncService.health`, derived from the live
-  status and this library's schedule): the last success and its date, the consecutive-failure
-  streak, the next scheduled pass, the typed last failure, and the pending uploads/downloads the
-  last plan found and did not finish. The streak and last success, like the pending counts, are
-  persisted in the `sync.lastRun` record in `device.db`; a pass that ended before planning carries
-  the previous plan's counts, so a failure never claims there is nothing left. These counts are "as
-  of the last check", never a live remote reading. A conflict is explained by its `ConflictKind`
+  status and the last pass's `SyncRunSummary`): the last success and its date, the
+  consecutive-failure streak, the typed last failure, and the pending uploads/downloads the last
+  plan found and did not settle. A planned transfer is settled once its file is across or found
+  there already (another device's trash entry, a document already in place), so nothing done is
+  left owed. A pass succeeds (`SyncRunSummary.synced`) only when it ran to its end and mirrored
+  documents: one that could not pull every journal object of another device's mirrors nothing, and
+  counts toward the streak like a failure. The headline says "in sync" only by `SyncHealth.healthy`
+  (that pass, nothing to look at, nothing owed). There is no promise of the next pass's time:
+  Android's background worker runs on its own schedule. The streak and last success, like the
+  pending counts, are persisted in the `sync.lastRun` record in `device.db`; a pass that ended
+  before planning carries the previous plan's counts, so a failure never claims there is nothing
+  left. These counts are "as of the last check", never a live remote reading. A conflict is explained by its `ConflictKind`
   with the document's title where the library still shows it and the remote path the pass saw.
 
 ### 5.7 Library verification

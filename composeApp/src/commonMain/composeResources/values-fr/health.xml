@@ -14,7 +14,7 @@
         <item quantity="one">%1$d synchronisation consécutive a échoué.</item>
         <item quantity="other">%1$d synchronisations consécutives ont échoué.</item>
     </plurals>
-    <string name="common_sync_health_next">La synchronisation automatique est prévue au plus tard le %1$s.</string>
+    <string name="common_sync_health_not_yet">Certaines modifications attendent encore d’être synchronisées ; la prochaine synchronisation continue.</string>
     <string name="common_sync_health_pending">Dernière vérification : %1$d à envoyer, %2$d à recevoir (au %3$s).</string>
     <string name="common_sync_health_pending_none">Rien ne restait à transférer lors de la dernière vérification (%1$s).</string>
     <string name="common_sync_health_never_checked">Aucune synchronisation n'a encore vérifié cette bibliothèque.</string>

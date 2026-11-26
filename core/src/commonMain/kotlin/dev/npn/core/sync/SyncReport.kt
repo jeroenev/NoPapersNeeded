@@ -91,6 +91,12 @@ data class SyncReport(
     val pendingCheckedAt: Long? = null,
     val conflicts: List<SyncConflict> = emptyList(),
     val errors: List<SyncError> = emptyList(),
+    /**
+     * Whether the pass mirrored documents at all. False when another device's journal objects could
+     * not all be pulled, so the pass planned nothing from a fold short of them: it sent this device's
+     * metadata up and nothing else, which no one should read as a sync.
+     */
+    val documentsSynced: Boolean = true,
 ) {
     val transferred: Int
         get() = downloadedDocuments + uploadedDocuments + downloadedObjects + uploadedObjects
@@ -115,15 +121,23 @@ data class SyncRunSummary(
     /** When a pass last finished without ending early, across remote changes this device kept. */
     val lastSuccessAt: Long? = null,
     /**
-     * The pending work the last plan that made one found, carried across a pass that ended before
-     * planning so a failure does not erase what is still owed.
+     * What is still owed: the pending work the last plan that made one found ([SyncReport]'s, for a
+     * pass that planned), carried across a pass that ended before planning so a failure does not
+     * erase it. The one place the settings screen reads it from.
      */
     val pendingUploads: Int = 0,
     val pendingDownloads: Int = 0,
     /** When that plan was made; null until a pass planned. */
     val pendingCheckedAt: Long? = null,
 ) {
+    /** The pass ran to its end: no typed failure ended it early. */
     val ok: Boolean get() = failure == null
+
+    /**
+     * The pass synced: it ran to its end and mirrored documents ([SyncReport.documentsSynced]). Only
+     * such a pass is a success; one that could not pull another device's changes counts as failed.
+     */
+    val synced: Boolean get() = ok && report?.documentsSynced != false
 }
 
 /** Why a pass ended early. */
@@ -159,10 +173,10 @@ data class SyncStatus(
 
 /**
  * How this library's cloud sync is doing, as the settings screen says it: the remote, the live pass,
- * the last outcome and its streak of failures, when the next automatic pass is due, and the work the
- * last plan found still to do.
+ * the last outcome and its streak of failures, and the work the last plan found still to do, all
+ * read from the last pass's summary ([SyncRunSummary]).
  *
- * The pending counts are what the last pass's plan saw and did not finish, never a guess at the
+ * The pending counts are what the last pass's plan saw and did not settle, never a guess at the
  * remote's current state: a true count would need another round-trip to it. [pendingAsOf] says when
  * that plan was made, and the UI labels the counts with it.
  */
@@ -173,17 +187,20 @@ data class SyncHealth(
     val running: Boolean = false,
     val progress: SyncProgress? = null,
     val lastPass: SyncRunSummary? = null,
-    /** When a pass last finished without ending early; null until one has. */
-    val lastSuccessAt: Long? = null,
-    /** Passes that ended early one after another, the last one included; zero after a pass that finished. */
-    val consecutiveFailures: Int = 0,
-    /** When the next automatic pass is due, while automatic sync is on. */
-    val nextAutomaticAt: Long? = null,
-    val pendingUploads: Int = 0,
-    val pendingDownloads: Int = 0,
-    /** When the plan behind the pending counts was made, null when none was. */
-    val pendingAsOf: Long? = null,
 ) {
+    /** When a pass last synced ([SyncRunSummary.synced]); null until one has. */
+    val lastSuccessAt: Long? get() = lastPass?.lastSuccessAt ?: lastPass?.takeIf { it.synced }?.finishedAt
+
+    /** Passes that did not sync one after another, the last one included; zero after one that did. */
+    val consecutiveFailures: Int get() = lastPass?.consecutiveFailures ?: 0
+
+    val pendingUploads: Int get() = lastPass?.pendingUploads ?: 0
+
+    val pendingDownloads: Int get() = lastPass?.pendingDownloads ?: 0
+
+    /** When the plan behind the pending counts was made, null when none was. */
+    val pendingAsOf: Long? get() = lastPass?.pendingCheckedAt
+
     val conflicts: List<SyncConflict> get() = lastPass?.report?.conflicts.orEmpty()
 
     val errors: List<SyncError> get() = lastPass?.report?.errors.orEmpty()
@@ -197,48 +214,33 @@ data class SyncHealth(
     val attentionCount: Int
         get() = conflicts.size + errors.size + if (lastFailure != null) 1 else 0
 
+    /**
+     * The library is in sync as far as this device knows: the last pass synced, left nothing to look
+     * at and nothing owed. What the settings screen's headline says "in sync" by, and only then.
+     */
     val healthy: Boolean
         get() =
             configured &&
-                lastPass != null &&
+                lastPass?.synced == true &&
                 !running &&
-                lastFailure == null &&
                 attentionCount == 0 &&
                 pendingUploads == 0 &&
                 pendingDownloads == 0
 
     companion object {
-        /** Derive the health of [config] and [status], with [nowMillis] dropping a due time already past. */
+        /** Derive the health of [config] and [status]. */
         fun of(
             config: CloudSyncConfig,
             status: SyncStatus,
-            nowMillis: Long,
-        ): SyncHealth {
-            val last = status.lastRun
-            return SyncHealth(
+        ): SyncHealth =
+            SyncHealth(
                 configured = config.configured,
                 automatic = config.enabled && config.configured,
                 intervalMinutes = config.intervalMinutes,
                 running = status.running,
                 progress = status.progress,
-                lastPass = last,
-                lastSuccessAt = last?.lastSuccessAt ?: last?.takeIf { it.ok }?.finishedAt,
-                consecutiveFailures = last?.consecutiveFailures ?: 0,
-                nextAutomaticAt =
-                    if (config.enabled && config.configured && last != null) {
-                        // A pass that never reached the engine (no engine, unreachable remote) leaves
-                        // finishedAt where it was; a due time already past would read as a promise.
-                        (last.finishedAt + config.intervalMinutes * MILLIS_PER_MINUTE).takeIf { it > nowMillis }
-                    } else {
-                        null
-                    },
-                pendingUploads = last?.pendingUploads ?: 0,
-                pendingDownloads = last?.pendingDownloads ?: 0,
-                pendingAsOf = last?.pendingCheckedAt,
+                lastPass = status.lastRun,
             )
-        }
-
-        private const val MILLIS_PER_MINUTE = 60L * 1000L
     }
 }
 

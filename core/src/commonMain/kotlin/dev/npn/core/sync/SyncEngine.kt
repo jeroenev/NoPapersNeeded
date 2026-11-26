@@ -122,7 +122,7 @@ class SyncEngine(
         } finally {
             withContext(NonCancellable) { resolver.cleanup() }
         }
-        return report.build(clock.nowMillis(), planned, planCheckedAt)
+        return report.build(clock.nowMillis(), planned, planCheckedAt, documentsSynced = documentsSafe)
     }
 
     /**

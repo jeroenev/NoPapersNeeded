@@ -14,7 +14,7 @@
         <item quantity="one">%1$d synchronisatie op rij is mislukt.</item>
         <item quantity="other">%1$d synchronisaties op rij zijn mislukt.</item>
     </plurals>
-    <string name="common_sync_health_next">Automatische synchronisatie uiterlijk op %1$s.</string>
+    <string name="common_sync_health_not_yet">Sommige wijzigingen wachten nog op synchronisatie; de volgende synchronisatie gaat verder.</string>
     <string name="common_sync_health_pending">Laatste controle: %1$d te uploaden, %2$d te downloaden (stand %3$s).</string>
     <string name="common_sync_health_pending_none">Bij de laatste controle was niets meer over te dragen (%1$s).</string>
     <string name="common_sync_health_never_checked">Deze bibliotheek is nog niet gesynchroniseerd.</string>

@@ -14,7 +14,7 @@
         <item quantity="one">%1$d sync in a row failed.</item>
         <item quantity="other">%1$d syncs in a row failed.</item>
     </plurals>
-    <string name="common_sync_health_next">Automatic sync is due by %1$s.</string>
+    <string name="common_sync_health_not_yet">Some changes are still waiting to sync; the next sync carries on.</string>
     <string name="common_sync_health_pending">Last check: %1$d to upload, %2$d to download (as of %3$s).</string>
     <string name="common_sync_health_pending_none">Nothing was left to transfer at the last check (%1$s).</string>
     <string name="common_sync_health_never_checked">No sync has checked this library yet.</string>

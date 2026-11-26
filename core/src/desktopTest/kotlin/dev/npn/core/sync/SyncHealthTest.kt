@@ -4,7 +4,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
-/** The settings screen's reading of the live status: schedule, streak, pending counts. */
+/** The settings screen's reading of the live status: streak, pending counts, and whether it is in sync. */
 class SyncHealthTest {
     private val finishedAt = 1_700_000_000_000L
     private val minute = 60_000L
@@ -26,18 +26,17 @@ class SyncHealthTest {
     )
 
     @Test
-    fun anUnconfiguredLibraryIsNotHealthyAndHasNoSchedule() {
-        val health = SyncHealth.of(CloudSyncConfig.DISABLED, SyncStatus(), nowMillis = finishedAt)
+    fun anUnconfiguredLibraryIsNotHealthy() {
+        val health = SyncHealth.of(CloudSyncConfig.DISABLED, SyncStatus())
 
         health.configured shouldBe false
         health.healthy shouldBe false
-        health.nextAutomaticAt.shouldBeNull()
         health.lastSuccessAt.shouldBeNull()
         health.pendingAsOf.shouldBeNull()
     }
 
     @Test
-    fun aFinishedPassCarriesItsScheduleStreakAndPendingWork() {
+    fun aFinishedPassCarriesItsStreakAndPendingWork() {
         val summary =
             SyncRunSummary(
                 startedAt = finishedAt - 2_000,
@@ -54,7 +53,6 @@ class SyncHealthTest {
             SyncHealth.of(
                 config,
                 SyncStatus(running = false, lastRun = summary),
-                nowMillis = finishedAt + minute,
             )
 
         health.configured shouldBe true
@@ -63,7 +61,6 @@ class SyncHealthTest {
         health.healthy shouldBe false
         health.consecutiveFailures shouldBe 0
         health.lastSuccessAt shouldBe finishedAt
-        health.nextAutomaticAt shouldBe finishedAt + 15 * minute
         health.pendingUploads shouldBe 3
         health.pendingDownloads shouldBe 1
         health.pendingAsOf shouldBe finishedAt - 1_000
@@ -87,7 +84,6 @@ class SyncHealthTest {
             SyncHealth.of(
                 config,
                 SyncStatus(lastRun = summary),
-                nowMillis = finishedAt,
             )
 
         health.healthy shouldBe false
@@ -96,7 +92,6 @@ class SyncHealthTest {
         health.consecutiveFailures shouldBe 4
         health.lastSuccessAt shouldBe lastSuccess
         health.attentionCount shouldBe 1
-        health.nextAutomaticAt.shouldBeNull()
     }
 
     @Test
@@ -108,7 +103,6 @@ class SyncHealthTest {
             SyncHealth.of(
                 CloudSyncConfig(remote = "drive:Library"),
                 SyncStatus(lastRun = summary),
-                nowMillis = finishedAt,
             )
 
         health.lastSuccessAt shouldBe finishedAt
@@ -130,7 +124,6 @@ class SyncHealthTest {
             SyncHealth.of(
                 CloudSyncConfig(remote = "drive:Library"),
                 SyncStatus(running = true, progress = progress, lastRun = summary),
-                nowMillis = finishedAt,
             )
 
         health.running shouldBe true
@@ -152,24 +145,29 @@ class SyncHealthTest {
             )
         val config = CloudSyncConfig(enabled = true, remote = "drive:Library")
 
-        SyncHealth.of(config, SyncStatus(), nowMillis = finishedAt).healthy shouldBe false
-        SyncHealth.of(config, SyncStatus(lastRun = summary), nowMillis = finishedAt).healthy shouldBe true
+        SyncHealth.of(config, SyncStatus()).healthy shouldBe false
+        SyncHealth.of(config, SyncStatus(lastRun = summary)).healthy shouldBe true
     }
 
     @Test
-    fun aDueTimeAlreadyPastIsNotShownAsTheNextPass() {
-        // A pass that never reached the engine (no engine, unreachable remote) leaves finishedAt
-        // where it was, and the card must not promise a time that has long gone.
-        val summary = SyncRunSummary(startedAt = finishedAt, finishedAt = finishedAt, lastSuccessAt = finishedAt)
-        val config = CloudSyncConfig(enabled = true, remote = "drive:Library", intervalMinutes = 5)
-
-        val health =
-            SyncHealth.of(
-                config,
-                SyncStatus(lastRun = summary),
-                nowMillis = finishedAt + 60 * minute,
+    fun aPassThatCouldNotPullAnotherDevicesChangesIsNoSuccess() {
+        val lastSuccess = finishedAt - 10 * minute
+        val stuck = report().copy(errors = listOf(SyncError("journal object", "unreadable")), documentsSynced = false)
+        val summary =
+            SyncRunSummary(
+                startedAt = finishedAt - 1_000,
+                finishedAt = finishedAt,
+                report = stuck,
+                consecutiveFailures = 2,
+                lastSuccessAt = lastSuccess,
             )
 
-        health.nextAutomaticAt.shouldBeNull()
+        val health = SyncHealth.of(CloudSyncConfig(remote = "drive:Library"), SyncStatus(lastRun = summary))
+
+        summary.ok shouldBe true
+        summary.synced shouldBe false
+        health.healthy shouldBe false
+        health.lastSuccessAt shouldBe lastSuccess
+        health.consecutiveFailures shouldBe 2
     }
 }
