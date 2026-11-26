@@ -4,11 +4,25 @@
     <string name="common_settings_ai_spend_last30">Last 30 days</string>
     <string name="common_settings_ai_spend_all_time">All time</string>
     <string name="common_settings_ai_spend_empty">No requests recorded yet.</string>
-    <string name="common_settings_ai_spend_estimated">Costs are estimates from list prices. Where a provider does not report usage, token counts are estimates too. Recorded for this library, on this device only.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — requests: %3$s · %4$s in / %5$s out · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — requests: %3$s · %4$s in / %5$s out (price unknown)</string>
+    <string name="common_settings_ai_spend_estimated">Costs are estimates from list prices. Token counts marked ≈ are estimates too, where the provider did not report usage. Recorded for this library, on this device only.</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s · %3$s — requests: %4$s · %5$s in / %6$s out · %7$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s · %3$s — requests: %4$s · %5$s in / %6$s out (price unknown)</string>
     <string name="common_settings_ai_spend_total">Total requests: %1$s · %2$s in / %3$s out · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Total requests: %1$s · %2$s in / %3$s out (some models have no price)</string>
+    <string name="common_settings_ai_spend_total_unpriced">Total requests: %1$s · %2$s in / %3$s out (price unknown)</string>
+    <plurals name="common_settings_ai_spend_model_line_partial">
+        <item quantity="one">%1$s · %2$s · %3$s — requests: %4$s · %5$s in / %6$s out · at least %7$s, plus %8$d request without a price</item>
+        <item quantity="other">%1$s · %2$s · %3$s — requests: %4$s · %5$s in / %6$s out · at least %7$s, plus %8$d requests without a price</item>
+    </plurals>
+    <plurals name="common_settings_ai_spend_total_partial">
+        <item quantity="one">Total requests: %1$s · %2$s in / %3$s out · at least %4$s + %5$d unpriced request</item>
+        <item quantity="other">Total requests: %1$s · %2$s in / %3$s out · at least %4$s + %5$d unpriced requests</item>
+    </plurals>
+    <string name="common_settings_ai_spend_approx">≈%1$s</string>
+    <string name="common_settings_ai_spend_kind_chat">Assistant chat</string>
+    <string name="common_settings_ai_spend_kind_suggest">Edit suggestions</string>
+    <string name="common_settings_ai_spend_kind_enrichment">Auto-organize</string>
+    <string name="common_settings_ai_spend_kind_ocr">Reading text</string>
+    <string name="common_settings_ai_spend_kind_other">Other</string>
     <string name="common_settings_ai_spend_reset">Reset spend history</string>
     <string name="common_settings_ai_spend_reset_title">Reset AI spend history?</string>
     <string name="common_settings_ai_spend_reset_message">Every request this device recorded for this library is removed. This cannot be undone.</string>

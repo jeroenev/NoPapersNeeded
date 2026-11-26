@@ -4,11 +4,25 @@
     <string name="common_settings_ai_spend_last30">30 derniers jours</string>
     <string name="common_settings_ai_spend_all_time">Total</string>
     <string name="common_settings_ai_spend_empty">Aucune requête enregistrée pour l’instant.</string>
-    <string name="common_settings_ai_spend_estimated">Les coûts sont estimés à partir des tarifs publics. Quand un fournisseur ne signale pas l’usage, les jetons sont aussi une estimation. Enregistré pour cette bibliothèque, uniquement sur cet appareil.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — requêtes : %3$s · %4$s en entrée / %5$s en sortie · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — requêtes : %3$s · %4$s en entrée / %5$s en sortie (prix inconnu)</string>
+    <string name="common_settings_ai_spend_estimated">Les coûts sont estimés à partir des tarifs publics. Les jetons marqués ≈ sont aussi une estimation, le fournisseur n’ayant pas signalé l’usage. Enregistré pour cette bibliothèque, uniquement sur cet appareil.</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s · %3$s — requêtes : %4$s · %5$s en entrée / %6$s en sortie · %7$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s · %3$s — requêtes : %4$s · %5$s en entrée / %6$s en sortie (prix inconnu)</string>
     <string name="common_settings_ai_spend_total">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie (certains modèles n’ont pas de prix)</string>
+    <string name="common_settings_ai_spend_total_unpriced">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie (prix inconnu)</string>
+    <plurals name="common_settings_ai_spend_model_line_partial">
+        <item quantity="one">%1$s · %2$s · %3$s — requêtes : %4$s · %5$s en entrée / %6$s en sortie · au moins %7$s, plus %8$d requête sans prix</item>
+        <item quantity="other">%1$s · %2$s · %3$s — requêtes : %4$s · %5$s en entrée / %6$s en sortie · au moins %7$s, plus %8$d requêtes sans prix</item>
+    </plurals>
+    <plurals name="common_settings_ai_spend_total_partial">
+        <item quantity="one">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie · au moins %4$s + %5$d requête sans prix</item>
+        <item quantity="other">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie · au moins %4$s + %5$d requêtes sans prix</item>
+    </plurals>
+    <string name="common_settings_ai_spend_approx">≈%1$s</string>
+    <string name="common_settings_ai_spend_kind_chat">Discussion avec l’assistant</string>
+    <string name="common_settings_ai_spend_kind_suggest">Suggestions de modification</string>
+    <string name="common_settings_ai_spend_kind_enrichment">Organisation automatique</string>
+    <string name="common_settings_ai_spend_kind_ocr">Lecture du texte</string>
+    <string name="common_settings_ai_spend_kind_other">Autre</string>
     <string name="common_settings_ai_spend_reset">Effacer l’historique des dépenses</string>
     <string name="common_settings_ai_spend_reset_title">Effacer l’historique des dépenses IA ?</string>
     <string name="common_settings_ai_spend_reset_message">Toutes les requêtes que cet appareil a enregistrées pour cette bibliothèque seront supprimées. Cette action est irréversible.</string>

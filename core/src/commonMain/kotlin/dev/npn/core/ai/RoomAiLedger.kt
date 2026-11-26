@@ -34,9 +34,11 @@ private fun dev.npn.core.db.AiUsageAggregate.toTotals(): AiUsageTotals =
     AiUsageTotals(
         provider = provider,
         model = model,
+        kind = AiUsageKind.entries.firstOrNull { it.name == kind },
         requests = requests,
         inputTokens = inputTokens,
         outputTokens = outputTokens,
         estimatedCostUsd = estimatedCostUsd,
         unpricedRequests = unpricedRequests,
+        estimatedRequests = estimatedRequests,
     )

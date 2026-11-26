@@ -33,14 +33,16 @@ class AiUsageLedgerTest {
         cost: Double? = 0.01,
         at: Long = 1_000,
         runId: String? = "run-1",
+        kind: AiUsageKind = AiUsageKind.SUGGEST,
+        estimated: Boolean = false,
     ) = AiUsageRecord(
         provider = provider,
         model = model,
-        kind = AiUsageKind.SUGGEST,
+        kind = kind,
         inputTokens = input,
         outputTokens = output,
         estimatedCostUsd = cost,
-        estimated = false,
+        estimated = estimated,
         recordedAt = at,
         runId = runId,
     )
@@ -84,6 +86,20 @@ class AiUsageLedgerTest {
             totals.estimatedCostUsd shouldBe null
             totals.unpricedRequests shouldBe 1
             totals.inputTokens shouldBe 1_000
+        }
+
+    @Test
+    fun totalsKeepEachKindOfWorkApartAndCountEstimatedRequests() =
+        runTest {
+            ledger.record(record(kind = AiUsageKind.CHAT, estimated = true))
+            ledger.record(record(kind = AiUsageKind.CHAT))
+            ledger.record(record(kind = AiUsageKind.OCR))
+
+            val byKind = ledger.totals(null).associateBy { it.kind }
+            byKind.keys shouldBe setOf(AiUsageKind.CHAT, AiUsageKind.OCR)
+            byKind.getValue(AiUsageKind.CHAT).requests shouldBe 2
+            byKind.getValue(AiUsageKind.CHAT).estimatedRequests shouldBe 1
+            byKind.getValue(AiUsageKind.OCR).estimatedRequests shouldBe 0
         }
 
     @Test

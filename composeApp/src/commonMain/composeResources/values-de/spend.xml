@@ -4,11 +4,25 @@
     <string name="common_settings_ai_spend_last30">Letzte 30 Tage</string>
     <string name="common_settings_ai_spend_all_time">Gesamt</string>
     <string name="common_settings_ai_spend_empty">Noch keine Anfragen erfasst.</string>
-    <string name="common_settings_ai_spend_estimated">Kosten sind Schätzungen aus Listenpreisen. Wenn ein Anbieter die Nutzung nicht meldet, sind auch die Token-Zahlen geschätzt. Für diese Bibliothek erfasst, nur auf diesem Gerät.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — Anfragen: %3$s · %4$s ein / %5$s aus · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — Anfragen: %3$s · %4$s ein / %5$s aus (Preis unbekannt)</string>
+    <string name="common_settings_ai_spend_estimated">Kosten sind Schätzungen aus Listenpreisen. Mit ≈ markierte Token-Zahlen sind ebenfalls geschätzt, weil der Anbieter die Nutzung nicht gemeldet hat. Für diese Bibliothek erfasst, nur auf diesem Gerät.</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s · %3$s — Anfragen: %4$s · %5$s ein / %6$s aus · %7$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s · %3$s — Anfragen: %4$s · %5$s ein / %6$s aus (Preis unbekannt)</string>
     <string name="common_settings_ai_spend_total">Anfragen gesamt: %1$s · %2$s ein / %3$s aus · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Anfragen gesamt: %1$s · %2$s ein / %3$s aus (für einige Modelle ist kein Preis bekannt)</string>
+    <string name="common_settings_ai_spend_total_unpriced">Anfragen gesamt: %1$s · %2$s ein / %3$s aus (Preis unbekannt)</string>
+    <plurals name="common_settings_ai_spend_model_line_partial">
+        <item quantity="one">%1$s · %2$s · %3$s — Anfragen: %4$s · %5$s ein / %6$s aus · mindestens %7$s, dazu %8$d Anfrage ohne Preis</item>
+        <item quantity="other">%1$s · %2$s · %3$s — Anfragen: %4$s · %5$s ein / %6$s aus · mindestens %7$s, dazu %8$d Anfragen ohne Preis</item>
+    </plurals>
+    <plurals name="common_settings_ai_spend_total_partial">
+        <item quantity="one">Anfragen gesamt: %1$s · %2$s ein / %3$s aus · mindestens %4$s + %5$d Anfrage ohne Preis</item>
+        <item quantity="other">Anfragen gesamt: %1$s · %2$s ein / %3$s aus · mindestens %4$s + %5$d Anfragen ohne Preis</item>
+    </plurals>
+    <string name="common_settings_ai_spend_approx">≈%1$s</string>
+    <string name="common_settings_ai_spend_kind_chat">Assistent-Chat</string>
+    <string name="common_settings_ai_spend_kind_suggest">Bearbeitungsvorschläge</string>
+    <string name="common_settings_ai_spend_kind_enrichment">Automatisch ordnen</string>
+    <string name="common_settings_ai_spend_kind_ocr">Text lesen</string>
+    <string name="common_settings_ai_spend_kind_other">Sonstiges</string>
     <string name="common_settings_ai_spend_reset">Ausgabenverlauf löschen</string>
     <string name="common_settings_ai_spend_reset_title">KI-Ausgabenverlauf löschen?</string>
     <string name="common_settings_ai_spend_reset_message">Jede Anfrage, die dieses Gerät für diese Bibliothek erfasst hat, wird entfernt. Das lässt sich nicht rückgängig machen.</string>

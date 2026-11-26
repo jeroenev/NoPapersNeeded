@@ -8,12 +8,13 @@ import kotlin.test.Test
 /** The pre-flight arithmetic, the price table and the per-run budget, without an endpoint. */
 class AiSpendTest {
     @Test
-    fun mixedPricedAndUnpricedRequestsDoNotProduceACompleteDollarTotal() {
-        val priced = AiUsageTotals("p", "m", 1, 10, 2, 0.5, 0)
-        val unpriced = AiUsageTotals("p", "other", 1, 10, 2, null, 1)
-        listOf(priced).completeCostUsd() shouldBe 0.5
-        listOf(priced, unpriced).completeCostUsd() shouldBe null
-        listOf(priced.copy(requests = 2, unpricedRequests = 1)).completeCostUsd() shouldBe null
+    fun oneUnpricedRequestLeavesThePricedSpendStandingAndCountsWhatHadNoPrice() {
+        val priced = AiUsageTotals("p", "m", AiUsageKind.CHAT, 1, 10, 2, 0.5, 0, 0)
+        val unpriced = AiUsageTotals("p", "other", AiUsageKind.OCR, 1, 10, 2, null, 1, 0)
+        listOf(priced).spendTotal() shouldBe AiSpendTotal(0.5, pricedRequests = 1, unpricedRequests = 0)
+        listOf(priced, unpriced).spendTotal() shouldBe AiSpendTotal(0.5, pricedRequests = 1, unpricedRequests = 1)
+        listOf(priced.copy(requests = 3, unpricedRequests = 1)).spendTotal() shouldBe
+            AiSpendTotal(0.5, pricedRequests = 2, unpricedRequests = 1)
     }
 
     @Test

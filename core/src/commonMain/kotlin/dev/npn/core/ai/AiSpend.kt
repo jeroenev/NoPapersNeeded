@@ -36,28 +36,40 @@ data class AiUsageRecord(
     val runId: String?,
 )
 
-/** One provider/model's recorded requests, as the ledger aggregates them. */
+/** One provider, model and kind of work's recorded requests, as the ledger aggregates them. */
 data class AiUsageTotals(
     val provider: String,
     val model: String,
+    /** What the requests were for; null for a kind a newer build recorded. */
+    val kind: AiUsageKind?,
     val requests: Int,
     val inputTokens: Long,
     val outputTokens: Long,
-    /** Sum of the priced requests' cost; null when no request on this model had a known price. */
+    /** Sum of the priced requests' cost; null when no request on this line had a known price. */
     val estimatedCostUsd: Double?,
     /** Requests whose model has no price (or no usage at all), reported as tokens only. */
     val unpricedRequests: Int,
+    /** Requests whose token counts this device estimated, as the provider reported no usage. */
+    val estimatedRequests: Int,
 )
 
-/** A dollar total is complete only when every request has a price. */
-fun List<AiUsageTotals>.completeCostUsd(): Double? =
-    if (isEmpty() ||
-        any { it.unpricedRequests > 0 || it.estimatedCostUsd == null }
-    ) {
-        null
-    } else {
-        sumOf { it.estimatedCostUsd ?: 0.0 }
-    }
+/**
+ * What a set of ledger lines spent: the sum of every priced request ([pricedUsd], over
+ * [pricedRequests]) and how many requests had no price. One unpriced request never hides the rest:
+ * the sum is a lower bound, shown as "at least" next to the unpriced count.
+ */
+data class AiSpendTotal(
+    val pricedUsd: Double,
+    val pricedRequests: Int,
+    val unpricedRequests: Int,
+)
+
+fun List<AiUsageTotals>.spendTotal(): AiSpendTotal =
+    AiSpendTotal(
+        pricedUsd = sumOf { it.estimatedCostUsd ?: 0.0 },
+        pricedRequests = sumOf { it.requests - it.unpricedRequests },
+        unpricedRequests = sumOf { it.unpricedRequests },
+    )
 
 /** The spend ledger's totals: the rolling last 30 days and everything this device recorded for the library. */
 data class AiSpendSummary(
@@ -338,7 +350,7 @@ interface AiLedger {
     /** Record one request. A failure here must not fail the AI call that produced it. */
     suspend fun record(record: AiUsageRecord)
 
-    /** Totals since [sinceMillis] (inclusive), or everything when null, per provider and model. */
+    /** Totals since [sinceMillis] (inclusive), or everything when null, per provider, model and kind. */
     suspend fun totals(sinceMillis: Long?): List<AiUsageTotals>
 
     /** Delete every recorded request. */

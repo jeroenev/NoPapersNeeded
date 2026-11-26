@@ -4,11 +4,25 @@
     <string name="common_settings_ai_spend_last30">Últimos 30 días</string>
     <string name="common_settings_ai_spend_all_time">Total</string>
     <string name="common_settings_ai_spend_empty">Aún no hay solicitudes registradas.</string>
-    <string name="common_settings_ai_spend_estimated">Los costes son estimaciones según los precios de lista. Cuando un proveedor no informa del uso, los tokens también son una estimación. Se registra para esta biblioteca, solo en este dispositivo.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — solicitudes: %3$s · %4$s de entrada / %5$s de salida · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — solicitudes: %3$s · %4$s de entrada / %5$s de salida (precio desconocido)</string>
+    <string name="common_settings_ai_spend_estimated">Los costes son estimaciones según los precios de lista. Los tokens marcados con ≈ también son estimaciones, porque el proveedor no informó del uso. Se registra para esta biblioteca, solo en este dispositivo.</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s · %3$s — solicitudes: %4$s · %5$s de entrada / %6$s de salida · %7$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s · %3$s — solicitudes: %4$s · %5$s de entrada / %6$s de salida (precio desconocido)</string>
     <string name="common_settings_ai_spend_total">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida (algunos modelos no tienen precio)</string>
+    <string name="common_settings_ai_spend_total_unpriced">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida (precio desconocido)</string>
+    <plurals name="common_settings_ai_spend_model_line_partial">
+        <item quantity="one">%1$s · %2$s · %3$s — solicitudes: %4$s · %5$s de entrada / %6$s de salida · al menos %7$s, más %8$d solicitud sin precio</item>
+        <item quantity="other">%1$s · %2$s · %3$s — solicitudes: %4$s · %5$s de entrada / %6$s de salida · al menos %7$s, más %8$d solicitudes sin precio</item>
+    </plurals>
+    <plurals name="common_settings_ai_spend_total_partial">
+        <item quantity="one">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida · al menos %4$s + %5$d solicitud sin precio</item>
+        <item quantity="other">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida · al menos %4$s + %5$d solicitudes sin precio</item>
+    </plurals>
+    <string name="common_settings_ai_spend_approx">≈%1$s</string>
+    <string name="common_settings_ai_spend_kind_chat">Chat del asistente</string>
+    <string name="common_settings_ai_spend_kind_suggest">Sugerencias de edición</string>
+    <string name="common_settings_ai_spend_kind_enrichment">Organización automática</string>
+    <string name="common_settings_ai_spend_kind_ocr">Lectura de texto</string>
+    <string name="common_settings_ai_spend_kind_other">Otros</string>
     <string name="common_settings_ai_spend_reset">Borrar historial de gasto</string>
     <string name="common_settings_ai_spend_reset_title">¿Borrar el historial de gasto de IA?</string>
     <string name="common_settings_ai_spend_reset_message">Se eliminarán todas las solicitudes que este dispositivo registró para esta biblioteca. No se puede deshacer.</string>
