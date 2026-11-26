@@ -24,8 +24,6 @@
     <string name="palette_action_tags">Go to Tags</string>
     <string name="palette_action_settings">Go to Settings</string>
 
-    <string name="palette_import_failed">Could not import the files: %1$s</string>
-    <string name="palette_sync_failed">Could not sync: %1$s</string>
     <plurals name="palette_tag_documents">
         <item quantity="one">%1$d document</item>
         <item quantity="other">%1$d documents</item>

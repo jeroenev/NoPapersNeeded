@@ -11,16 +11,15 @@ import dev.npn.app.ui.common.importBatch
 import dev.npn.app.ui.common.importScanned
 import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.queue.syncNowNotice
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.TagInfo
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.settings.SettingsRepository
-import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -29,17 +28,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_show
-import no_papers_needed.composeapp.generated.resources.palette_import_failed
-import no_papers_needed.composeapp.generated.resources.palette_sync_failed
-import no_papers_needed.composeapp.generated.resources.queue_sync_not_configured
-import no_papers_needed.composeapp.generated.resources.queue_sync_unavailable
+import no_papers_needed.composeapp.generated.resources.queue_sync_now_failed
 
 /** What the palette's overlay asks of it: the query, the keyboard, and running a result. */
 internal interface CommandPaletteActions {
@@ -80,7 +76,8 @@ private class StaticSources(
  *
  * Documents the repository returns are kept even when neither their title nor their file name
  * matches: the full-text index may have found them by their contents, and their order still puts
- * the strongest title matches first.
+ * the strongest title matches first. The documents on screen stay until the next query's arrive,
+ * and Enter pressed while a search is under way runs the selection once it has answered.
  */
 internal class CommandPaletteViewModel(
     private val session: LibrarySession,
@@ -111,6 +108,9 @@ internal class CommandPaletteViewModel(
 
     private var searchJob: Job? = null
 
+    /** Enter was pressed while [searchJob] ran: run the selection once it has answered. */
+    private var runWhenSearched = false
+
     private val uiBits = combine(open, selected, ::UiBits)
 
     private val librarySources = combine(documents, tags, views, ::LibrarySources)
@@ -119,15 +119,25 @@ internal class CommandPaletteViewModel(
 
     val state: StateFlow<PaletteState> =
         combine(uiBits, query, librarySources, staticSources) { bits, text, library, static ->
-            val groups = groups(text, library, static)
-            val count = groups.sumOf { it.items.size }
-            PaletteState(
-                open = bits.open,
-                query = text,
-                groups = groups,
-                selected = if (count == 0) 0 else bits.selected.coerceIn(0, count - 1),
-            )
+            paletteState(bits.open, bits.selected, text, library, static)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, PaletteState())
+
+    private fun paletteState(
+        open: Boolean,
+        selected: Int,
+        text: String,
+        library: LibrarySources,
+        static: StaticSources,
+    ): PaletteState {
+        val groups = groups(text, library, static)
+        val count = groups.sumOf { it.items.size }
+        return PaletteState(
+            open = open,
+            query = text,
+            groups = groups,
+            selected = if (count == 0) 0 else selected.coerceIn(0, count - 1),
+        )
+    }
 
     fun bindNavigation(navigation: PaletteNavigation) {
         this.navigation = navigation
@@ -157,6 +167,8 @@ internal class CommandPaletteViewModel(
     override fun onQueryChange(text: String) {
         query.value = text
         selected.value = 0
+        // An Enter pressed for the query before this one is not carried over to this one.
+        runWhenSearched = false
         searchDocuments(text)
     }
 
@@ -167,8 +179,18 @@ internal class CommandPaletteViewModel(
     }
 
     override fun runSelected() {
-        val current = state.value
-        if (current.query == query.value) current.selectedItem?.let(::run)
+        if (searchJob?.isActive == true) {
+            runWhenSearched = true
+            return
+        }
+        // Read from the sources rather than [state], which may not have caught up with them yet.
+        paletteState(
+            open.value,
+            selected.value,
+            query.value,
+            LibrarySources(documents.value, tags.value, views.value),
+            StaticSources(commands.value, settingsEntries.value, recents.value),
+        ).selectedItem?.let(::run)
     }
 
     override fun run(item: PaletteItem) {
@@ -219,13 +241,7 @@ internal class CommandPaletteViewModel(
             }
 
             PaletteCommandId.SYNC_NOW -> {
-                launchReporting(Res.string.palette_sync_failed) {
-                    when (session.sync.syncNow()) {
-                        is SyncOutcome.Unavailable -> message(uiText(Res.string.queue_sync_unavailable))
-                        SyncOutcome.NotConfigured -> message(uiText(Res.string.queue_sync_not_configured))
-                        is SyncOutcome.Completed, is SyncOutcome.Failed, SyncOutcome.AlreadyRunning -> Unit
-                    }
-                }
+                launchReporting(Res.string.queue_sync_now_failed) { session.sync.syncNowNotice()?.let(::message) }
             }
 
             PaletteCommandId.ASSISTANT -> {
@@ -251,6 +267,7 @@ internal class CommandPaletteViewModel(
         query.value = ""
         selected.value = 0
         searchJob?.cancel()
+        runWhenSearched = false
         documents.value = emptyList()
     }
 
@@ -258,7 +275,7 @@ internal class CommandPaletteViewModel(
     fun importFiles(files: List<Pair<ExternalSource, String>>) {
         if (files.isEmpty()) return
         close()
-        launchReporting(Res.string.palette_import_failed) {
+        launchReporting(Res.string.library_import_failed) {
             val batch = session.ingest.importBatch(ImportRequest(files))
             message(
                 batch.asUiText(),
@@ -278,7 +295,7 @@ internal class CommandPaletteViewModel(
 
     /** Import what a platform scan came to, and say what became of it. */
     fun importScan(result: ScanResult) =
-        launchReporting(Res.string.palette_import_failed) {
+        launchReporting(Res.string.library_import_failed) {
             session.ingest.importScanned(result, ::message)
         }
 
@@ -289,27 +306,30 @@ internal class CommandPaletteViewModel(
 
     /**
      * Search the library for [text]. A blank query reads the documents chosen before, so an empty
-     * palette leads with what the user last picked; typing goes through the repository's full-text
-     * and file-name search, debounced and bounded.
+     * palette leads with what the user last picked; typing goes through the repository's bounded
+     * search, debounced. The documents shown stay until the new ones replace them, and an Enter
+     * pressed meanwhile runs the selection once they have.
      */
     private fun searchDocuments(text: String) {
         searchJob?.cancel()
-        documents.value = emptyList()
         if (!open.value) return
         searchJob =
             viewModelScope.launch {
-                if (text.isBlank()) {
-                    documents.value = recentDocuments()
-                } else {
-                    delay(SEARCH_DEBOUNCE_MS)
-                    documents.value =
+                documents.value =
+                    if (text.isBlank()) {
+                        recentDocuments()
+                    } else {
+                        delay(SEARCH_DEBOUNCE_MS)
                         log
                             .runLogged("Searching the library from the palette") {
-                                session.documents
-                                    .observeDocuments(LibraryFilter(query = text), LibrarySort())
-                                    .first()
-                                    .take(MAX_DOCUMENT_CANDIDATES)
+                                session.documents.searchDocuments(text, MAX_DOCUMENT_CANDIDATES)
                             }.orEmpty()
+                    }
+                if (runWhenSearched) {
+                    runWhenSearched = false
+                    // This job is still the active one while it runs the selection: clear it first.
+                    searchJob = null
+                    runSelected()
                 }
             }
     }

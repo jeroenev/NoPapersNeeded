@@ -144,24 +144,48 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             current.tags shouldBe 1
         }
 
+    /**
+     * Enter typed before the search has answered runs the new query's first result once it has,
+     * not whatever led the list meanwhile (a tag, a settings pane, an action).
+     */
     @Test
-    fun changingQueryRemovesOldDocumentsBeforeDebounce() =
+    fun enterBeforeTheSearchAnswersRunsTheNewQuerysFirstResult() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            session.documents.documents.value = listOf(listItem(doc("doc-1", title = "Tax invoice")))
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(listItem(doc("doc-1", title = "Tax invoice")))
+                    tags.tags.value = listOf(TagInfo("taxes", null, null, 2))
+                }
             val navigation = FakePaletteNavigation()
             val model = vm(session, navigation)
             model.open()
+            advanceUntilIdle()
+
+            model.onQueryChange("tax")
+            model.runSelected()
+            navigation.filters shouldBe emptyList()
+            advanceUntilIdle()
+
+            navigation.documents shouldContainExactly listOf("doc-1")
+            navigation.filters shouldBe emptyList()
+        }
+
+    /** The results on screen stay until the next query's arrive, so the list does not flicker per key. */
+    @Test
+    fun previousResultsStayUntilTheNewOnesArrive() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.documents.value = listOf(listItem(doc("doc-1", title = "Tax invoice")))
+            val model = vm(session)
+            model.open()
             model.onQueryChange("tax")
             advanceUntilIdle()
+
+            model.onQueryChange("taxi")
+            runCurrent()
+
             model.state.value.items
                 .any { it.key == "doc:doc-1" } shouldBe true
-            model.onQueryChange("zzzz")
-            model.runSelected()
-            navigation.documents shouldBe emptyList()
-            runCurrent()
-            model.state.value.items
-                .any { it.key == "doc:doc-1" } shouldBe false
         }
 
     @Test
@@ -229,7 +253,7 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             navigation.documents shouldContainExactly listOf("doc-1")
-            session.documents.observedFilters.any { it.first.query == "tax" } shouldBe true
+            session.documents.searches.any { it.first == "tax" } shouldBe true
         }
 
     @Test
@@ -392,10 +416,13 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.onQueryChange("ta")
             advanceUntilIdle()
 
-            session.documents.observedFilters.count { it.first.query != null } shouldBe 1
-            session.documents.observedFilters
-                .last { it.first.query != null }
-                .first.query shouldBe "ta"
+            // One bounded search, for the last query: not the whole result set per keystroke.
+            session.documents.searches.map { it.first } shouldContainExactly listOf("ta")
+            (
+                session.documents.searches
+                    .single()
+                    .second <= MAX_PALETTE_DOCUMENTS
+            ) shouldBe true
         }
 
     @Test
@@ -506,4 +533,8 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
 
             requests shouldContainExactly listOf(PaletteRequest.PickFiles)
         }
+
+    private companion object {
+        const val MAX_PALETTE_DOCUMENTS = 50
+    }
 }

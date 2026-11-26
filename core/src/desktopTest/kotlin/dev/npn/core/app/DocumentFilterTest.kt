@@ -407,6 +407,30 @@ class DocumentFilterTest {
             results.first().snippet.shouldNotBeNull()
         }
 
+    /**
+     * The palette's search: the best live matches, at most as many as asked for, with the snippet a
+     * full-text hit shows; a trashed match is left out.
+     */
+    @Test
+    fun searchDocumentsReturnsAtMostTheLimitOfLiveMatches() =
+        appSessionTest { rig ->
+            listOf("alpha", "bravo", "charlie", "delta").forEach {
+                rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf("invoice $it"))
+            }
+            rig.session.rescan()
+            drainOcr(rig)
+            rig.session.docLifecycle.trashDoc(rig.fs.sha256("alpha.pdf"))
+
+            val found = rig.session.documents.searchDocuments("invoice", limit = 2)
+
+            found.size shouldBe 2
+            found.none { it.doc.fileName == "alpha.pdf" } shouldBe true
+            found.all { it.snippet != null } shouldBe true
+            rig.session.documents
+                .searchDocuments("invoice", limit = 10)
+                .size shouldBe 3
+        }
+
     /** An id list too long to bind in one statement narrows the result like a short one does. */
     @Test
     fun aLongIdListNarrowsAlongsideTheRestOfTheFilter() =

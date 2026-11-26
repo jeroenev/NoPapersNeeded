@@ -24,8 +24,6 @@
     <string name="palette_action_tags">Naar Tags</string>
     <string name="palette_action_settings">Naar Instellingen</string>
 
-    <string name="palette_import_failed">De bestanden konden niet worden geïmporteerd: %1$s</string>
-    <string name="palette_sync_failed">Synchroniseren is mislukt: %1$s</string>
     <plurals name="palette_tag_documents">
         <item quantity="one">%1$d document</item>
         <item quantity="other">%1$d documenten</item>

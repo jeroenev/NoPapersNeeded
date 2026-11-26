@@ -2,8 +2,6 @@ package dev.npn.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,8 +33,8 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.OpenDocumentRequests
 import dev.npn.app.ui.common.PublishWindowTitle
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.reducedMotion
-import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
@@ -144,7 +141,8 @@ internal fun MainNav(
                         // Not while the palette's own window is open: the two must not fight over
                         // focus as the dialog appears.
                         KeepShellFocus(shellFocus, shellFocusHeld || paletteState.open)
-                        val paletteSnackbar = rememberSnackbarMessages(palette.messages)
+                        // The palette reports on the shell's own snackbar, not a second one over it.
+                        SnackbarMessages(palette.messages, snackbar)
                         Box(Modifier.fillMaxSize()) {
                             NavigationShell(
                                 current = topLevel,
@@ -182,10 +180,6 @@ internal fun MainNav(
                                 onSetSources = palette::setSources,
                                 onImportFiles = palette::importFiles,
                                 onImportScan = palette::importScan,
-                            )
-                            SnackbarHost(
-                                paletteSnackbar,
-                                Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                             )
                         }
                     }

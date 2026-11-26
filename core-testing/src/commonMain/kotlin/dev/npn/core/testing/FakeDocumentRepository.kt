@@ -105,6 +105,18 @@ class FakeDocumentRepository : DocumentRepository {
 
     override fun observeDoc(docId: String): Flow<DocListItem?> = singleDoc
 
+    /** Every (query, limit) [searchDocuments] was called with. */
+    val searches = mutableListOf<Pair<String, Int>>()
+
+    /** [documents] up to the limit, whatever the query: a test chooses what a search finds. */
+    override suspend fun searchDocuments(
+        query: String,
+        limit: Int,
+    ): List<DocListItem> {
+        searches += query to limit
+        return documents.value.take(limit)
+    }
+
     override fun observeReviewQueueCount(mode: ReviewMode): Flow<Int> =
         when (mode) {
             ReviewMode.UNTAGGED_ONLY -> untaggedCount

@@ -100,6 +100,16 @@ interface DocumentRepository {
 
     fun observeDoc(docId: String): Flow<DocListItem?>
 
+    /**
+     * The live documents [query] finds (full text, file names and metadata, as [observeDocuments]
+     * searches them), best match first, read once and at most [limit] of them: tags, fields and a
+     * snippet are read for those alone, so it costs what it returns rather than the whole match.
+     */
+    suspend fun searchDocuments(
+        query: String,
+        limit: Int,
+    ): List<DocListItem>
+
     /** How many documents [mode]'s review queue holds: those its [reviewQueueFilter] lists. */
     fun observeReviewQueueCount(mode: ReviewMode): Flow<Int>
 

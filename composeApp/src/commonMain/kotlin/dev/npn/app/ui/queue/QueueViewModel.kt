@@ -2,11 +2,13 @@ package dev.npn.app.ui.queue
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.SyncFacade
 import dev.npn.core.app.WorkBlock
 import dev.npn.core.app.WorkCapabilities
 import dev.npn.core.app.WorkFacade
@@ -159,12 +161,17 @@ class QueueViewModel(
      * Run a cloud sync pass now. How it went shows on the sync row, which points a failure to the
      * cloud sync settings; only a pass that could not start at all is said here.
      */
-    fun syncNow() =
-        launchReporting(Res.string.queue_sync_now_failed) {
-            when (cloud.syncNow()) {
-                is SyncOutcome.Unavailable -> message(uiText(Res.string.queue_sync_unavailable))
-                SyncOutcome.NotConfigured -> message(uiText(Res.string.queue_sync_not_configured))
-                is SyncOutcome.Completed, is SyncOutcome.Failed, SyncOutcome.AlreadyRunning -> Unit
-            }
-        }
+    fun syncNow() = launchReporting(Res.string.queue_sync_now_failed) { cloud.syncNowNotice()?.let(::message) }
 }
+
+/**
+ * Run a cloud sync pass now, and what to tell the user of it: only a pass that could not start at
+ * all is said, as how a pass went shows on Activity's sync row. Activity's Sync now and the
+ * palette's share it.
+ */
+internal suspend fun SyncFacade.syncNowNotice(): UiText? =
+    when (syncNow()) {
+        is SyncOutcome.Unavailable -> uiText(Res.string.queue_sync_unavailable)
+        SyncOutcome.NotConfigured -> uiText(Res.string.queue_sync_not_configured)
+        is SyncOutcome.Completed, is SyncOutcome.Failed, SyncOutcome.AlreadyRunning -> null
+    }

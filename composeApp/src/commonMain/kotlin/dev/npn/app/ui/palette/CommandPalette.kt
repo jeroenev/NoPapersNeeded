@@ -50,12 +50,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +65,7 @@ import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.platform.platformFileToExternalSource
 import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.previewKeyShortcuts
 import dev.npn.app.ui.settings.settingsCategoryLabels
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
@@ -229,7 +227,7 @@ private fun PaletteCard(
             Modifier
                 .paletteCardWidth()
                 .height(cardHeight)
-                .onPreviewKeyEvent { event -> handlePaletteKey(event, actions) },
+                .previewKeyShortcuts { event -> paletteKey(event, actions) },
             shape = MaterialTheme.shapes.large,
             tonalElevation = 3.dp,
             shadowElevation = 8.dp,
@@ -283,42 +281,35 @@ private fun PaletteSearchField(
 }
 
 /** The palette's keys, bound on the dialog so they work wherever focus is inside it. */
-private fun handlePaletteKey(
+private fun paletteKey(
     event: KeyEvent,
     actions: CommandPaletteActions,
-): Boolean {
-    if (event.type != KeyEventType.KeyDown) return false
-    return when {
+): (() -> Unit)? =
+    when {
         event.key == Key.DirectionDown -> {
-            actions.moveSelection(1)
-            true
+            { actions.moveSelection(1) }
         }
 
         event.key == Key.DirectionUp -> {
-            actions.moveSelection(-1)
-            true
+            { actions.moveSelection(-1) }
         }
 
         event.key == Key.Enter || event.key == Key.NumPadEnter -> {
-            actions.runSelected()
-            true
+            actions::runSelected
         }
 
         event.key == Key.Escape -> {
-            actions.close()
-            true
+            actions::close
         }
 
         event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed) -> {
-            actions.close()
-            true
+            actions::close
         }
 
         else -> {
-            false
+            null
         }
     }
-}
 
 private val SCRIM = Color.Black.copy(alpha = 0.32f)
 

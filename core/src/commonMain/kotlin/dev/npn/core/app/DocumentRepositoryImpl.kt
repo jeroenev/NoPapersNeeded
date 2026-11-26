@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.withContext
 
 /**
  * The single translation from the disposable index row to the [Doc] the rest of the app sees.
@@ -118,6 +119,25 @@ internal class DocumentRepositoryImpl(
                     listItems(matched, snippets)
                 }
             }.flowOn(mapping)
+    }
+
+    override suspend fun searchDocuments(
+        query: String,
+        limit: Int,
+    ): List<DocListItem> {
+        if (query.isBlank() || limit <= 0) return emptyList()
+        return withContext(mapping) {
+            val match = FtsQuery.sanitize(query)
+            // Ranked ids are cheap; rows are read a slice at a time until enough live ones are found.
+            val found = ArrayList<DocumentEntity>(limit)
+            for (slice in ftsDao.search(match).chunked(limit)) {
+                val rows = documentDao.getByDocIds(slice).filter { it.isLive }.associateBy { it.docId }
+                slice.mapNotNullTo(found) { rows[it] }
+                if (found.size >= limit) break
+            }
+            val top = found.take(limit)
+            listItems(top, ftsDao.snippetsFor(match, top.map { it.docId }))
+        }
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> =

@@ -24,8 +24,6 @@
     <string name="palette_action_tags">Ir a Etiquetas</string>
     <string name="palette_action_settings">Ir a Ajustes</string>
 
-    <string name="palette_import_failed">No se pudieron importar los archivos: %1$s</string>
-    <string name="palette_sync_failed">No se pudo sincronizar: %1$s</string>
     <plurals name="palette_tag_documents">
         <item quantity="one">%1$d documento</item>
         <item quantity="other">%1$d documentos</item>
