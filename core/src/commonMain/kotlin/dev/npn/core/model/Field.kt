@@ -205,12 +205,17 @@ object FieldKeys {
     /**
      * Raised whenever [seedDefinitions] gains something a library seeded earlier should get too
      * ([upgradeSeeded]). 1: the five definitions. 2: title's [FieldDef.perDocument] and the hints.
-     * 3: the e-invoice fields and their marker. 4: the email Message-ID.
+     * 3: the e-invoice fields and their marker, which earlier builds seeded into every library. They
+     * are the library's E-invoice fields setting now ([eInvoiceDefinitions]): a library is seeded at
+     * 3 without them, and one seeded with them keeps them. 4: the email Message-ID.
      */
     const val SEED_VERSION = 4
 
-    /** Seeded fields introduced at [SEED_VERSION] 3; [upgradeSeeded] adds them to older libraries. */
-    private val ADDED_IN_VERSION_3: Set<String> =
+    /**
+     * The keys of [eInvoiceDefinitions]. A library that registers any of them and never decided on
+     * the E-invoice fields setting has them from an earlier seed, and counts as having it on.
+     */
+    val EINVOICE_FIELDS: Set<String> =
         setOf(
             INVOICE_NUMBER,
             INVOICE_TOTAL,
@@ -296,7 +301,7 @@ object FieldKeys {
             // Not AI-enabled on purpose: automatic enrichment must not start generating prose into
             // the user's notes on every OCR completion, which is exactly today's behaviour.
             FieldDef(NOTES, labels(NOTES), FieldType.LONG_TEXT, showByDefault = true, aiEnabled = false, position = 4),
-        ) + eInvoiceDefinitions(labels) + emailDefinitions(labels)
+        ) + emailDefinitions(labels)
 
     /** What email import records about the email a document came from; [HIDDEN] from everyone. */
     private fun emailDefinitions(labels: (String) -> String): List<FieldDef> =
@@ -313,11 +318,12 @@ object FieldKeys {
         )
 
     /**
-     * The fields an embedded structured e-invoice fills ([dev.npn.core.einvoice.EInvoiceData]).
-     * Deliberately not AI-enabled: a seller's own numbers are not a model's guess. All are hidden
-     * until a value lands, and the last is only the badge marker.
+     * The fields an embedded structured e-invoice fills ([dev.npn.core.einvoice.EInvoiceData]), which
+     * the library's E-invoice fields setting adds. Deliberately not AI-enabled: a seller's own
+     * numbers are not a model's guess. All are hidden until a value lands, and the last is only the
+     * badge marker. Their positions follow the five seeds; a library places them after its own.
      */
-    private fun eInvoiceDefinitions(labels: (String) -> String): List<FieldDef> =
+    fun eInvoiceDefinitions(labels: (String) -> String = { it }): List<FieldDef> =
         listOf(
             FieldDef(
                 INVOICE_NUMBER,
@@ -394,8 +400,9 @@ object FieldKeys {
     /**
      * What a library seeded at an earlier [fromVersion] gains from [seeds]: each definition still
      * registered under a seeded key takes the seed's [FieldDef.perDocument], and its hint where it has
-     * none; definitions introduced at a later seed version than [fromVersion] (3, 4) and missing from
+     * none; definitions introduced at a later seed version than [fromVersion] (4) and missing from
      * [current] are added, because a library seeded before them never had the chance to delete them.
+     * Version 3 adds nothing: its e-invoice fields became the library's E-invoice fields setting.
      * Everything else the library decided stays: a label, type, flag or position changed since, a hint
      * of its own, and a definition seeded before [fromVersion] that was deleted, which stays deleted.
      * Only the changed definitions are returned.
@@ -407,9 +414,7 @@ object FieldKeys {
     ): List<FieldDef> {
         val seedsByKey = seeds.associateBy { it.key }
         val present = current.mapTo(HashSet()) { it.key.lowercase() }
-        val introduced =
-            (if (fromVersion < 3) ADDED_IN_VERSION_3 else emptySet()) +
-                (if (fromVersion < 4) ADDED_IN_VERSION_4 else emptySet())
+        val introduced = if (fromVersion < 4) ADDED_IN_VERSION_4 else emptySet()
         val added = seeds.filter { it.key in introduced && it.key.lowercase() !in present }
         return current.mapNotNull { def ->
             val seed = seedsByKey[def.key] ?: return@mapNotNull null

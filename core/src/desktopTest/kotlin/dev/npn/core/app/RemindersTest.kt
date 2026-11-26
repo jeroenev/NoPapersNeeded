@@ -65,8 +65,10 @@ class RemindersTest {
         }
 
     @Test
-    fun enablingWithNoFieldChosenStartsFromTheSeededDueDate() =
+    fun enablingWithNoFieldChosenStartsFromTheDueDate() =
         appSessionTest { rig ->
+            // The due date is one of the e-invoice fields, which a new library has off.
+            rig.session.fieldRegistry.setEInvoiceFields(true)
             rig.session.reminders.setEnabled(true)
 
             val settings =
@@ -80,6 +82,8 @@ class RemindersTest {
     @Test
     fun enablingAfterSelectedFieldWasRemovedFallsBackToDueDate() =
         appSessionTest { rig ->
+            // The due date is one of the e-invoice fields, which a new library has off.
+            rig.session.fieldRegistry.setEInvoiceFields(true)
             val reminders = rig.session.reminders
             rig.session.fieldRegistry.upsert(
                 FieldDef("renewal", "Renewal", FieldType.DATE, false, false, FieldDef.PLACE_LAST),

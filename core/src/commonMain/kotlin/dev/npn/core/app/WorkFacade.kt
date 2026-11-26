@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.EditRunSource
 import dev.npn.core.app.aiedit.AiEditQueueFacade
 import kotlinx.coroutines.flow.Flow
 
@@ -109,6 +110,8 @@ data class QueuedEditRun(
     val nextAttemptAt: Long? = null,
     /** Message from the most recent failure, or null while the run has never failed. */
     val lastError: String? = null,
+    /** Where its suggestions come from: a model, or an emailed e-invoice held for review. */
+    val source: EditRunSource = EditRunSource.AI,
 )
 
 /**

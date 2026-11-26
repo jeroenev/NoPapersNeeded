@@ -481,6 +481,23 @@ class SettingsViewModelTest : MainDispatcherTest() {
         const val TREE = "content://com.example.documents/tree/primary%3AInbox"
     }
 
+    /** The E-invoice fields switch shows the library's setting and writes it through the registry. */
+    @Test
+    fun theEInvoiceFieldsSwitchFollowsAndWritesTheLibrarysSetting() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+            collecting(model.paneState)
+            advanceUntilIdle()
+            model.paneState.value.settings.eInvoiceFields shouldBe false
+
+            model.setEInvoiceFields(true)
+            advanceUntilIdle()
+
+            session.fieldRegistry.eInvoice.value shouldBe true
+            model.paneState.value.settings.eInvoiceFields shouldBe true
+        }
+
     @Test
     fun fieldManagerActionsReachTheRegistry() =
         runTest(dispatcher) {

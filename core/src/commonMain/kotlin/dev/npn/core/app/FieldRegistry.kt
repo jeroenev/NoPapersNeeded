@@ -61,6 +61,21 @@ interface FieldRegistry {
         delta: Int,
     )
 
+    /**
+     * The library's E-invoice fields setting: whether an import reads an embedded structured
+     * e-invoice into the document's fields. Library data, synced through the journal. Off for a new
+     * library; one that registers any of [dev.npn.core.model.FieldKeys.EINVOICE_FIELDS] and never
+     * decided has them from an earlier build's seed, and counts as on.
+     */
+    val eInvoiceFields: Flow<Boolean>
+
+    /**
+     * Turn the E-invoice fields on, adding whichever of
+     * [dev.npn.core.model.FieldKeys.eInvoiceDefinitions] the library lacks after its own fields, or
+     * off. Off only stops the reading: the fields and the values documents carry stay.
+     */
+    suspend fun setEInvoiceFields(enabled: Boolean)
+
     companion object {
         const val DEFAULT_VALUE_LIMIT = 200
     }

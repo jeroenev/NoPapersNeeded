@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="einvoice_badge">Depuis une facture électronique</string>
+    <string name="einvoice_setting">Champs de facture électronique</string>
+    <string name="einvoice_setting_help">Lorsqu’un PDF importé contient une facture électronique structurée (Factur-X, ZUGFeRD, XRechnung ou UBL), remplit les champs de facture à partir de celle-ci. Les données de facture reçues par e-mail attendent dans Activité que vous les vérifiiez. La désactivation conserve les champs et leurs valeurs.</string>
+    <string name="einvoice_review_run">Données de facture reçues par e-mail</string>
 </resources>

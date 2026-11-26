@@ -23,6 +23,15 @@ class FakeFieldRegistry : FieldRegistry {
 
     override val fields: Flow<List<FieldDef>> get() = defs
 
+    /** The E-invoice fields setting; the fake only records it, it adds no definitions. */
+    val eInvoice = MutableStateFlow(false)
+
+    override val eInvoiceFields: Flow<Boolean> get() = eInvoice
+
+    override suspend fun setEInvoiceFields(enabled: Boolean) {
+        eInvoice.value = enabled
+    }
+
     override fun orphanKeys(): Flow<List<String>> = orphans
 
     override fun usageCounts(): Flow<Map<String, Int>> = usage

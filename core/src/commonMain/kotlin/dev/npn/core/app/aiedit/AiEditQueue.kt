@@ -5,6 +5,8 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiRunBudget
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.ai.EditRunSource
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
@@ -221,6 +223,40 @@ internal class AiEditQueue(
                 AiEditJobDocEntity(jobId = jobId, docId = docId, position = index)
             },
         )
+    }
+
+    /**
+     * Hold [values] read from [docId]'s embedded e-invoice for the user's review, as a run of the one
+     * document that is finished from the start: there is no model to ask, so the drain never takes
+     * it, and it waits on the processing queue for the same Review and Apply as a bulk edit.
+     */
+    suspend fun holdForReview(
+        docId: String,
+        values: Map<String, String>,
+    ): String {
+        val jobId = newJobId()
+        ownWrite {
+            val now = clock.nowMillis()
+            val suggestion = AiEditSuggestion(metadata = FieldSuggestion(values))
+            dao.insertRun(
+                AiEditJobEntity(
+                    jobId = jobId,
+                    requestJson = json.encodeToString(AiEditRequest(source = EditRunSource.EINVOICE)),
+                    createdAt = now,
+                    updatedAt = now,
+                    nextAttemptAt = now,
+                ),
+                listOf(
+                    AiEditJobDocEntity(
+                        jobId = jobId,
+                        docId = docId,
+                        position = 0,
+                        suggestionJson = json.encodeToString(suggestion),
+                    ),
+                ),
+            )
+        }
+        return jobId
     }
 
     override suspend fun openEditRun(jobId: String): EditRunReview? {

@@ -11,6 +11,12 @@ enum class EInvoiceFormat(
     UBL("ubl"),
 }
 
+/** What a structured e-invoice asks for: payment ([INVOICE]), or a credit to the buyer ([CREDIT_NOTE]). */
+enum class EInvoiceKind {
+    INVOICE,
+    CREDIT_NOTE,
+}
+
 /**
  * The metadata a structured e-invoice carries that maps to document fields. Dates are canonical
  * `yyyy-MM-dd`, [totalAmount] is a canonical decimal, and [currency] is a three-letter code. Nothing
@@ -19,6 +25,7 @@ enum class EInvoiceFormat(
  */
 data class EInvoiceData(
     val format: EInvoiceFormat,
+    val kind: EInvoiceKind = EInvoiceKind.INVOICE,
     val invoiceNumber: String? = null,
     val issueDate: String? = null,
     val dueDate: String? = null,
@@ -45,22 +52,96 @@ data class EInvoiceData(
             ).all { it == null }
 
     /**
-     * The registry values this invoice fills, keyed by [FieldKeys]. Only what is present is included;
-     * the marker is always there so the detail screen can show that the metadata came from one.
+     * The registry values this invoice fills, keyed by [FieldKeys]; only what is present is included.
+     * The [FieldKeys.EINVOICE] marker is not among them: it is written once one of these was filled
+     * or held for review, by whoever does that.
+     *
+     * The correspondent is the other party, and the library may not know which party its user is: the
+     * seller, in the spelling of [knownCorrespondents] when the library already has them, except when
+     * only the buyer is among them. Then the user most likely issued this invoice to a known client,
+     * and the seller is the user's own company, so no correspondent is offered.
+     *
+     * A credit note asks nothing to be paid: its total is negative, and it offers no due date (which
+     * a reminder would watch), payment reference or account.
      */
-    fun documentFields(): Map<String, String> =
-        buildMap {
+    fun documentFields(knownCorrespondents: Collection<String> = emptyList()): Map<String, String> {
+        val payable = kind == EInvoiceKind.INVOICE
+        return buildMap {
             invoiceNumber?.let { put(FieldKeys.INVOICE_NUMBER, it) }
             issueDate?.let { put(FieldKeys.DOC_DATE, it) }
-            dueDate?.let { put(FieldKeys.INVOICE_DUE_DATE, it) }
-            totalAmount?.let { put(FieldKeys.INVOICE_TOTAL, it) }
+            dueDate?.takeIf { payable }?.let { put(FieldKeys.INVOICE_DUE_DATE, it) }
+            totalAmount?.let { put(FieldKeys.INVOICE_TOTAL, if (payable) it else negative(it)) }
             currency?.let { put(FieldKeys.INVOICE_CURRENCY, it) }
-            sellerName?.let { put(FieldKeys.CORRESPONDENT, it) }
+            correspondent(knownCorrespondents)?.let { put(FieldKeys.CORRESPONDENT, it) }
             buyerName?.let { put(FieldKeys.INVOICE_BUYER, it) }
-            paymentReference?.let { put(FieldKeys.PAYMENT_REFERENCE, it) }
-            iban?.let { put(FieldKeys.IBAN, it) }
-            put(FieldKeys.EINVOICE, format.wire)
+            paymentReference?.takeIf { payable }?.let { put(FieldKeys.PAYMENT_REFERENCE, it) }
+            iban?.takeIf { payable }?.let { put(FieldKeys.IBAN, it) }
         }
+    }
+
+    private fun correspondent(known: Collection<String>): String? {
+        val seller = sellerName ?: return null
+        PartyNames.matching(seller, known)?.let { return it }
+        return seller.takeIf { buyerName == null || PartyNames.matching(buyerName, known) == null }
+    }
+
+    private fun negative(amount: String): String = if (amount.startsWith("-") || amount == "0") amount else "-$amount"
+}
+
+/**
+ * Party names compared as a person reads them: in any case, spacing and punctuation, with a trailing
+ * legal form left off, so "ACME Supplies B.V." is the library's "Acme Supplies".
+ */
+internal object PartyNames {
+    private val legalForms =
+        setOf(
+            "ab",
+            "ag",
+            "as",
+            "bv",
+            "bvba",
+            "co",
+            "gmbh",
+            "inc",
+            "kg",
+            "limited",
+            "llc",
+            "ltd",
+            "nv",
+            "oy",
+            "plc",
+            "sa",
+            "sarl",
+            "sas",
+            "sl",
+            "spa",
+            "srl",
+            "ug",
+            "vof",
+        )
+
+    private val separators = Regex("[^\\p{L}\\p{N}]+")
+
+    /** The one of [known] that names the same party as [name], or null. */
+    fun matching(
+        name: String,
+        known: Collection<String>,
+    ): String? {
+        val wanted = key(name).ifEmpty { return null }
+        return known.firstOrNull { key(it) == wanted }
+    }
+
+    private fun key(name: String): String {
+        val words =
+            name
+                .lowercase()
+                .replace(".", "")
+                .split(separators)
+                .filter { it.isNotEmpty() }
+                .toMutableList()
+        while (words.size > 1 && words.last() in legalForms) words.removeAt(words.lastIndex)
+        return words.joinToString(" ")
+    }
 }
 
 /**
@@ -77,8 +158,8 @@ object EInvoiceDetector {
 }
 
 /**
- * Read [xml] as a CII (`rsm:CrossIndustryInvoice`) or UBL (`Invoice`) e-invoice, or null when it is
- * neither, is malformed, or tries to pull in a DTD or an external entity. The parser never resolves
- * external resources and never expands a DOCTYPE.
+ * Read [xml] as a CII (`rsm:CrossIndustryInvoice`) or UBL (`Invoice` or `CreditNote`) e-invoice, or
+ * null when it is neither, is malformed, or tries to pull in a DTD or an external entity. The parser
+ * never resolves external resources and never expands a DOCTYPE.
  */
 expect fun parseEInvoiceXml(xml: ByteArray): EInvoiceData?

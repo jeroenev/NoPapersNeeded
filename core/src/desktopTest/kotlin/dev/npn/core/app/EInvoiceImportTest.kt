@@ -7,6 +7,7 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.test.TestScope
 import kotlin.test.Test
 
 /**
@@ -16,7 +17,7 @@ import kotlin.test.Test
 class EInvoiceImportTest {
     @Test
     fun importingDoesNotFillDeletedFields() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val keys = setOf(FieldKeys.IBAN, FieldKeys.PAYMENT_REFERENCE)
             val deleted =
                 rig.session.fieldRegistry
@@ -37,7 +38,7 @@ class EInvoiceImportTest {
 
     @Test
     fun importingACiiInvoiceFillsBlankFields() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val imported = importInvoice(rig, "factur-x.xml", "cii.xml")
             val fields = rig.db.documentFieldDao().valuesOf(imported.docId)
 
@@ -55,7 +56,7 @@ class EInvoiceImportTest {
 
     @Test
     fun importingAUblInvoiceFillsBlankFields() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val imported = importInvoice(rig, "xrechnung.xml", "ubl.xml")
             val fields = rig.db.documentFieldDao().valuesOf(imported.docId)
 
@@ -67,7 +68,7 @@ class EInvoiceImportTest {
 
     @Test
     fun incompatibleExtractedValueDoesNotPreventOtherFields() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val def =
                 rig.session.fieldRegistry
                     .current()
@@ -82,7 +83,7 @@ class EInvoiceImportTest {
 
     @Test
     fun filledRetypedFieldDoesNotPreventFillingOtherFieldsOnReturn() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val bytes = invoicePdf("factur-x.xml", "cii.xml")
             val first = rig.session.importPdfBytes(bytes, "invoice.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
             rig.session.meta.setField(first.docId, FieldKeys.INVOICE_NUMBER, "123")
@@ -101,7 +102,7 @@ class EInvoiceImportTest {
 
     @Test
     fun aPdfWithoutAnInvoiceIsNotMarked() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val imported =
                 rig.session
                     .importPdfBytes(PdfFixtures.embeddedTextPdf("ordinary invoice"), "ordinary.pdf")
@@ -113,9 +114,26 @@ class EInvoiceImportTest {
                 .shouldBeNull()
         }
 
+    /** The badge says the metadata came from an invoice, so an invoice that filled nothing gets none. */
+    @Test
+    fun anInvoiceThatFillsNothingIsNotMarked() =
+        invoiceTest { rig ->
+            val registry = rig.session.fieldRegistry
+            registry
+                .current()
+                .filter { it.key != FieldKeys.EINVOICE }
+                .forEach { registry.remove(it.key) }
+
+            val imported = importInvoice(rig, "factur-x.xml", "cii.xml")
+
+            rig.db
+                .documentFieldDao()
+                .valuesOf(imported.docId) shouldBe emptyMap()
+        }
+
     @Test
     fun malformedAndXxeAttachmentsAreIgnored() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val malformed = importInvoice(rig, "factur-x.xml", "malformed.xml")
             rig.db
                 .documentFieldDao()
@@ -131,7 +149,7 @@ class EInvoiceImportTest {
 
     @Test
     fun aValueWrittenBeforeTheReturnIsNotOverwritten() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val bytes = invoicePdf("factur-x.xml", "cii.xml")
             val first = rig.session.importPdfBytes(bytes, "invoice.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
             rig.session.meta.setField(first.docId, FieldKeys.CORRESPONDENT, "A person chose this")
@@ -148,7 +166,7 @@ class EInvoiceImportTest {
 
     @Test
     fun aRescanDoesNotApplyTheInvoiceAgain() =
-        appSessionTest { rig ->
+        invoiceTest { rig ->
             val imported = importInvoice(rig, "factur-x.xml", "cii.xml")
             rig.session.meta.setField(imported.docId, FieldKeys.INVOICE_NUMBER, null)
 
@@ -158,6 +176,13 @@ class EInvoiceImportTest {
                 .documentFieldDao()
                 .valuesOf(imported.docId)[FieldKeys.INVOICE_NUMBER]
                 .shouldBeNull()
+        }
+
+    /** An [appSessionTest] in a library with the E-invoice fields on. */
+    private fun invoiceTest(body: suspend TestScope.(AppSessionRig) -> Unit) =
+        appSessionTest { rig ->
+            rig.session.fieldRegistry.setEInvoiceFields(true)
+            body(rig)
         }
 
     private suspend fun importInvoice(

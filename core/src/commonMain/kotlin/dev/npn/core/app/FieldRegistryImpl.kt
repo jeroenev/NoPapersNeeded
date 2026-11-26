@@ -9,6 +9,7 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -35,6 +36,36 @@ internal class FieldRegistryImpl(
 
     override fun orphanKeys(): Flow<List<String>> =
         defDao.observeOrphanKeys().map { keys -> keys.filter { it !in FieldKeys.HIDDEN } }
+
+    override val eInvoiceFields: Flow<Boolean> =
+        combine(coordinator.settingFlow(LibrarySettingKeys.EINVOICE_FIELDS), fields, ::eInvoiceFieldsOn)
+            .distinctUntilChanged()
+
+    /** The E-invoice fields setting as of now, for an import deciding whether to read the invoice. */
+    suspend fun eInvoiceFieldsOn(): Boolean =
+        eInvoiceFieldsOn(coordinator.setting(LibrarySettingKeys.EINVOICE_FIELDS), current())
+
+    override suspend fun setEInvoiceFields(enabled: Boolean) =
+        lifetime.owned<Unit> {
+            coordinator.commitBuilt { state ->
+                val value = enabled.toString()
+                val setting =
+                    if (state.effectiveSetting(LibrarySettingKeys.EINVOICE_FIELDS) == value) {
+                        emptyList()
+                    } else {
+                        listOf(PendingOp.settingSet(LibrarySettingKeys.EINVOICE_FIELDS, value))
+                    }
+                if (!enabled) return@commitBuilt setting
+                val existing = state.effectiveFieldDefs()
+                val present = existing.mapTo(HashSet()) { it.key.lowercase() }
+                var position = (existing.maxOfOrNull { it.position } ?: -1) + 1
+                setting +
+                    FieldKeys
+                        .eInvoiceDefinitions { FieldKeys.SEED_LABELS.getValue(it) }
+                        .filter { it.key.lowercase() !in present }
+                        .map { PendingOp.fieldDefSet(it.copy(position = position++)) }
+            }
+        }
 
     override fun usageCounts(): Flow<Map<String, Int>> =
         fieldDao.observeKeysWithCounts().map { rows ->
@@ -125,3 +156,12 @@ internal class FieldRegistryImpl(
             }
         }
 }
+
+/**
+ * The E-invoice fields setting from its stored [setting], or, while the library never decided, from
+ * whether its registry [defs] hold an e-invoice field an earlier build seeded.
+ */
+private fun eInvoiceFieldsOn(
+    setting: String?,
+    defs: List<FieldDef>,
+): Boolean = setting?.toBooleanStrictOrNull() ?: defs.any { it.key in FieldKeys.EINVOICE_FIELDS }

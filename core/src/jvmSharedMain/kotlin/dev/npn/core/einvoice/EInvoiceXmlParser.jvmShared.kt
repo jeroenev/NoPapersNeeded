@@ -39,7 +39,11 @@ actual fun parseEInvoiceXml(xml: ByteArray): EInvoiceData? {
             }
 
             root.localNameOrNodeName() == "Invoice" && namespace.contains("Invoice-2") -> {
-                parseUbl(root)
+                parseUbl(root, creditNote = false)
+            }
+
+            root.localNameOrNodeName() == "CreditNote" && namespace.contains("CreditNote-2") -> {
+                parseUbl(root, creditNote = true)
             }
 
             else -> {
@@ -114,6 +118,7 @@ private fun parseCii(root: Element): EInvoiceData {
     val total = summation?.child("GrandTotalAmount") ?: summation?.child("DuePayableAmount")
     return EInvoiceData(
         format = EInvoiceFormat.CII,
+        kind = kindOf(exchanged?.child("TypeCode")?.textValue()),
         invoiceNumber = exchanged?.child("ID")?.textValue(),
         issueDate = dateValue(exchanged?.child("IssueDateTime")?.child("DateTimeString")?.textValue()),
         dueDate = dateValue(settlement?.descendant("DueDateDateTime")?.child("DateTimeString")?.textValue()),
@@ -127,15 +132,26 @@ private fun parseCii(root: Element): EInvoiceData {
     )
 }
 
-private fun parseUbl(root: Element): EInvoiceData {
+/**
+ * A UBL `Invoice`, or with [creditNote] a UBL `CreditNote`: the same parties and totals, under its
+ * own root. An invoice whose type code is a credit note's is one too.
+ */
+private fun parseUbl(
+    root: Element,
+    creditNote: Boolean,
+): EInvoiceData {
     val monetary = root.child("LegalMonetaryTotal")
     val total = monetary?.child("TaxInclusiveAmount") ?: monetary?.child("PayableAmount")
     val means = root.child("PaymentMeans")
     return EInvoiceData(
         format = EInvoiceFormat.UBL,
+        kind = if (creditNote) EInvoiceKind.CREDIT_NOTE else kindOf(root.child("InvoiceTypeCode")?.textValue()),
         invoiceNumber = root.child("ID")?.textValue(),
         issueDate = dateValue(root.child("IssueDate")?.textValue()),
-        dueDate = dateValue((root.child("DueDate") ?: root.descendant("DueDate"))?.textValue()),
+        dueDate =
+            dateValue(
+                (root.child("DueDate") ?: root.descendant("DueDate") ?: means?.child("PaymentDueDate"))?.textValue(),
+            ),
         totalAmount = decimalValue(total?.textValue()),
         currency =
             currencyValue(
@@ -148,6 +164,15 @@ private fun parseUbl(root: Element): EInvoiceData {
         iban = means?.descendant("PayeeFinancialAccount")?.child("ID")?.textValue(),
     )
 }
+
+/**
+ * The UNTDID 1001 document type codes EN 16931 lists for a credit note (381 the usual one); every
+ * other code, or none, is an invoice.
+ */
+private val CREDIT_NOTE_CODES = setOf("81", "83", "261", "262", "296", "308", "381", "396", "420", "458", "532")
+
+private fun kindOf(typeCode: String?): EInvoiceKind =
+    if (typeCode in CREDIT_NOTE_CODES) EInvoiceKind.CREDIT_NOTE else EInvoiceKind.INVOICE
 
 private fun ciiPartyName(party: Element?): String? =
     party?.child("Name")?.textValue()

@@ -80,6 +80,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun setAppLockEnabled(enabled: Boolean) = Unit
 
+    override fun setEInvoiceFields(enabled: Boolean) = Unit
+
     override fun setAppLockTimeout(timeout: LockTimeout) = Unit
 
     override fun setAppLockPin(pin: String) = Unit

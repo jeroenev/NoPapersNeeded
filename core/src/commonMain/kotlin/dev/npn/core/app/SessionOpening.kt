@@ -150,7 +150,9 @@ private suspend fun foldJournal(
         deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }
     }
     deps.upgradeAtOpen("Restoring the seeded fields' per-document flag") {
-        coordinator.restoreSeededPerDocument(seeds, projected = deps.db.fieldDefDao().defs())
+        // The e-invoice fields too, in a library that has them: they were seeded with the flag.
+        val withInvoice = seeds + FieldKeys.eInvoiceDefinitions { FieldKeys.SEED_LABELS.getValue(it) }
+        coordinator.restoreSeededPerDocument(withInvoice, projected = deps.db.fieldDefDao().defs())
     }
     deps.upgradeAtOpen("Adopting this device's library settings") {
         coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())

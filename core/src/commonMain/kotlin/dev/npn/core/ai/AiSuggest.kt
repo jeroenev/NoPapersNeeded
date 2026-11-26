@@ -57,6 +57,17 @@ data class AiFieldConfig(
 )
 
 /**
+ * Where a queued edit run's suggestions came from: a model ([AI]), or a structured e-invoice an
+ * email brought ([EINVOICE]), whose values wait for the user as a run that is finished from the
+ * start. Either way they go through the same Review and Apply.
+ */
+@Serializable
+enum class EditRunSource {
+    AI,
+    EINVOICE,
+}
+
+/**
  * One AI-edit run's per-document configuration: which fields to autofill ([fields]), whether to
  * also propose tag additions ([tags]) and/or tag removals ([tagRemovals]), the optional per-call
  * tag caps ([maxTags]/[maxNewTags]; null means the configured defaults), and an optional free-text
@@ -73,6 +84,8 @@ data class AiEditRequest(
     val maxTags: Int? = null,
     val maxNewTags: Int? = null,
     val customPrompt: String? = null,
+    /** What the run's suggestions come from; a run of a model's by default, as every older one is. */
+    val source: EditRunSource = EditRunSource.AI,
 ) {
     companion object {
         /**

@@ -24,6 +24,13 @@ and discussion; sharpen them here when they drift.
   them as that type; everything else about them is editable. A change to the
   seeds raises `FieldKeys.SEED_VERSION`, and older libraries are upgraded once
   without overriding what their users changed.
+- **E-invoice fields** — the library setting (`eInvoiceFields`, a `setting-set`)
+  that adds the eight fields an embedded structured e-invoice fills
+  (`FieldKeys.eInvoiceDefinitions`) and lets an import read one. Off for a new
+  library; a library that registers one of them without ever deciding counts as
+  on (an earlier build seeded them). Off only stops the reading: the fields and
+  their values stay. An email's invoice data is held for review on Activity, not
+  written.
 - **Canonical form** — the one stored representation of a value for its type
   (`FieldValues`): trimmed text, `yyyy-MM-dd`, `-?\d+`, `-?\d+(\.\d+)?`. Locale
   formatting happens only at the UI boundary. Blank canonicalizes to "no value":

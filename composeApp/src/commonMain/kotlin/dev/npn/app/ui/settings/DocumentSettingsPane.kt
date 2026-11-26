@@ -43,6 +43,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_review_wo
 import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
+import no_papers_needed.composeapp.generated.resources.einvoice_setting
+import no_papers_needed.composeapp.generated.resources.einvoice_setting_help
 import no_papers_needed.composeapp.generated.resources.library_trash_retention_zero_help
 import org.jetbrains.compose.resources.stringResource
 
@@ -64,6 +66,12 @@ internal fun DocumentSettingsPane(
             onSave = actions::saveField,
             onRemove = actions::removeField,
             onMove = actions::moveField,
+        )
+        SwitchRow(
+            label = stringResource(Res.string.einvoice_setting),
+            help = stringResource(Res.string.einvoice_setting_help),
+            checked = state.settings.eInvoiceFields,
+            onCheckedChange = actions::setEInvoiceFields,
         )
     }
 

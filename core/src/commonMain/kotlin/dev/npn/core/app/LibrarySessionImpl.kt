@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -89,13 +90,15 @@ internal class LibrarySessionImpl(
     /** The rules' cache in the index, mirrored from the journal when another device's list arrives. */
     internal val ruleSource: AutoMatchRuleSource = graph.ruleSource
     override val storagePath: StoragePathFacade = graph.storagePath
-    override val fieldRegistry: FieldRegistry = graph.fieldRegistry
+    private val fieldRegistryImpl = graph.fieldRegistry
+    override val fieldRegistry: FieldRegistry = fieldRegistryImpl
     override val content: DocContentFacade = graph.content
     override val reviewConfig: ReviewConfigFacade = graph.reviewConfig
     override val trashRetention: TrashRetentionFacade = graph.trashRetention
     override val reminders: RemindersFacade = graph.reminders
     override val maintenance: MaintenanceFacade = graph.maintenance
-    override val aiEditQueue: AiEditQueueFacade = graph.edits.queue
+    private val editQueue = graph.edits.queue
+    override val aiEditQueue: AiEditQueueFacade = editQueue
     override val aiSpend: AiSpendFacade = graph.aiSpend
 
     /** The trash auto-purge, run after each [backgroundRescan]. */
@@ -180,7 +183,7 @@ internal class LibrarySessionImpl(
     ): Pair<MailImportResult, String?> {
         val result = runCatchingCancellable { importService.importBytes(bytes, name, reviveRemoved = false) }
         if (result.exceptionOrNull() is RemovedImportException) return MailImportResult.Removed to null
-        val outcome = fillEInvoiceFields(importing { result.getOrThrow() })
+        val outcome = fillEInvoiceFields(importing { result.getOrThrow() }, holdForReview = true)
         val docId =
             when (outcome) {
                 is ImportOutcome.Imported -> outcome.docId
@@ -305,19 +308,40 @@ internal class LibrarySessionImpl(
         }
 
     /**
-     * Fill a freshly imported document's blank fields from an embedded structured e-invoice. Only a
-     * compatible blank field is written, so a value somebody else
-     * already wrote wins, and only an import does this: a rescan never re-applies it. A failure is
-     * logged; the import stands either way. The outcome's path is re-read because filling fields can
-     * trigger the storage-path rule, which may have moved the file after the import placed it.
+     * Fill a freshly imported document's blank fields from an embedded structured e-invoice, while
+     * the library's E-invoice fields setting is on. Only a compatible blank field is written, so a
+     * value somebody else already wrote wins, and only an import does this: a rescan never re-applies
+     * it. The [FieldKeys.EINVOICE] marker is written only with a value it filled or held.
+     *
+     * With [holdForReview] (an email's attachment, which anybody can send) nothing is filled: the
+     * values wait on the processing queue for the user's review ([AiEditQueue.holdForReview]).
+     *
+     * A failure is logged; the import stands either way. The outcome's path is re-read because
+     * filling fields can trigger the storage-path rule, which may have moved the file after the
+     * import placed it.
      */
-    private suspend fun fillEInvoiceFields(outcome: ImportOutcome): ImportOutcome {
+    private suspend fun fillEInvoiceFields(
+        outcome: ImportOutcome,
+        holdForReview: Boolean = false,
+    ): ImportOutcome {
         val imported = outcome as? ImportOutcome.Imported ?: return outcome
+        if (!fieldRegistryImpl.eInvoiceFieldsOn()) return outcome
         // By its id: the path can hold an email's subject or a document's title.
         log.runLogged("Reading the e-invoice of document ${imported.docId}") {
             val bytes = fs.readDocument(imported.relPath, imported.docId) ?: return@runLogged
             val invoice = EInvoiceDetector.detect(deps.pdfEngine, bytes) ?: return@runLogged
-            writer.fillExtracted(imported.docId, invoice.documentFields())
+            val correspondents =
+                fieldRegistryImpl.distinctValues(FieldKeys.CORRESPONDENT, KNOWN_CORRESPONDENTS_LIMIT).first()
+            val values = invoice.documentFields(correspondents)
+            val marker = FieldKeys.EINVOICE to invoice.format.wire
+            if (holdForReview) {
+                val held = writer.fillableExtracted(imported.docId, values)
+                if (held.isEmpty()) return@runLogged
+                editQueue.holdForReview(imported.docId, held)
+                writer.fillExtracted(imported.docId, mapOf(marker))
+            } else {
+                writer.fillExtracted(imported.docId, values, marker)
+            }
         }
         val currentPath =
             deps.db
@@ -525,5 +549,8 @@ internal class LibrarySessionImpl(
 
         /** Slack past a deferred file's settle time, so the follow-up does not land just short. */
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
+
+        /** Most correspondents an e-invoice's parties are matched against: more than a library names. */
+        private const val KNOWN_CORRESPONDENTS_LIMIT = 10_000
     }
 }

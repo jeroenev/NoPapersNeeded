@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="einvoice_badge">Uit e-factuur</string>
+    <string name="einvoice_setting">E-factuurvelden</string>
+    <string name="einvoice_setting_help">Bevat een geïmporteerde pdf een gestructureerde e-factuur (Factur-X, ZUGFeRD, XRechnung of UBL), dan worden de factuurvelden daaruit ingevuld. Factuurgegevens die per e-mail binnenkomen, wachten in Activiteit tot je ze nakijkt. Uitschakelen behoudt de velden en hun waarden.</string>
+    <string name="einvoice_review_run">Factuurgegevens uit e-mail</string>
 </resources>

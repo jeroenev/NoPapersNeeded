@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
+    xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+    xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2">
+    <cbc:ID>CN-2024-5</cbc:ID>
+    <cbc:IssueDate>2024-04-02</cbc:IssueDate>
+    <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
+    <cbc:DocumentCurrencyCode>GBP</cbc:DocumentCurrencyCode>
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyName>
+                <cbc:Name>Widgets Ltd</cbc:Name>
+            </cac:PartyName>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyName>
+                <cbc:Name>Buyer Corp</cbc:Name>
+            </cac:PartyName>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:PaymentMeans>
+        <cbc:PaymentDueDate>2024-05-02</cbc:PaymentDueDate>
+        <cbc:PaymentID>PAY-REF-10</cbc:PaymentID>
+        <cac:PayeeFinancialAccount>
+            <cbc:ID>GB33BUKB20201555555555</cbc:ID>
+        </cac:PayeeFinancialAccount>
+    </cac:PaymentMeans>
+    <cac:LegalMonetaryTotal>
+        <cbc:PayableAmount currencyID="GBP">40.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+</CreditNote>

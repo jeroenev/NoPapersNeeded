@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="einvoice_badge">From e-invoice</string>
+    <string name="einvoice_setting">E-invoice fields</string>
+    <string name="einvoice_setting_help">When an imported PDF carries a structured e-invoice (Factur-X, ZUGFeRD, XRechnung or UBL), fill the invoice fields from it. Invoice data that arrives by email waits in Activity until you review it. Turning this off keeps the fields and their values.</string>
+    <string name="einvoice_review_run">Invoice data from email</string>
 </resources>

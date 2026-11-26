@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DocumentScanner
@@ -68,6 +69,7 @@ import dev.npn.app.ui.settings.MailLeftBehind
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.mailPositionText
 import dev.npn.app.ui.settings.text
+import dev.npn.core.ai.EditRunSource
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
@@ -84,6 +86,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_message
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_title
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
+import no_papers_needed.composeapp.generated.resources.einvoice_review_run
 import no_papers_needed.composeapp.generated.resources.email_cancel_check
 import no_papers_needed.composeapp.generated.resources.email_check_now
 import no_papers_needed.composeapp.generated.resources.queue_ai_failed_help
@@ -624,15 +627,21 @@ private fun EditRunRow(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Invoice data an email brought is held for review the same way, but nobody asked a model.
+        val heldInvoice = run.source == EditRunSource.EINVOICE
         Icon(
-            Icons.Filled.AutoAwesome,
+            if (heldInvoice) Icons.AutoMirrored.Filled.ReceiptLong else Icons.Filled.AutoAwesome,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                pluralStringResource(Res.plurals.queue_edit_run_documents, run.total, run.total),
+                if (heldInvoice) {
+                    stringResource(Res.string.einvoice_review_run)
+                } else {
+                    pluralStringResource(Res.plurals.queue_edit_run_documents, run.total, run.total)
+                },
                 style = MaterialTheme.typography.titleSmall,
             )
             Row(

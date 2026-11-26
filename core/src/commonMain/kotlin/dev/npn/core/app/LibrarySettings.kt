@@ -102,6 +102,12 @@ internal object LibrarySettingKeys {
     const val MAIL_SAVE_PDF = "mailSaveEmailAsPdf"
     const val MAIL_START_FROM = "mailStartFrom"
 
+    /**
+     * Whether imports read embedded e-invoices into the e-invoice fields, `true` or `false`; absent
+     * until the library decides ([FieldRegistry.eInvoiceFields] says what that means).
+     */
+    const val EINVOICE_FIELDS = "eInvoiceFields"
+
     /** Whether this library's reminders are on. */
     const val REMINDER_ENABLED = "reminderEnabled"
 

@@ -114,6 +114,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_whats_new
 import no_papers_needed.composeapp.generated.resources.common_sync_health_retry
 import no_papers_needed.composeapp.generated.resources.common_sync_health_title
 import no_papers_needed.composeapp.generated.resources.detail_add_field
+import no_papers_needed.composeapp.generated.resources.einvoice_setting
 import no_papers_needed.composeapp.generated.resources.email_account
 import no_papers_needed.composeapp.generated.resources.email_add_filter
 import no_papers_needed.composeapp.generated.resources.email_allow_plain
@@ -396,6 +397,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                 listOf(
                     Res.string.common_settings_document_fields,
                     Res.string.detail_add_field,
+                    Res.string.einvoice_setting,
                     Res.string.common_settings_review_workflow,
                     Res.string.common_settings_enable_inbox,
                     Res.string.common_settings_reminders,

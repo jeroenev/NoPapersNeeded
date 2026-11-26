@@ -107,7 +107,7 @@ internal class SessionGraph(
         DocumentRepositoryImpl(db, mapping = deps.computation, origins = localActors::origins)
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
-    val fieldRegistry: FieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)
+    val fieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)
     val storagePath = JournalStoragePath(coordinator, lifetime)
 
     private val pathRules =

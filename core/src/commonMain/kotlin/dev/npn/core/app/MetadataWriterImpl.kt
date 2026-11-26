@@ -114,25 +114,55 @@ internal class MetadataWriterImpl(
         fillOnly: Boolean,
     ) = owned { edit(docIds, addTags, fields, fillOnly, asStored = false) }
 
-    /** Fill compatible extracted values against the registry and document at commit time. */
+    /**
+     * The part of extracted [fields] that [docId] can take now, in canonical form: blank on it
+     * (inherited values included), registered, and valid for their field's type. Read under the
+     * journal's lock against the state a write would land on; nothing is written.
+     */
+    internal suspend fun fillableExtracted(
+        docId: String,
+        fields: Map<String, String?>,
+    ): Map<String, String> =
+        owned {
+            var fillable = emptyMap<String, String>()
+            coordinator.commitBuilt { state ->
+                fillable = state.fillable(docId, fields)
+                emptyList()
+            }
+            fillable
+        }
+
+    /**
+     * Write the part of extracted [fields] that [docId] can take ([fillableExtracted]), decided at
+     * commit time, and with it [marker] (a field key and value) when anything was filled: the marker
+     * says where the document's values came from, so it is never written on its own here.
+     */
     internal suspend fun fillExtracted(
         docId: String,
         fields: Map<String, String?>,
+        marker: Pair<String, String>? = null,
     ) = owned {
         var wrote = false
         coordinator.commitBuilt { state ->
-            val filled = state.inheritedFields(docId).keys
-            val values =
-                fields.mapNotNull { (key, raw) ->
-                    if (key in filled) return@mapNotNull null
-                    val def = state.effectiveFieldDef(key) ?: return@mapNotNull null
-                    val parsed = FieldValues.canonicalize(def.type, raw)
-                    (parsed as? FieldParse.Ok)?.canonical?.let { key to it }
-                }
+            val values = state.fillable(docId, fields)
             wrote = values.isNotEmpty()
-            values.map { (key, value) -> PendingOp.fieldSet(docId, key, value) }
+            val marked = if (wrote && marker != null) state.fillable(docId, mapOf(marker)) else emptyMap()
+            (values + marked).map { (key, value) -> PendingOp.fieldSet(docId, key, value) }
         }
         if (wrote) followUp(listOf(docId), autoMatch = true)
+    }
+
+    private fun FoldedState.fillable(
+        docId: String,
+        fields: Map<String, String?>,
+    ): Map<String, String> {
+        val filled = inheritedFields(docId).keys
+        return fields
+            .mapNotNull { (key, raw) ->
+                if (key in filled) return@mapNotNull null
+                val def = effectiveFieldDef(key) ?: return@mapNotNull null
+                (FieldValues.canonicalize(def.type, raw) as? FieldParse.Ok)?.canonical?.let { key to it }
+            }.toMap()
     }
 
     /**

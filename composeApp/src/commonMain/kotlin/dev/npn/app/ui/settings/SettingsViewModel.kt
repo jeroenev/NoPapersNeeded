@@ -229,7 +229,8 @@ class SettingsViewModel(
             combine(trashRetention.trashRetentionDays, typedRetention.draft) { days, typedDays -> days to typedDays },
             reminderDraft,
             aiSpend.summary,
-        ) { (snapshot, path, template), (days, typedDays), reminder, spend ->
+            fieldRegistry.eInvoiceFields,
+        ) { (snapshot, path, template), (days, typedDays), reminder, spend, eInvoice ->
             SettingsUiState(
                 snapshot = snapshot,
                 storagePathTemplate = template ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
@@ -240,6 +241,7 @@ class SettingsViewModel(
                 reminderLeadDays = reminder.leadDays ?: reminder.settings.leadDays,
                 reminderNotifiesHere = reminder.notifiesHere,
                 aiSpend = spend,
+                eInvoiceFields = eInvoice,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState(snapshot = settings.settings.value))
 
@@ -595,6 +597,9 @@ class SettingsViewModel(
         val securityCheck: SecurityCheck,
         val problemReport: ProblemReportState,
     )
+
+    override fun setEInvoiceFields(enabled: Boolean) =
+        launchReporting(Res.string.common_save_setting_failed) { fieldRegistry.setEInvoiceFields(enabled) }
 
     override fun saveField(def: FieldDef) =
         launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="einvoice_badge">De factura electrónica</string>
+    <string name="einvoice_setting">Campos de factura electrónica</string>
+    <string name="einvoice_setting_help">Cuando un PDF importado contiene una factura electrónica estructurada (Factur-X, ZUGFeRD, XRechnung o UBL), rellena con ella los campos de factura. Los datos de facturas que llegan por correo esperan en Actividad hasta que los revises. Al desactivarlo se conservan los campos y sus valores.</string>
+    <string name="einvoice_review_run">Datos de factura del correo</string>
 </resources>

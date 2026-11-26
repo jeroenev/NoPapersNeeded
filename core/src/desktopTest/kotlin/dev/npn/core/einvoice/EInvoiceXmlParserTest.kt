@@ -55,6 +55,38 @@ class EInvoiceXmlParserTest {
     }
 
     @Test
+    fun anInvoiceIsNotACreditNote() {
+        checkNotNull(parseEInvoiceXml(fixture("cii.xml"))).kind shouldBe EInvoiceKind.INVOICE
+        checkNotNull(parseEInvoiceXml(fixture("ubl.xml"))).kind shouldBe EInvoiceKind.INVOICE
+    }
+
+    @Test
+    fun parsesAUblCreditNote() {
+        val note = parseEInvoiceXml(fixture("ubl-credit-note.xml")) ?: error("UBL credit note did not parse")
+
+        note.format shouldBe EInvoiceFormat.UBL
+        note.kind shouldBe EInvoiceKind.CREDIT_NOTE
+        note.invoiceNumber shouldBe "CN-2024-5"
+        note.issueDate shouldBe "2024-04-02"
+        note.totalAmount shouldBe "40"
+        note.sellerName shouldBe "Widgets Ltd"
+        note.buyerName shouldBe "Buyer Corp"
+    }
+
+    @Test
+    fun readsTheCiiTypeCode() {
+        val xml = fixture("cii.xml").decodeToString()
+        for ((code, kind) in listOf("380" to EInvoiceKind.INVOICE, "381" to EInvoiceKind.CREDIT_NOTE)) {
+            val typed =
+                xml.replace(
+                    "<ram:ID>INV-2024-0042</ram:ID>",
+                    "<ram:ID>N-1</ram:ID><ram:TypeCode>$code</ram:TypeCode>",
+                )
+            checkNotNull(parseEInvoiceXml(typed.encodeToByteArray())).kind shouldBe kind
+        }
+    }
+
+    @Test
     fun rejectsMalformedXml() {
         assertNull(parseEInvoiceXml(fixture("malformed.xml")))
     }

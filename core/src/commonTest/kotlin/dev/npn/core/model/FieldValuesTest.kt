@@ -164,34 +164,23 @@ class FieldKeysTest {
     fun seedMatchesThePlanTable() {
         val seed = FieldKeys.seedDefinitions()
         assertEquals(
-            listOf(
-                "title",
-                "correspondent",
-                "docType",
-                "docDate",
-                "notes",
-                "invoiceNumber",
-                "invoiceTotal",
-                "invoiceCurrency",
-                "invoiceDueDate",
-                "invoiceBuyer",
-                "paymentReference",
-                "iban",
-                "eInvoice",
-                "emailMessageId",
-            ),
+            listOf("title", "correspondent", "docType", "docDate", "notes", "emailMessageId"),
             seed.map { it.key },
         )
         assertEquals(FieldType.DATE, seed.single { it.key == FieldKeys.DOC_DATE }.type)
         assertEquals(FieldType.LONG_TEXT, seed.single { it.key == FieldKeys.NOTES }.type)
-        assertEquals(FieldType.DECIMAL, seed.single { it.key == FieldKeys.INVOICE_TOTAL }.type)
-        assertEquals(FieldType.DATE, seed.single { it.key == FieldKeys.INVOICE_DUE_DATE }.type)
-        // The five well-known fields show on every document; the e-invoice fields appear with a value.
+        // The five well-known fields show on every document; the email Message-ID is hidden.
         assertTrue(seed.take(5).all { it.showByDefault })
         assertTrue(seed.drop(5).none { it.showByDefault })
+        assertEquals(setOf("notes", "emailMessageId"), seed.filterNot { it.aiEnabled }.map { it.key }.toSet())
+        assertEquals((0 until 5).toList(), seed.take(5).map { it.position })
+    }
+
+    @Test
+    fun theEInvoiceFieldsAreTheirOwnSetHiddenUntilAValueLands() {
+        val fields = FieldKeys.eInvoiceDefinitions()
         assertEquals(
-            setOf(
-                "notes",
+            listOf(
                 "invoiceNumber",
                 "invoiceTotal",
                 "invoiceCurrency",
@@ -202,8 +191,12 @@ class FieldKeysTest {
                 "eInvoice",
                 "emailMessageId",
             ),
-            seed.filterNot { it.aiEnabled }.map { it.key }.toSet(),
+            fields.map { it.key },
         )
-        assertEquals((0 until seed.size).toList(), seed.map { it.position })
+        assertEquals(FieldKeys.EINVOICE_FIELDS, fields.map { it.key }.toSet())
+        assertEquals(FieldType.DECIMAL, fields.single { it.key == FieldKeys.INVOICE_TOTAL }.type)
+        assertEquals(FieldType.DATE, fields.single { it.key == FieldKeys.INVOICE_DUE_DATE }.type)
+        // A seller's own numbers are not a model's guess, and each appears only with a value.
+        assertTrue(fields.none { it.aiEnabled || it.showByDefault })
     }
 }

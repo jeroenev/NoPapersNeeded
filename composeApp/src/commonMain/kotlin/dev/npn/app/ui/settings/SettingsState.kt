@@ -40,6 +40,8 @@ data class SettingsUiState(
     val reminderLeadDays: Int = ReminderSettings.DEFAULT_LEAD_DAYS,
     /** Whether this device shows reminder notifications; the other reminder settings are the library's. */
     val reminderNotifiesHere: Boolean = true,
+    /** The library's E-invoice fields setting ([dev.npn.core.app.FieldRegistry.eInvoiceFields]). */
+    val eInvoiceFields: Boolean = false,
     /** The two spend windows the AI pane shows, read from this device's ledger. */
     val aiSpend: AiSpendSummary = AiSpendSummary.EMPTY,
 ) {
@@ -268,6 +270,9 @@ interface SettingsActions : ProblemReportActions {
 
     /** The in-app cloud setup wizard: provider, sign-in, folder. */
     val cloudSetup: CloudSetupActions
+
+    /** Turn the library's E-invoice fields on (adding them) or off (keeping them, reading no more). */
+    fun setEInvoiceFields(enabled: Boolean)
 
     fun saveField(def: FieldDef)
 

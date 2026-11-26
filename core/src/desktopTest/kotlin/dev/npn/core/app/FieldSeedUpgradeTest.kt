@@ -146,30 +146,21 @@ class FieldSeedUpgradeTest {
             coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
         }
 
+    /**
+     * The e-invoice fields are the library's own choice now ([FieldRegistry.setEInvoiceFields]):
+     * a library seeded at 2 comes up to the current version without them.
+     */
     @Test
-    fun aLibrarySeededAtTwoGainsTheEInvoiceFields() =
+    fun aLibrarySeededAtTwoDoesNotGainTheEInvoiceFields() =
         runTest {
             val coordinator = rig.coordinator()
             coordinator.refreshState()
-            val v3Keys =
-                setOf(
-                    FieldKeys.INVOICE_NUMBER,
-                    FieldKeys.INVOICE_TOTAL,
-                    FieldKeys.INVOICE_CURRENCY,
-                    FieldKeys.INVOICE_DUE_DATE,
-                    FieldKeys.INVOICE_BUYER,
-                    FieldKeys.PAYMENT_REFERENCE,
-                    FieldKeys.IBAN,
-                    FieldKeys.EINVOICE,
-                )
-            val v2Seeds = FieldKeys.seedDefinitions().filterNot { it.key in v3Keys }
-            coordinator.seedFieldRegistryIfNeeded(v2Seeds, version = 2)
-            registry().keys shouldBe v2Seeds.map { it.key }.toSet()
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions(), version = 2)
 
             coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
 
-            val upgraded = registry()
-            v3Keys.forEach { upgraded.containsKey(it) shouldBe true }
+            registry().keys shouldBe seeds.keys
+            FieldKeys.EINVOICE_FIELDS.forEach { registry().containsKey(it) shouldBe false }
             coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
         }
 
@@ -191,12 +182,32 @@ class FieldSeedUpgradeTest {
             journalObjects() shouldBe objects
         }
 
+    /**
+     * What an earlier build seeded at 3: the five, and the e-invoice fields with them. None of it is
+     * taken away; the upgrade to 4 adds only the email Message-ID.
+     */
+    private val earlierThreeSeeds =
+        FieldKeys.seedDefinitions().filterNot { it.key == FieldKeys.EMAIL_MESSAGE_ID } +
+            FieldKeys.eInvoiceDefinitions()
+
+    @Test
+    fun aLibrarySeededAtThreeWithTheEInvoiceFieldsKeepsThem() =
+        runTest {
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            coordinator.seedFieldRegistryIfNeeded(earlierThreeSeeds, version = 3)
+
+            rig.coordinator().apply { refreshState() }.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+
+            registry() shouldBe earlierThreeSeeds.associateBy { it.key } + seeds.filterKeys { it == FieldKeys.EMAIL_MESSAGE_ID }
+        }
+
     @Test
     fun aLibrarySeededAtThreeKeepsADeletedEInvoiceFieldDeleted() =
         runTest {
             val coordinator = rig.coordinator()
             coordinator.refreshState()
-            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+            coordinator.seedFieldRegistryIfNeeded(earlierThreeSeeds, version = 3)
             coordinator.commitAndApply(listOf(PendingOp.fieldDefRemove(FieldKeys.INVOICE_NUMBER)))
 
             coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())

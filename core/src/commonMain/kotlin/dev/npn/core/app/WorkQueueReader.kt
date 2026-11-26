@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.EditRunSource
 import dev.npn.core.db.AiEditJobDao
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.db.AiEditJobProgress
@@ -10,6 +12,7 @@ import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -107,8 +110,14 @@ internal class WorkQueueReader(
             attempts = attempts,
             nextAttemptAt = nextAttemptAt.takeIf { attempts > 0 },
             lastError = lastError,
+            source = source(),
         )
     }
+
+    /** The run's [EditRunSource], read off its stored request; a model's when that does not decode. */
+    private fun AiEditJobEntity.source(): EditRunSource =
+        runCatching { NpnJson.Persisted.decodeFromString<AiEditRequest>(requestJson).source }
+            .getOrDefault(EditRunSource.AI)
 
     /**
      * Resolve both row sets against the document table in one pass. A queue row outlives the

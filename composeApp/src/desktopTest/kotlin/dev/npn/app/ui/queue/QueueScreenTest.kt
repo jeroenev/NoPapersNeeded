@@ -13,6 +13,7 @@ import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.text
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.core.ai.EditRunSource
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkStage
@@ -57,6 +58,38 @@ class QueueScreenTest : EnglishLocaleTest() {
                 render()
                 has { it.text() == "Stop this run?" } shouldBe false
                 session.aiEditQueue.discarded shouldContainExactly listOf("run")
+            }
+        }
+
+    /** Invoice data an email brought reads as that, not as a bulk edit, and opens for review. */
+    @Test
+    fun invoiceDataHeldFromEmailSaysSoAndOpensItsReview() =
+        onUiThread {
+            val opened = mutableListOf<String>()
+            val session =
+                FakeLibrarySession().apply {
+                    work.editRunEntries.value =
+                        listOf(
+                            QueuedEditRun(
+                                jobId = "held",
+                                total = 1,
+                                done = 1,
+                                failures = 0,
+                                state = WorkState.READY,
+                                createdAt = 0L,
+                                updatedAt = 0L,
+                                attempts = 0,
+                                source = EditRunSource.EINVOICE,
+                            ),
+                        )
+                }
+            scene(session, onOpenEditRun = { opened += it }).closing {
+                render()
+                has { it.text() == "Invoice data from email" } shouldBe true
+                has { it.text() == "Bulk edit of 1 document" } shouldBe false
+
+                click { it.text() == "Review" }
+                opened shouldContainExactly listOf("held")
             }
         }
 
@@ -182,20 +215,22 @@ class QueueScreenTest : EnglishLocaleTest() {
                 )
         }
 
-    private fun scene(session: FakeLibrarySession) =
-        hostedScene(WIDTH, HEIGHT) {
-            NpnTheme(
-                darkTheme = false,
-            ) {
-                QueueScreen(
-                    session,
-                    settings = FakeSettingsRepository(),
-                    onOpenDoc = {},
-                    onOpenEditRun = {},
-                    onOpenSettings = { openedSettings += it },
-                )
-            }
+    private fun scene(
+        session: FakeLibrarySession,
+        onOpenEditRun: (String) -> Unit = {},
+    ) = hostedScene(WIDTH, HEIGHT) {
+        NpnTheme(
+            darkTheme = false,
+        ) {
+            QueueScreen(
+                session,
+                settings = FakeSettingsRepository(),
+                onOpenDoc = {},
+                onOpenEditRun = onOpenEditRun,
+                onOpenSettings = { openedSettings += it },
+            )
         }
+    }
 
     private companion object {
         const val WIDTH = 600
