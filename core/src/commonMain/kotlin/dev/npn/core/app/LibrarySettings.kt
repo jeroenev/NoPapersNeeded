@@ -70,11 +70,31 @@ internal object LibrarySettingKeys {
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
 
     /**
-     * The one IMAP account email import reads, as [dev.npn.core.mail.MailAccountJson]. This is a
-     * new key under the existing `setting-set` op, not a new journal op: a build that does not know
-     * it folds every other setting and leaves this one alone.
+     * The one IMAP account email import reads, as earlier builds stored it: one
+     * [dev.npn.core.mail.MailAccountJson] value. Read only for a field that has no setting of its
+     * own below; never written again.
      */
     const val MAIL_ACCOUNT = "mailAccount"
+
+    /*
+     * The account one field per setting, so that two devices changing different fields at once both
+     * keep their change (each setting is last-writer-wins on its own). New keys under the existing
+     * `setting-set` op, not a new journal op: a build that does not know them leaves them alone.
+     * Read and written by [MailAccountSettings].
+     */
+    const val MAIL_HOST = "mailHost"
+    const val MAIL_PORT = "mailPort"
+    const val MAIL_SECURITY = "mailSecurity"
+    const val MAIL_USERNAME = "mailUsername"
+    const val MAIL_FOLDER = "mailFolder"
+    const val MAIL_POLL_MINUTES = "mailPollMinutes"
+
+    /** The filters as one JSON list: they are edited as a list, and a list has no per-item identity. */
+    const val MAIL_FILTERS = "mailFilters"
+    const val MAIL_POST_ACTION = "mailPostAction"
+    const val MAIL_MOVE_TO = "mailMoveToFolder"
+    const val MAIL_SAVE_PDF = "mailSaveEmailAsPdf"
+    const val MAIL_START_FROM = "mailStartFrom"
 
     /** Whether this library's reminders are on. */
     const val REMINDER_ENABLED = "reminderEnabled"

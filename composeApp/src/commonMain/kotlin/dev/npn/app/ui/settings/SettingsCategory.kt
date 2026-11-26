@@ -133,7 +133,6 @@ import no_papers_needed.composeapp.generated.resources.email_never_checked
 import no_papers_needed.composeapp.generated.resources.email_password
 import no_papers_needed.composeapp.generated.resources.email_port
 import no_papers_needed.composeapp.generated.resources.email_post_action
-import no_papers_needed.composeapp.generated.resources.email_post_delete
 import no_papers_needed.composeapp.generated.resources.email_post_keep
 import no_papers_needed.composeapp.generated.resources.email_post_mark_read
 import no_papers_needed.composeapp.generated.resources.email_post_move
@@ -354,7 +353,6 @@ internal val SettingsCategories: List<SettingsCategory> =
                         Res.string.email_post_keep,
                         Res.string.email_post_mark_read,
                         Res.string.email_post_move,
-                        Res.string.email_post_delete,
                         Res.string.email_move_folder,
                         Res.string.email_save_pdf,
                         Res.string.email_save,

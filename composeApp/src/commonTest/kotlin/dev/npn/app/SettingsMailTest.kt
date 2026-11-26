@@ -4,6 +4,7 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailCheckError
 import dev.npn.core.mail.MailCheckReport
+import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.mail.MailFailureReason
 import dev.npn.core.mail.MailSaveOutcome
 import io.kotest.matchers.collections.shouldContainExactly
@@ -26,18 +27,31 @@ class SettingsMailTest : MainDispatcherTest() {
             val model = settingsVm(session = session)
             var acknowledgements = 0
             session.mail.saveOutcome = MailSaveOutcome.AccountInvalid
-            model.saveMailAccount(MailAccount(), "draft", enabledHere = true) { acknowledgements++ }
+            model.saveMailAccount(MailAccount(), "draft", MailDeviceChoices(enabledHere = true)) { acknowledgements++ }
             model.clearMailPassword { acknowledgements++ }
             runCurrent()
             acknowledgements shouldBe 0
 
             session.mail.saveOutcome = MailSaveOutcome.Saved
-            model.saveMailAccount(MailAccount(), "draft", enabledHere = true) { acknowledgements++ }
+            model.saveMailAccount(MailAccount(), "draft", MailDeviceChoices(enabledHere = true)) { acknowledgements++ }
             model.clearMailPassword { acknowledgements++ }
             runCurrent()
             acknowledgements shouldBe 2
             // Whether this device checks travels with the save, as this device's own choice.
-            session.mail.enabledHere shouldBe true
+            session.mail.device shouldBe MailDeviceChoices(enabledHere = true)
+        }
+
+    /** The keyring is read for the pane when it opens, not at every start. */
+    @Test
+    fun openingThePaneLooksUpThePassword() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+
+            model.mailPaneOpened()
+            runCurrent()
+
+            session.mail.lookUps shouldBe 1
         }
 
     /** Try again reaches the facet, and says how it went as Check now does. */

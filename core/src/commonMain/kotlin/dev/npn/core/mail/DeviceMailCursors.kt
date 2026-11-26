@@ -14,8 +14,9 @@ import kotlinx.serialization.Serializable
  * which messages were passed over live beside it in the device's key-value table, as JSON, so this
  * state needed no new schema version. Both are written in one transaction.
  *
- * Whether this device imports at all is a key of its own in the same table: one per library, as
- * `device.db` is.
+ * What this device decides for itself ([MailDeviceChoices]), a password the server refused and the
+ * one-time move of a password from an earlier build's key are keys of their own in the same table:
+ * one per library, as `device.db` is.
  */
 internal class DeviceMailCursors(
     private val dao: MailCursorDao,
@@ -60,16 +61,28 @@ internal class DeviceMailCursors(
         )
     }
 
-    override suspend fun enabledHere(): Boolean = kv.get(ENABLED_KEY) == "true"
+    override suspend fun choices(): MailDeviceChoices =
+        MailDeviceChoices(enabledHere = kv.get(ENABLED_KEY) == "true", allowPlain = kv.get(ALLOW_PLAIN_KEY) == "true")
 
-    override suspend fun setEnabledHere(enabled: Boolean) {
-        kv.put(ENABLED_KEY, enabled.toString())
+    override suspend fun setChoices(choices: MailDeviceChoices) {
+        kv.putAll(
+            listOf(
+                KeyValueEntity(ENABLED_KEY, choices.enabledHere.toString()),
+                KeyValueEntity(ALLOW_PLAIN_KEY, choices.allowPlain.toString()),
+            ),
+        )
     }
 
-    override suspend fun followedKey(): String? = kv.get(FOLLOWED_KEY)
+    override suspend fun refusedLogin(): String? = kv.get(REFUSED_LOGIN_KEY)
 
-    override suspend fun setFollowedKey(accountKey: String) {
-        kv.put(FOLLOWED_KEY, accountKey)
+    override suspend fun setRefusedLogin(loginKey: String?) {
+        if (loginKey == null) kv.delete(REFUSED_LOGIN_KEY) else kv.put(REFUSED_LOGIN_KEY, loginKey)
+    }
+
+    override suspend fun legacyPasswordMoved(): Boolean = kv.get(LEGACY_PASSWORD_KEY) == "true"
+
+    override suspend fun setLegacyPasswordMoved() {
+        kv.put(LEGACY_PASSWORD_KEY, "true")
     }
 
     private fun MailCursorEntity.toModel(progress: StoredProgress?): MailCursor =
@@ -108,8 +121,14 @@ internal class DeviceMailCursors(
         /** Whether this device checks the account: its own choice, never the library's. */
         const val ENABLED_KEY = "mail.enabledHere"
 
-        /** The account key this device's password and cursor were last kept under. */
-        const val FOLLOWED_KEY = "mail.followedKey"
+        /** Whether this device may log in unencrypted: its own opt-in, never the library's. */
+        const val ALLOW_PLAIN_KEY = "mail.allowPlain"
+
+        /** The login the server refused the password for; see [MailCursorStore.refusedLogin]. */
+        const val REFUSED_LOGIN_KEY = "mail.refusedLogin"
+
+        /** Set once this device has looked for a password under an earlier build's key. */
+        const val LEGACY_PASSWORD_KEY = "mail.legacyPasswordMoved"
 
         /** The account key and folder joined by a character neither can hold. */
         fun progressKey(

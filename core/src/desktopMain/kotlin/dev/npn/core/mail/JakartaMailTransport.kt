@@ -16,6 +16,7 @@ import jakarta.mail.Store
 import jakarta.mail.StoreClosedException
 import jakarta.mail.UIDFolder
 import jakarta.mail.internet.InternetAddress
+import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimePart
 import jakarta.mail.internet.MimeUtility
 import jakarta.mail.search.ComparisonTerm
@@ -117,9 +118,9 @@ internal class JakartaMailTransport(
 
     /**
      * Where the account's post-action puts a message, checked once per connection before anything
-     * is imported. A move target or trash folder the server lacks, or a server that can move no
-     * single message (neither MOVE nor UIDPLUS, so an expunge would take every message another
-     * client marked deleted), is the account's problem, not one message's: it fails the open.
+     * is imported. A move target the server lacks, or a server that can move no single message
+     * (neither MOVE nor UIDPLUS, so an expunge would take every message another client marked
+     * deleted), is the account's problem, not one message's: it fails the open.
      */
     private fun postActionTarget(
         store: Store,
@@ -150,31 +151,6 @@ internal class JakartaMailTransport(
                     }
                 }
             }
-
-            MailPostAction.DELETE -> {
-                val trash = trashFolder(store)?.takeUnless { it.equals(account.folder, ignoreCase = true) }
-                when {
-                    !canMoveOne -> PostActionTarget.Refused(MailFailureReason.POST_ACTION_UNSUPPORTED)
-                    trash == null -> PostActionTarget.Refused(MailFailureReason.TRASH_NOT_FOUND)
-                    else -> PostActionTarget.Ready(trash)
-                }
-            }
-        }
-    }
-
-    /**
-     * The server's trash folder: the one it marks `\Trash` (RFC 6154 SPECIAL-USE, as Gmail's
-     * `[Gmail]/Trash`, Fastmail and Dovecot do), else one with a usual trash name.
-     */
-    private fun trashFolder(store: Store): String? {
-        val folders = store.defaultFolder.list("*").toList()
-        folders
-            .firstOrNull { folder ->
-                (folder as? IMAPFolder)?.attributes?.any { it.equals("\\Trash", ignoreCase = true) } ==
-                    true
-            }?.let { return it.fullName }
-        return TRASH_NAMES.firstNotNullOfOrNull { name ->
-            folders.firstOrNull { it.fullName.equals(name, ignoreCase = true) }?.fullName
         }
     }
 
@@ -268,7 +244,7 @@ private class JakartaMailConnection(
     private val folder: Folder,
     override val uidValidity: Long,
     override val uidNext: Long,
-    /** Where the post-action puts a message: the move target, or the trash; checked on open. */
+    /** Where the post-action moves a message; checked on open. */
     private val postActionFolder: String?,
     private val io: CoroutineDispatcher,
 ) : MailConnection {
@@ -385,10 +361,7 @@ private class JakartaMailConnection(
     override suspend fun moveTo(
         uid: Long,
         folder: String,
-    ): MailFailureReason? = moveOne(uid, folder, MailFailureReason.MOVE_FOLDER_NOT_FOUND)
-
-    override suspend fun delete(uid: Long): MailFailureReason? =
-        moveOne(uid, postActionFolder ?: return MailFailureReason.TRASH_NOT_FOUND, MailFailureReason.TRASH_NOT_FOUND)
+    ): MailFailureReason? = moveOne(uid, postActionFolder ?: folder, MailFailureReason.MOVE_FOLDER_NOT_FOUND)
 
     /**
      * Move one message to [target]: IMAP MOVE where the server has it, else a copy and a UID
@@ -499,10 +472,6 @@ internal fun causeChain(failure: Throwable): String =
 
 private const val MAX_CAUSES = 4
 
-/** Trash folder names to fall back on for a server without SPECIAL-USE, tried in this order. */
-private val TRASH_NAMES =
-    listOf("Trash", "INBOX.Trash", "INBOX/Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash")
-
 /**
  * Whether the server answered a command with NO or BAD: a refusal (throttling, a temporary error,
  * a message it cannot serve now) rather than a message that cannot be parsed. Retried on later
@@ -572,6 +541,9 @@ private const val WRITE_TIMEOUT_MILLIS = 60_000
  */
 internal object MimeParser {
     private const val MAX_BODY_CHARS = 1_000_000
+
+    /** RFC 5322's line limit: an id longer than this is no id another client would have written. */
+    private const val MAX_MESSAGE_ID_CHARS = 998
     private const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
     private const val MAX_PART_DEPTH = 10
     private const val UTF8_MAX_BYTES = 4
@@ -615,6 +587,7 @@ internal object MimeParser {
                 dateMillis = message.sentDate?.time ?: message.receivedDate?.time,
                 attachments = candidates(leaves(message)).map { MailAttachmentInfo(it.name, it.leaf.part.contentType) },
                 receivedMillis = message.receivedDate?.time ?: message.sentDate?.time,
+                messageId = messageId(message),
             )
         } catch (failure: Exception) {
             if (isConnectionLoss(failure)) throw failure
@@ -658,17 +631,6 @@ internal object MimeParser {
             )
         }
 
-    /** Everything of [message] at once, its text included: what a test of the two passes reads. */
-    fun parseOrFailed(
-        uid: Long,
-        message: Message,
-    ): MailMessage = downloadOrFailed(uid, message, withBody = true)
-
-    fun parse(
-        uid: Long,
-        message: Message,
-    ): MailMessage = download(uid, message, withBody = true)
-
     private fun download(
         uid: Long,
         message: Message,
@@ -708,8 +670,22 @@ internal object MimeParser {
             bodyText = if (withBody) plainText(leaves) else "",
             attachments = attachments,
             droppedParts = dropped,
+            messageId = messageId(message),
         )
     }
+
+    /**
+     * The Message-ID, without its angle brackets and surrounding space; null when the message has
+     * none, or one too long to be a real id. An IMAP message has it from its envelope.
+     */
+    private fun messageId(message: Message): String? =
+        (message as? MimeMessage)
+            ?.messageID
+            ?.trim()
+            ?.removePrefix("<")
+            ?.removeSuffix(">")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && it.length <= MAX_MESSAGE_ID_CHARS }
 
     /**
      * The leaves of [part]'s structure, in order. Walking it reads multipart and nested-message

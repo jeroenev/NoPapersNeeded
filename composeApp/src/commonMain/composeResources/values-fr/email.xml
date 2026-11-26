@@ -16,11 +16,11 @@
     <string name="email_username">Identifiant</string>
     <string name="email_password">Mot de passe</string>
     <string name="email_password_saved">Un mot de passe est enregistré dans le trousseau du système.</string>
-    <string name="email_password_help">Laissez vide pour garder le mot de passe enregistré. Il est stocké dans le trousseau du système, pas dans la bibliothèque.</string>
+    <string name="email_password_help">Laissez vide pour garder le mot de passe enregistré ; un serveur ou un identifiant modifié le redemande. Il est stocké dans le trousseau du système, pas dans la bibliothèque.</string>
     <string name="email_password_needed">Aucun mot de passe n’est enregistré pour ce compte sur cet appareil. Saisissez-le et enregistrez le compte.</string>
     <string name="email_folder">Dossier</string>
     <string name="email_folder_help">Le dossier de la boîte à lire, généralement INBOX.</string>
-    <string name="email_allow_plain">Autoriser une connexion non chiffrée</string>
+    <string name="email_allow_plain">Autoriser une connexion non chiffrée sur cet appareil</string>
     <string name="email_allow_plain_help">À n’utiliser que si votre serveur ne propose ni SSL ni STARTTLS. Votre mot de passe circulerait sans protection.</string>
     <string name="email_interval">Vérifier toutes les</string>
     <string name="email_interval_help">Au moins 5 minutes. L’application vérifie pendant qu’elle est ouverte.</string>
@@ -37,8 +37,6 @@
     <string name="email_post_keep">Laisser le message tel quel</string>
     <string name="email_post_mark_read">Le marquer comme lu</string>
     <string name="email_post_move">Le déplacer vers un dossier</string>
-    <string name="email_post_delete">Le mettre à la corbeille</string>
-    <string name="email_post_delete_help">L’e-mail entier va dans la corbeille de la boîte, avec son texte et les pièces jointes que la bibliothèque ne peut pas prendre, et peut encore y être récupéré.</string>
     <string name="email_move_folder">Déplacer vers le dossier</string>
     <string name="email_save_pdf">Enregistrer aussi l’e-mail en PDF</string>
     <string name="email_save_pdf_help">Ajoute à la bibliothèque un PDF lisible avec les en-têtes et le texte du message.</string>
@@ -50,6 +48,7 @@
     <string name="email_never_checked">Pas encore vérifié</string>
     <string name="email_last_check">Dernière vérification : %1$s</string>
     <string name="email_last_error">Dernière erreur : %1$s</string>
+    <string name="email_login_refused_paused">Le serveur a refusé le mot de passe : cet appareil ne vérifie plus de lui-même tant que le mot de passe ou le compte ne change pas. « Vérifier maintenant » essaie toujours.</string>
     <string name="email_checking">Vérification des e-mails…</string>
 
     <string name="email_saved">Compte e-mail enregistré.</string>
@@ -75,8 +74,7 @@
     <string name="email_reason_pdf_render_failed">le PDF de l’e-mail n’a pas pu être créé</string>
     <string name="email_reason_unsupported">l’import d’e-mails n’est pas pris en charge sur cette plateforme</string>
     <string name="email_reason_move_folder_not_found">le dossier où déplacer les e-mails importés n’existe pas sur le serveur</string>
-    <string name="email_reason_trash_not_found">le serveur n’a pas de corbeille où déplacer les e-mails importés</string>
-    <string name="email_reason_post_action_unsupported">le serveur ne peut pas déplacer ni supprimer un seul message</string>
+    <string name="email_reason_post_action_unsupported">le serveur ne peut pas déplacer un seul message</string>
 
     <string name="email_secret_unsupported">le trousseau du système n’est pas pris en charge sur cette plateforme</string>
     <string name="email_secret_unavailable">le trousseau du système n’est pas disponible</string>

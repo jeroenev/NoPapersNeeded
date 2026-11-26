@@ -16,11 +16,11 @@
     <string name="email_username">Username</string>
     <string name="email_password">Password</string>
     <string name="email_password_saved">A password is saved in your system keyring.</string>
-    <string name="email_password_help">Leave blank to keep the saved password. It is stored in your system keyring, not in the library.</string>
+    <string name="email_password_help">Leave blank to keep the saved password; a changed server or username needs it again. It is stored in your system keyring, not in the library.</string>
     <string name="email_password_needed">No password for this account is saved on this device. Enter it and save the account.</string>
     <string name="email_folder">Folder</string>
     <string name="email_folder_help">The mailbox folder to read, usually INBOX.</string>
-    <string name="email_allow_plain">Allow an unencrypted connection</string>
+    <string name="email_allow_plain">Allow an unencrypted connection on this device</string>
     <string name="email_allow_plain_help">Only use this when your server cannot do SSL or STARTTLS. Your password would travel unprotected.</string>
     <string name="email_interval">Check every</string>
     <string name="email_interval_help">At least 5 minutes. The app checks while it is open.</string>
@@ -37,8 +37,6 @@
     <string name="email_post_keep">Leave the message as it is</string>
     <string name="email_post_mark_read">Mark it read</string>
     <string name="email_post_move">Move it to a folder</string>
-    <string name="email_post_delete">Move it to the trash</string>
-    <string name="email_post_delete_help">The whole email goes to the mailbox’s trash folder, with its text and any attachments the library cannot take, so it can still be recovered there.</string>
     <string name="email_move_folder">Move to folder</string>
     <string name="email_save_pdf">Also save the email as a PDF</string>
     <string name="email_save_pdf_help">Adds a readable PDF with the message headers and text to the library.</string>
@@ -50,6 +48,7 @@
     <string name="email_never_checked">Not checked yet</string>
     <string name="email_last_check">Last check: %1$s</string>
     <string name="email_last_error">Last error: %1$s</string>
+    <string name="email_login_refused_paused">The server refused the password, so this device stops checking on its own until the password or the account changes. Check now still tries.</string>
     <string name="email_checking">Checking mail…</string>
 
     <string name="email_saved">Email account saved.</string>
@@ -75,8 +74,7 @@
     <string name="email_reason_pdf_render_failed">the email PDF could not be made</string>
     <string name="email_reason_unsupported">email import is not supported on this platform</string>
     <string name="email_reason_move_folder_not_found">the folder to move imported mail to does not exist on the server</string>
-    <string name="email_reason_trash_not_found">the server has no trash folder to move imported mail to</string>
-    <string name="email_reason_post_action_unsupported">the server cannot move or delete a single message</string>
+    <string name="email_reason_post_action_unsupported">the server cannot move a single message</string>
 
     <string name="email_secret_unsupported">the system keyring is not supported on this platform</string>
     <string name="email_secret_unavailable">the system keyring is not available</string>

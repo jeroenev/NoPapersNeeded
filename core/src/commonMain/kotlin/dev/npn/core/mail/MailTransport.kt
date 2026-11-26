@@ -46,6 +46,8 @@ data class MailEnvelope(
     /** Set when even the envelope or structure could not be read; see [MailMessage.readFailure]. */
     val readFailure: MailFailureReason? = null,
     val readFailureCause: String? = null,
+    /** The message's Message-ID, without its angle brackets; null when it has none. See [MailMessage.messageId]. */
+    val messageId: String? = null,
 )
 
 /** One message the transport read, reduced to what filtering, importing and the email PDF need. */
@@ -79,6 +81,12 @@ data class MailMessage(
      * place in the mailbox, as no post-action runs on it.
      */
     val droppedParts: List<MailDroppedPart> = emptyList(),
+    /**
+     * The message's Message-ID, without its angle brackets; null when it has none. What tells the
+     * email PDF of a message read again from a new one: its bytes are no proof, as another build or
+     * renderer makes other bytes of the same email.
+     */
+    val messageId: String? = null,
 )
 
 /** Why one attachment of an otherwise readable message was left out. */
@@ -114,10 +122,7 @@ enum class MailFailureReason {
     /** The folder the account moves imported mail to does not exist on the server. */
     MOVE_FOLDER_NOT_FOUND,
 
-    /** "Move to the trash" was chosen, and the server names no folder as its trash. */
-    TRASH_NOT_FOUND,
-
-    /** The server cannot move or delete one message alone (neither MOVE nor UIDPLUS). */
+    /** The server cannot move one message alone (neither MOVE nor UIDPLUS). */
     POST_ACTION_UNSUPPORTED,
 }
 
@@ -200,8 +205,8 @@ interface MailTransport {
      * Connect and open the account's folder for one whole check: every page and every post-action
      * of the check goes over the returned connection, which the caller closes. The account's
      * post-action is checked here, before anything is imported: a move target the server does not
-     * have, no trash folder to delete into, or a server that cannot move one message alone fails
-     * the open, rather than every message failing its post-action one check at a time.
+     * have, or a server that cannot move one message alone, fails the open, rather than every
+     * message failing its post-action one check at a time.
      */
     suspend fun open(
         account: MailAccount,
@@ -276,9 +281,6 @@ interface MailConnection {
         uid: Long,
         folder: String,
     ): MailFailureReason?
-
-    /** Move [uid] to the server's trash folder (its special-use `\Trash`), which [MailTransport.open] found. */
-    suspend fun delete(uid: Long): MailFailureReason?
 
     /** Close the folder and the connection; never throws, and is safe to call twice. */
     suspend fun close()
@@ -404,8 +406,8 @@ data class MailCursor(
 
 /**
  * Device-local mail state (`device.db`), never synced because it describes this device: its cursors,
- * and whether this device imports at all. The account is shared by every device of the library; which
- * of them reads the mailbox is each device's own choice.
+ * and what this device decides for itself ([MailDeviceChoices]). The account is shared by every
+ * device of the library; which of them reads the mailbox, and how, is each device's own choice.
  */
 interface MailCursorStore {
     suspend fun get(
@@ -415,19 +417,23 @@ interface MailCursorStore {
 
     suspend fun save(cursor: MailCursor)
 
-    /** Whether this device checks the account on its own; off until this device's user turns it on. */
-    suspend fun enabledHere(): Boolean
+    /** This device's choices; checking is off, and so is an unencrypted login, until its user says. */
+    suspend fun choices(): MailDeviceChoices
 
-    suspend fun setEnabledHere(enabled: Boolean)
+    suspend fun setChoices(choices: MailDeviceChoices)
 
     /**
-     * The account key this device last kept its password and cursor under; null before any. A synced
-     * change of host, username or port gives the account a new key, and this is how the device finds
-     * what to carry over, even when the change arrived while the app was closed.
+     * The [MailAccount.loginKey] the server last refused the password for on this device; null
+     * when none was refused since. Routine checks wait while it is the account's.
      */
-    suspend fun followedKey(): String?
+    suspend fun refusedLogin(): String?
 
-    suspend fun setFollowedKey(accountKey: String)
+    suspend fun setRefusedLogin(loginKey: String?)
+
+    /** Whether this device moved a password from the key earlier builds used ([MailAccount.legacyAccountKey]). */
+    suspend fun legacyPasswordMoved(): Boolean
+
+    suspend fun setLegacyPasswordMoved()
 }
 
 /** What the import path offers email import: the session's own ingest façade, narrowed. */
@@ -435,6 +441,20 @@ interface MailDocumentSink {
     suspend fun importPdf(
         bytes: ByteArray,
         suggestedName: String,
+    ): MailImportResult
+
+    /**
+     * What the email PDF of the message [messageId] names came to before: [MailImportResult.Duplicate]
+     * while the library shows it, [MailImportResult.Removed] once the user trashed or deleted it;
+     * null when no document records that Message-ID, so the PDF is to be made.
+     */
+    suspend fun emailPdfOf(messageId: String): MailImportResult?
+
+    /** [importPdf] for an email's own PDF, which then records [messageId] (see [emailPdfOf]). */
+    suspend fun importEmailPdf(
+        bytes: ByteArray,
+        suggestedName: String,
+        messageId: String?,
     ): MailImportResult
 
     suspend fun importImage(

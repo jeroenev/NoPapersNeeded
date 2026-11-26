@@ -16,11 +16,11 @@
     <string name="email_username">Gebruikersnaam</string>
     <string name="email_password">Wachtwoord</string>
     <string name="email_password_saved">Er is een wachtwoord opgeslagen in de sleutelhanger van het systeem.</string>
-    <string name="email_password_help">Laat leeg om het opgeslagen wachtwoord te houden. Het staat in de sleutelhanger van het systeem, niet in de bibliotheek.</string>
+    <string name="email_password_help">Laat leeg om het opgeslagen wachtwoord te houden; een gewijzigde server of gebruikersnaam vraagt het opnieuw. Het staat in de sleutelhanger van het systeem, niet in de bibliotheek.</string>
     <string name="email_password_needed">Op dit apparaat is geen wachtwoord voor dit account bewaard. Vul het in en sla het account op.</string>
     <string name="email_folder">Map</string>
     <string name="email_folder_help">De te lezen map in het postvak, meestal INBOX.</string>
-    <string name="email_allow_plain">Een onversleutelde verbinding toestaan</string>
+    <string name="email_allow_plain">Een onversleutelde verbinding toestaan op dit apparaat</string>
     <string name="email_allow_plain_help">Gebruik dit alleen als je server geen SSL of STARTTLS kan. Je wachtwoord zou onbeschermd reizen.</string>
     <string name="email_interval">Controleren elke</string>
     <string name="email_interval_help">Minimaal 5 minuten. De app controleert terwijl ze open is.</string>
@@ -37,8 +37,6 @@
     <string name="email_post_keep">Het bericht laten zoals het is</string>
     <string name="email_post_mark_read">Als gelezen markeren</string>
     <string name="email_post_move">Naar een map verplaatsen</string>
-    <string name="email_post_delete">Naar de prullenbak verplaatsen</string>
-    <string name="email_post_delete_help">De hele e-mail gaat naar de prullenbak van de mailbox, met de tekst en alle bijlagen die de bibliotheek niet kan opnemen, zodat hij daar nog terug te halen is.</string>
     <string name="email_move_folder">Naar map</string>
     <string name="email_save_pdf">De e-mail ook als PDF opslaan</string>
     <string name="email_save_pdf_help">Voegt een leesbare PDF met de kopregels en tekst van het bericht aan de bibliotheek toe.</string>
@@ -50,6 +48,7 @@
     <string name="email_never_checked">Nog niet gecontroleerd</string>
     <string name="email_last_check">Laatste controle: %1$s</string>
     <string name="email_last_error">Laatste fout: %1$s</string>
+    <string name="email_login_refused_paused">De server weigerde het wachtwoord, dus dit apparaat controleert niet meer vanzelf tot het wachtwoord of het account verandert. Nu controleren probeert het nog wel.</string>
     <string name="email_checking">E-mail wordt gecontroleerd…</string>
 
     <string name="email_saved">E-mailaccount opgeslagen.</string>
@@ -75,8 +74,7 @@
     <string name="email_reason_pdf_render_failed">de PDF van de e-mail kon niet worden gemaakt</string>
     <string name="email_reason_unsupported">e-mail importeren wordt op dit platform niet ondersteund</string>
     <string name="email_reason_move_folder_not_found">de map om geïmporteerde e-mail naartoe te verplaatsen bestaat niet op de server</string>
-    <string name="email_reason_trash_not_found">de server heeft geen prullenbak om geïmporteerde e-mail naartoe te verplaatsen</string>
-    <string name="email_reason_post_action_unsupported">de server kan geen los bericht verplaatsen of verwijderen</string>
+    <string name="email_reason_post_action_unsupported">de server kan geen los bericht verplaatsen</string>
 
     <string name="email_secret_unsupported">de sleutelhanger van het systeem wordt op dit platform niet ondersteund</string>
     <string name="email_secret_unavailable">de sleutelhanger van het systeem is niet beschikbaar</string>

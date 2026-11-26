@@ -282,14 +282,17 @@ class SessionSmokeTest {
                             dev.npn.core.mail
                                 .MailAccount(),
                             null,
-                            enabledHere = false,
+                            dev.npn.core.mail
+                                .MailDeviceChoices(),
                         )
                     },
+                    { rig.session.mail.lookUpPassword() },
                     {
                         rig.session.mail.testConnection(
                             dev.npn.core.mail
                                 .MailAccount(),
                             null,
+                            false,
                         )
                     },
                     { rig.session.ocr.reOcr(id) },

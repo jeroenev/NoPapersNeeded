@@ -151,7 +151,7 @@ class MailServicePassedOverTest {
 
             assertEquals(0, transport.opens)
 
-            fixture.service.saveAccount(testAccount, null, enabledHere = true)
+            fixture.service.saveAccount(testAccount, null, MailDeviceChoices(enabledHere = true))
             fixture.service.pollIfDue()
 
             assertTrue(fixture.cursors.enabled)

@@ -11,6 +11,7 @@ import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.ReminderSettings
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.mail.MailAccount
+import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.model.FieldDef
 import dev.npn.core.security.LockTimeout
 import dev.npn.core.settings.SettingsSnapshot
@@ -309,23 +310,28 @@ interface SettingsActions {
     fun watchedFolderPicked(pick: FolderPick)
 
     /**
-     * Save the IMAP account, with [password] when one was typed (blank removes it, null keeps it),
-     * and whether this device checks it ([enabledHere], this device's own choice).
+     * Save the IMAP account, with [password] when one was typed (null keeps the saved one), and what
+     * this device decides for itself ([device]: whether it checks the account, and may log in
+     * unencrypted).
      */
     fun saveMailAccount(
         account: MailAccount,
         password: String?,
-        enabledHere: Boolean,
+        device: MailDeviceChoices,
         onSuccess: () -> Unit,
     )
 
     /** Remove the password from the OS secret store, leaving the account configured otherwise. */
     fun clearMailPassword(onSuccess: () -> Unit)
 
+    /** The email pane opened: read from the keyring whether this device has the password. */
+    fun mailPaneOpened()
+
     /** Connect with these values and report only that it worked, without importing anything. */
     fun testMailConnection(
         account: MailAccount,
         password: String?,
+        allowPlain: Boolean,
     )
 
     /** Check the saved account now, whatever the switch and interval say. */

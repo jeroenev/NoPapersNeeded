@@ -104,6 +104,58 @@ internal class MailMessageImporter(
         return Considered(outcome, message.droppedParts)
     }
 
+    class Retried(
+        val report: MailCheckReport,
+        val cursor: MailCursor,
+        val error: MailCheckError?,
+    )
+
+    /**
+     * Read the passed-over messages again. One the folder no longer holds leaves the list; one that
+     * imports fully now leaves it too; one that still cannot is counted and stays. A lost
+     * connection ends the retry with what it did saved; the rest wait for the next retry.
+     */
+    suspend fun retryPassedOver(
+        account: MailAccount,
+        connection: MailConnection,
+        start: MailCursor,
+        startReport: MailCheckReport,
+        cancelRequested: () -> Boolean,
+    ): Retried {
+        val described =
+            when (val fetched = connection.describe(start.passedOver)) {
+                is MailFetchResult.Failed -> return Retried(
+                    startReport,
+                    start,
+                    MailCheckError(fetched.reason, fetched.detail),
+                )
+
+                is MailFetchResult.Success -> fetched.messages.sortedBy(MailEnvelope::uid)
+            }
+        val held = described.mapTo(HashSet(), MailEnvelope::uid)
+        var cursor = start.copy(passedOver = start.passedOver.filter { it in held })
+        var report = startReport
+        for (message in described) {
+            if (cancelRequested()) break
+            val considered = consider(account, connection, message)
+            val outcome = considered.outcome
+            if (outcome is MessageOutcome.Lost) return Retried(report, cursor, outcome.error)
+            report =
+                report
+                    .copy(
+                        messagesSeen = report.messagesSeen + 1,
+                        droppedAttachments = report.droppedAttachments + considered.dropped.size,
+                    ).tallied(outcome)
+            if (outcome is MessageOutcome.Failed) report = report.copy(unreadable = report.unreadable + 1)
+            val imported = outcome !is MessageOutcome.Unreadable && outcome !is MessageOutcome.Failed
+            if (imported && considered.dropped.isEmpty()) {
+                cursor = cursor.copy(passedOver = cursor.passedOver - message.uid)
+            }
+        }
+        log.info("Retried ${described.size} passed-over emails; ${cursor.passedOver.size} still left in the mailbox")
+        return Retried(report, cursor, null)
+    }
+
     private suspend fun handle(
         account: MailAccount,
         connection: MailConnection,
@@ -160,20 +212,12 @@ internal class MailMessageImporter(
             }
         }
         if (account.saveEmailAsPdf) {
-            val pdf =
-                runCatchingCancellable { pdfRenderer.render(message) }.getOrElse { thrown ->
-                    log.warn("Rendering an email as a PDF failed", thrown)
-                    null
-                }
-            if (pdf == null) {
-                failure = failure ?: MailFailureReason.PDF_RENDER_FAILED
-            } else {
-                record(sink.importPdf(pdf, emailPdfFileName(message)))
-            }
+            val pdf = emailPdf(message)
+            if (pdf == null) failure = failure ?: MailFailureReason.PDF_RENDER_FAILED else record(pdf)
         }
         if (removed) log.info("Email UID ${message.uid} holds a document that was removed; left in the mailbox")
-        // A message that lost an attachment keeps its place in the mailbox: moving or deleting it
-        // would take the part the library could not take with it.
+        // A message that lost an attachment keeps its place in the mailbox: moving it would take the
+        // part the library could not take with it.
         if (failure == null && message.droppedParts.isEmpty() && !removed) {
             failure = postAction(account, connection, message.uid)
         }
@@ -185,6 +229,21 @@ internal class MailMessageImporter(
             // sees those as duplicates, tries the failed parts again, and only then the action.
             MessageOutcome.Failed(reason, importedDocIds = imported, duplicates = duplicates)
         }
+    }
+
+    /**
+     * What [message]'s own PDF came to in the library; null when it could not be made. An email read
+     * again (another device, a renumbered folder, a start moved back) is known by its Message-ID:
+     * its PDF made again, by another build, need not have the same bytes.
+     */
+    private suspend fun emailPdf(message: MailMessage): MailImportResult? {
+        message.messageId?.let { id -> sink.emailPdfOf(id)?.let { return it } }
+        val pdf =
+            runCatchingCancellable { pdfRenderer.render(message) }.getOrElse { thrown ->
+                log.warn("Rendering an email as a PDF failed", thrown)
+                null
+            } ?: return null
+        return sink.importEmailPdf(pdf, emailPdfFileName(message), message.messageId)
     }
 }
 
@@ -198,7 +257,6 @@ private suspend fun postAction(
         MailPostAction.KEEP -> null
         MailPostAction.MARK_READ -> connection.markRead(uid)
         MailPostAction.MOVE -> connection.moveTo(uid, account.moveToFolder)
-        MailPostAction.DELETE -> connection.delete(uid)
     }
 
 internal fun MailCheckReport.counting(

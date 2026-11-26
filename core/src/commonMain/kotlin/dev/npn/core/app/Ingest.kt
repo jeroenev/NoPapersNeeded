@@ -25,8 +25,9 @@ interface IngestFacade {
 
     /**
      * Import PDF bytes already in memory, through the same staging, hashing, duplicate and journal
-     * path as [importPdf]. Email attachments arrive this way; no file is written into the library
-     * outside the importer.
+     * path as [importPdf]; no file is written into the library outside the importer. A hidden
+     * document's bytes bring it back, as for any import. Email does not come this way: its own path
+     * leaves a document the user trashed or deleted removed.
      */
     suspend fun importPdfBytes(
         bytes: ByteArray,

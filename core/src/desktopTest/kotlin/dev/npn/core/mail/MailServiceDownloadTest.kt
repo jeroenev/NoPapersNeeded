@@ -57,13 +57,17 @@ class MailServiceDownloadTest {
         runTest {
             val partial = message(uid = 1).copy(droppedParts = listOf(MailDroppedPart.TOO_LARGE))
             val transport = FakeTransport(messages = listOf(partial, message(uid = 2)))
-            val fixture = fixture(account = account.copy(postAction = MailPostAction.DELETE), transport = transport)
+            val fixture =
+                fixture(
+                    account = account.copy(postAction = MailPostAction.MOVE, moveToFolder = "Done"),
+                    transport = transport,
+                )
             val report = fixture.service.checkNow()
             assertTrue(report.errors.isEmpty())
             assertEquals(2, report.imported)
             assertEquals(1, report.droppedAttachments)
-            // Deleting it would take the oversized attachment with it.
-            assertEquals(listOf(2L), transport.deleted)
+            // Moving it would take the oversized attachment with it.
+            assertEquals(listOf(2L to "Done"), transport.moved)
             assertEquals(2, fixture.cursors.last().lastUid)
         }
 

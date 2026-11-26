@@ -18,6 +18,7 @@ import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.TextSetting
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.mail.MailAccount
+import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.security.LockTimeout
@@ -143,15 +144,18 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun saveMailAccount(
         account: MailAccount,
         password: String?,
-        enabledHere: Boolean,
+        device: MailDeviceChoices,
         onSuccess: () -> Unit,
     ) = Unit
 
     override fun clearMailPassword(onSuccess: () -> Unit) = Unit
 
+    override fun mailPaneOpened() = Unit
+
     override fun testMailConnection(
         account: MailAccount,
         password: String?,
+        allowPlain: Boolean,
     ) = Unit
 
     override fun checkMailNow() = Unit

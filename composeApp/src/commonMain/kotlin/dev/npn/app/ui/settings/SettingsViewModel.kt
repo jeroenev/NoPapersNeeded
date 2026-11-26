@@ -31,6 +31,7 @@ import dev.npn.core.diagnostics.DiagnosticsReport
 import dev.npn.core.diagnostics.LibrarySummary
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailCheckReport
+import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.mail.MailSaveOutcome
 import dev.npn.core.mail.MailState
 import dev.npn.core.mail.MailTestOutcome
@@ -294,10 +295,10 @@ class SettingsViewModel(
     override fun saveMailAccount(
         account: MailAccount,
         password: String?,
-        enabledHere: Boolean,
+        device: MailDeviceChoices,
         onSuccess: () -> Unit,
     ) = launchReporting(Res.string.email_save_failed) {
-        when (val outcome = mail.saveAccount(account, password, enabledHere)) {
+        when (val outcome = mail.saveAccount(account, password, device)) {
             MailSaveOutcome.Saved -> {
                 onSuccess()
                 message(uiText(Res.string.email_saved))
@@ -331,13 +332,21 @@ class SettingsViewModel(
             }
         }
 
+    override fun mailPaneOpened() {
+        viewModelScope.launch {
+            // A keyring that cannot be read is in the mail state; a closed library has nothing to say.
+            runCatchingCancellable { mail.lookUpPassword() }
+        }
+    }
+
     override fun testMailConnection(
         account: MailAccount,
         password: String?,
+        allowPlain: Boolean,
     ) {
         viewModelScope.launch {
             val outcome =
-                runCatchingCancellable { mail.testConnection(account, password) }.getOrElse {
+                runCatchingCancellable { mail.testConnection(account, password, allowPlain) }.getOrElse {
                     message(uiText(Res.string.email_test_failed, it.reasonText()))
                     return@launch
                 }

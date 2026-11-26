@@ -5,14 +5,13 @@ import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
 
 /**
- * One desktop user's IMAP account, as the library's journal keeps it. The password is deliberately
- * absent: it lives only in the OS secret store ([MailCredentialStore]), keyed by [accountKey].
+ * One desktop user's IMAP account, as the library's journal keeps it: one setting per field, so two
+ * devices that change different fields at once both keep their change. The password is deliberately
+ * absent: it lives only in the OS secret store ([MailCredentialStore]), under [accountKey].
  *
  * The account is library data (every device that could import from it should see the same
- * filters and post-action), while the password, whether this device imports at all, the
- * last-processed UID and the last error are this device's own state. An `enabled` key an earlier
- * build wrote here is ignored: switching import on for one device must not make every other device
- * of the library start reading the mailbox too.
+ * filters and post-action), while the password, whether this device imports at all, whether it
+ * may log in unencrypted, the last-processed UID and the last error are this device's own state.
  */
 @Serializable
 data class MailAccount(
@@ -31,20 +30,29 @@ data class MailAccount(
     /** Import a readable PDF of the message headers and plain-text body beside its attachments. */
     val saveEmailAsPdf: Boolean = false,
     /**
-     * The explicit opt-in without which [MailSecurity.PLAIN] is refused: the password travels
-     * unencrypted, which is never a silent fallback.
-     */
-    val allowPlain: Boolean = false,
-    /**
-     * How far back a device that has not read this folder yet starts. A build that does not know
-     * this key ignores it (the setting's JSON is decoded leniently), and a key from a later build
-     * this one does not know reads as the default.
+     * How far back a device that has not read this folder yet starts. A value from a later build
+     * this one does not know reads as the default, and is not written back unless changed here.
      */
     val startFrom: MailStartPoint = MailStartPoint.LAST_30_DAYS,
 ) {
-    /** The keyring entry and device cursor this account uses, derived from its connection identity. */
+    /**
+     * The mailbox this account reads: its username at its server. The password and this device's
+     * place in the folder are kept under it, so a changed port or connection security keeps both,
+     * while a changed server or username is another mailbox, whose password is asked for again.
+     */
     val accountKey: String
-        get() = "${username.trim().lowercase()}@${host.trim().lowercase()}:$port"
+        get() = "${username.trim().lowercase()}@${host.trim().lowercase()}"
+
+    /** The key earlier builds kept the password and cursor under, with the port; read once to move them. */
+    internal val legacyAccountKey: String
+        get() = "$accountKey:$port"
+
+    /**
+     * Everything a login depends on but the password: what a refused login is remembered for, so
+     * that routine checks resume once any of it changes.
+     */
+    internal val loginKey: String
+        get() = "$accountKey:$port:${security.name}"
 
     /** Whether every required field is filled and the choices are internally consistent. */
     val isConfigured: Boolean
@@ -56,8 +64,7 @@ data class MailAccount(
                 (
                     postAction != MailPostAction.MOVE ||
                         (moveToFolder.isNotBlank() && !moveToFolder.equals(folder, ignoreCase = true))
-                ) &&
-                (security != MailSecurity.PLAIN || allowPlain)
+                )
 
     /** This account with the blanks trimmed and the values that have a range brought into it. */
     fun normalized(): MailAccount =
@@ -131,23 +138,34 @@ enum class MailSecurity {
     SSL,
     STARTTLS,
 
-    /** Unencrypted; accepted only with [MailAccount.allowPlain]. */
+    /** Unencrypted; accepted only where this device's user allowed it ([MailDeviceChoices.allowPlain]). */
     PLAIN,
 }
 
-/** What happens to a message once every attachment and its email PDF have been handled. */
+/**
+ * What happens to a message once every attachment and its email PDF have been handled. An earlier
+ * build's "move to the trash" reads as [KEEP]: nothing leaves the mailbox that the user did not
+ * choose again.
+ */
 @Serializable
 enum class MailPostAction {
     KEEP,
     MARK_READ,
     MOVE,
-
-    /**
-     * Move it to the server's trash folder. Never an expunge: the email's text and any attachment
-     * the library cannot take stay recoverable from the trash, as after deleting it in a mail app.
-     */
-    DELETE,
 }
+
+/**
+ * What each device decides for itself about the account, kept in its own `device.db` and never
+ * synced: whether it checks the account, and whether it may log in over an unencrypted connection.
+ */
+data class MailDeviceChoices(
+    val enabledHere: Boolean = false,
+    /**
+     * The explicit opt-in without which [MailSecurity.PLAIN] is refused: the password travels
+     * unencrypted, which is never a silent fallback, and one device's choice is not every device's.
+     */
+    val allowPlain: Boolean = false,
+)
 
 /**
  * One way a message may match. An empty field is no condition; a filter with every field empty is
@@ -247,7 +265,8 @@ private fun globMatches(
 /**
  * A stable, safe library name for the email PDF of [message]: its UID and subject, sanitized so a
  * subject can never become a path or leave the library, and capped so an overlong subject stays a
- * file name. The UID makes it stable across restarts; the import deduplicates repeated saves.
+ * file name. The UID makes it stable across restarts; the import deduplicates repeated saves. It
+ * holds the subject, so no log line may name it.
  */
 fun emailPdfFileName(message: MailMessage): String {
     val stem =
@@ -268,7 +287,12 @@ fun imageAttachmentPdfName(fileName: String): String {
 
 private const val MAX_EMAIL_PDF_STEM = 120
 
-/** The account as the journal's setting stores it: JSON, and never a password. */
+/**
+ * The account as one JSON value: what the settings form keeps across a recreation, and how builds
+ * before the per-field settings stored it (the `mailAccount` setting, still read where a field has
+ * no setting of its own). Never a password. A value this build does not know, such as the dropped
+ * "move to the trash", reads as the field's default.
+ */
 object MailAccountJson {
     private val json = NpnJson.Persisted
 

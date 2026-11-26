@@ -16,11 +16,11 @@
     <string name="email_username">Utilizador</string>
     <string name="email_password">Palavra-passe</string>
     <string name="email_password_saved">Há uma palavra-passe guardada no cofre do sistema.</string>
-    <string name="email_password_help">Deixe vazio para manter a palavra-passe guardada. Fica no cofre do sistema, não na biblioteca.</string>
+    <string name="email_password_help">Deixe vazio para manter a palavra-passe guardada; um servidor ou utilizador alterado volta a pedi-la. Fica no cofre do sistema, não na biblioteca.</string>
     <string name="email_password_needed">Não há nenhuma palavra-passe desta conta guardada neste dispositivo. Introduza-a e guarde a conta.</string>
     <string name="email_folder">Pasta</string>
     <string name="email_folder_help">A pasta da caixa a ler, normalmente INBOX.</string>
-    <string name="email_allow_plain">Permitir uma ligação sem encriptação</string>
+    <string name="email_allow_plain">Permitir uma ligação sem encriptação neste dispositivo</string>
     <string name="email_allow_plain_help">Use apenas se o seu servidor não suportar SSL nem STARTTLS. A palavra-passe viajaria sem proteção.</string>
     <string name="email_interval">Verificar a cada</string>
     <string name="email_interval_help">No mínimo 5 minutos. A aplicação verifica enquanto está aberta.</string>
@@ -37,8 +37,6 @@
     <string name="email_post_keep">Deixar a mensagem como está</string>
     <string name="email_post_mark_read">Marcar como lida</string>
     <string name="email_post_move">Mover para uma pasta</string>
-    <string name="email_post_delete">Movê-lo para o lixo</string>
-    <string name="email_post_delete_help">O e-mail inteiro vai para a pasta do lixo da caixa de correio, com o texto e os anexos que a biblioteca não consegue receber, e ainda pode ser recuperado lá.</string>
     <string name="email_move_folder">Mover para a pasta</string>
     <string name="email_save_pdf">Guardar também o e-mail como PDF</string>
     <string name="email_save_pdf_help">Acrescenta à biblioteca um PDF legível com os cabeçalhos e o texto da mensagem.</string>
@@ -50,6 +48,7 @@
     <string name="email_never_checked">Ainda não verificado</string>
     <string name="email_last_check">Última verificação: %1$s</string>
     <string name="email_last_error">Último erro: %1$s</string>
+    <string name="email_login_refused_paused">O servidor recusou a palavra-passe, por isso este dispositivo deixa de verificar sozinho até a palavra-passe ou a conta mudarem. «Verificar agora» continua a tentar.</string>
     <string name="email_checking">A verificar o correio…</string>
 
     <string name="email_saved">Conta de e-mail guardada.</string>
@@ -75,8 +74,7 @@
     <string name="email_reason_pdf_render_failed">não foi possível criar o PDF do e-mail</string>
     <string name="email_reason_unsupported">a importação de e-mail não é suportada nesta plataforma</string>
     <string name="email_reason_move_folder_not_found">a pasta para onde mover o e-mail importado não existe no servidor</string>
-    <string name="email_reason_trash_not_found">o servidor não tem uma pasta do lixo para onde mover o e-mail importado</string>
-    <string name="email_reason_post_action_unsupported">o servidor não consegue mover nem eliminar uma única mensagem</string>
+    <string name="email_reason_post_action_unsupported">o servidor não consegue mover uma única mensagem</string>
 
     <string name="email_secret_unsupported">o cofre do sistema não é suportado nesta plataforma</string>
     <string name="email_secret_unavailable">o cofre do sistema não está disponível</string>

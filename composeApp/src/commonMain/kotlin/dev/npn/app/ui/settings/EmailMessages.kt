@@ -31,7 +31,6 @@ import no_papers_needed.composeapp.generated.resources.email_reason_post_action_
 import no_papers_needed.composeapp.generated.resources.email_reason_post_action_unsupported
 import no_papers_needed.composeapp.generated.resources.email_reason_secret_unavailable
 import no_papers_needed.composeapp.generated.resources.email_reason_tls_failed
-import no_papers_needed.composeapp.generated.resources.email_reason_trash_not_found
 import no_papers_needed.composeapp.generated.resources.email_reason_unsupported
 import no_papers_needed.composeapp.generated.resources.email_retry_passed_over
 import no_papers_needed.composeapp.generated.resources.email_secret_store_failed
@@ -59,7 +58,6 @@ internal fun MailFailureReason.textRes(): StringResource =
         MailFailureReason.PDF_RENDER_FAILED -> Res.string.email_reason_pdf_render_failed
         MailFailureReason.UNSUPPORTED -> Res.string.email_reason_unsupported
         MailFailureReason.MOVE_FOLDER_NOT_FOUND -> Res.string.email_reason_move_folder_not_found
-        MailFailureReason.TRASH_NOT_FOUND -> Res.string.email_reason_trash_not_found
         MailFailureReason.POST_ACTION_UNSUPPORTED -> Res.string.email_reason_post_action_unsupported
     }
 

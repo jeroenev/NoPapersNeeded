@@ -76,7 +76,19 @@ data class MailState(
     val account: MailAccount = MailAccount(),
     /** Whether this device checks the account; each device of the library chooses for itself. */
     val enabledHere: Boolean = false,
+    /** Whether this device may log in unencrypted; each device of the library chooses for itself. */
+    val allowPlainHere: Boolean = false,
     val hasPassword: Boolean = false,
+    /**
+     * Whether [hasPassword] was read from the keyring. It is read only while this device checks the
+     * account or the settings pane asked ([MailFacade.lookUpPassword]); until then it says nothing.
+     */
+    val passwordKnown: Boolean = false,
+    /**
+     * The server refused the password, and routine checks on this device wait until the password,
+     * the server, the port, the security or the username changes. Check now still tries.
+     */
+    val loginRefused: Boolean = false,
     val checking: Boolean = false,
     val lastCheckedAtMillis: Long? = null,
     val lastError: MailFailureReason? = null,
@@ -105,6 +117,10 @@ data class MailState(
      */
     val passedOver: Int = 0,
 ) {
+    /** A configured account this device has no password for, once the keyring was read to say so. */
+    val passwordMissing: Boolean
+        get() = account.isConfigured && transportAvailable && passwordKnown && !hasPassword
+
     /**
      * Why checks of a configured account are not going through, for Activity's problems: the last
      * check's failure, or a secret store that could not be read. Null while a check runs.
@@ -164,10 +180,18 @@ interface MailAccountStore {
  * Where a device starts reading is the account's [MailStartPoint]. Placing the cursor there starts
  * a catch-up, which reads page after page until the folder is exhausted; a routine poll otherwise
  * reads at most [MAX_PAGES_PER_CHECK] pages and leaves the rest for the next one.
+ *
+ * The password is kept under the library's [keyScope] and the account's server and username
+ * ([MailAccount.accountKey]): a changed port or security keeps it, a changed server or username is
+ * asked for it again, here or on any device the change reaches, and two libraries on one desktop
+ * never share or remove each other's. The keyring is read only while this device checks the
+ * account, or when the settings pane asks.
  */
 internal class MailService(
     private val store: MailAccountStore,
-    private val credentials: MailCredentialStore,
+    credentials: MailCredentialStore,
+    /** What sets this library's keyring entries apart from another library's on the same desktop. */
+    keyScope: String,
     private val cursors: MailCursorStore,
     private val transport: MailTransport,
     sink: MailDocumentSink,
@@ -177,8 +201,12 @@ internal class MailService(
     private val scope: CoroutineScope,
 ) : MailFacade {
     private data class Runtime(
-        val enabledHere: Boolean = false,
+        val choices: MailDeviceChoices = MailDeviceChoices(),
         val hasPassword: Boolean = false,
+        val passwordKnown: Boolean = false,
+        /** The settings pane asked for the password state: the keyring may be read from now on. */
+        val passwordWanted: Boolean = false,
+        val loginRefused: Boolean = false,
         val checking: Boolean = false,
         val cursor: MailCursor? = null,
         val lastReport: MailCheckReport? = null,
@@ -188,22 +216,25 @@ internal class MailService(
     )
 
     private val importer = MailMessageImporter(sink, pdfRenderer, log)
+    private val passwords = MailPasswords(credentials, cursors, keyScope, log)
     private val runtime = MutableStateFlow(Runtime())
     private val checkMutex = Mutex()
-    private val rekeyMutex = Mutex()
     private val imports = MutableSharedFlow<List<String>>(extraBufferCapacity = IMPORT_EVENT_BUFFER)
 
     private var started = false
 
     /** Whether this device can import at all: IMAP, and a keyring for the password. */
-    private val supported: Boolean get() = transport.available && credentials.available
+    private val supported: Boolean get() = transport.available && passwords.available
 
     override val state: StateFlow<MailState> =
         combine(store.account, runtime) { account, run ->
             MailState(
                 account = account,
-                enabledHere = run.enabledHere,
+                enabledHere = run.choices.enabledHere,
+                allowPlainHere = run.choices.allowPlain,
                 hasPassword = run.hasPassword,
+                passwordKnown = run.passwordKnown,
+                loginRefused = run.loginRefused,
                 checking = run.checking,
                 lastCheckedAtMillis = run.cursor?.lastCheckedAtMillis,
                 lastError = run.cursor?.lastError,
@@ -235,12 +266,13 @@ internal class MailService(
         started = true
         scope.launch {
             log.runLogged("Following the email account") {
-                val enabled = cursors.enabledHere()
-                runtime.update { it.copy(enabledHere = enabled) }
+                val choices = cursors.choices()
+                runtime.update { it.copy(choices = choices) }
                 store.account.collect { account ->
-                    followKey(account)
-                    refreshCredentials(account)
+                    adoptLegacyCursor(account)
                     reloadCursor(account)
+                    refreshLoginRefused(account)
+                    if (keyringWanted()) refreshCredentials(account) else forgetCredentials()
                 }
             }
         }
@@ -255,91 +287,62 @@ internal class MailService(
     override suspend fun saveAccount(
         account: MailAccount,
         password: String?,
-        enabledHere: Boolean,
+        device: MailDeviceChoices,
     ): MailSaveOutcome {
         val normalized = account.normalized()
-        if (!normalized.isConfigured) return MailSaveOutcome.AccountInvalid
+        if (!normalized.isConfigured || (normalized.security == MailSecurity.PLAIN && !device.allowPlain)) {
+            return MailSaveOutcome.AccountInvalid
+        }
+        val previous = store.current()
         // Save the account first: a keyring failure then leaves the account visible and fixable,
         // rather than a password stored for a host the journal never accepted.
         store.save(normalized)
-        cursors.setEnabledHere(enabledHere)
-        runtime.update { it.copy(enabledHere = enabledHere) }
-        // A changed host, username or port is a new key: the saved password and the place in the
-        // folder move to it, so a blank password field keeps the password, as the form says.
-        val moved = followKey(normalized)
+        cursors.setChoices(device)
+        runtime.update { it.copy(choices = device, passwordWanted = true) }
+        adoptLegacyCursor(normalized)
         val failure =
-            when {
-                password == null -> {
-                    moved
-                }
-
-                password.isEmpty() -> {
-                    (credentials.clear(normalized.accountKey) as? MailSecretResult.Failed)?.reason
-                }
-
-                else -> {
-                    (credentials.store(normalized.accountKey, password) as? MailSecretResult.Failed)?.reason
-                }
+            password?.takeIf(String::isNotBlank)?.let { secret ->
+                passwords.store(normalized, secret)
             }
+        if (password?.isNotBlank() == true && failure == null) cursors.setRefusedLogin(null)
+        // Another server or username: its password is asked for again, and the old one, which
+        // nothing reads any more, is not left in the keyring.
+        if (previous.isConfigured && previous.accountKey != normalized.accountKey) {
+            passwords.forget(previous)
+        }
         refreshCredentials(normalized)
         reloadCursor(normalized)
+        refreshLoginRefused(normalized)
         return if (failure != null) MailSaveOutcome.CredentialFailed(failure) else MailSaveOutcome.Saved
     }
 
-    /**
-     * Carry this device's password and cursor from the key it last kept them under to [account]'s,
-     * when a changed host, username or port (here or on another device) gave the account a new key.
-     * Idempotent: what the new key already has wins, and the old password is removed only once the
-     * new key holds one. A keyring failure leaves the followed key where it was, so the next account
-     * change or start tries again; it is returned.
-     */
-    private suspend fun followKey(account: MailAccount): MailSecretFailure? =
-        rekeyMutex.withLock {
-            if (!account.isConfigured) return@withLock null
-            val newKey = account.accountKey
-            val oldKey = cursors.followedKey()
-            if (oldKey == newKey) return@withLock null
-            if (oldKey != null) {
-                cursors.get(oldKey, account.folder)?.let { old ->
-                    if (cursors.get(newKey, account.folder) == null) cursors.save(old.copy(accountKey = newKey))
-                }
-                val failure = movePassword(oldKey, newKey)
-                if (failure != null) return@withLock failure
-            }
-            cursors.setFollowedKey(newKey)
-            null
-        }
+    override suspend fun lookUpPassword() {
+        runtime.update { it.copy(passwordWanted = true) }
+        refreshCredentials(store.current())
+    }
 
-    private suspend fun movePassword(
-        oldKey: String,
-        newKey: String,
-    ): MailSecretFailure? {
-        val present =
-            when (val loaded = credentials.load(newKey)) {
-                is MailSecretResult.Failed -> return loaded.reason
-                is MailSecretResult.Success -> !loaded.value.isNullOrBlank()
-            }
-        if (!present) {
-            val old =
-                when (val loaded = credentials.load(oldKey)) {
-                    is MailSecretResult.Failed -> return loaded.reason
-                    is MailSecretResult.Success -> loaded.value?.takeIf(String::isNotBlank)
-                }
-            if (old != null) {
-                val stored = credentials.store(newKey, old)
-                if (stored is MailSecretResult.Failed) return stored.reason
-            }
+    /** Whether the keyring may be read: this device checks the account, or the settings pane asked. */
+    private fun keyringWanted(): Boolean = runtime.value.let { it.choices.enabledHere || it.passwordWanted }
+
+    /**
+     * Give [account]'s mailbox the cursor an earlier build kept under [MailAccount.legacyAccountKey],
+     * once, when it has none of its own: a port that later changes no longer starts the folder over.
+     */
+    private suspend fun adoptLegacyCursor(account: MailAccount) {
+        if (!account.isConfigured || cursors.get(account.accountKey, account.folder) != null) return
+        cursors.get(account.legacyAccountKey, account.folder)?.let { old ->
+            cursors.save(old.copy(accountKey = account.accountKey))
         }
-        // The old key's password now lives under the new one (or never existed); nothing reads it.
-        clearQuietly(oldKey)
-        return null
     }
 
     override suspend fun clearPassword(): MailSaveOutcome {
         val account = store.current()
-        return when (val result = credentials.clear(account.accountKey)) {
+        return when (val result = passwords.clear(account)) {
             is MailSecretResult.Success -> {
-                runtime.update { it.copy(hasPassword = false, credentialProblem = null) }
+                cursors.setRefusedLogin(null)
+                runtime.update {
+                    it.copy(hasPassword = false, passwordKnown = true, credentialProblem = null, loginRefused = false)
+                }
                 MailSaveOutcome.Saved
             }
 
@@ -353,19 +356,18 @@ internal class MailService(
     override suspend fun testConnection(
         account: MailAccount,
         password: String?,
+        allowPlain: Boolean,
     ): MailTestOutcome {
         val normalized = account.normalized()
-        if (normalized.security == MailSecurity.PLAIN && !normalized.allowPlain) {
+        if (normalized.security == MailSecurity.PLAIN && !allowPlain) {
             return MailTestOutcome.Failed(MailFailureReason.PLAIN_REFUSED)
         }
         if (!normalized.isConfigured) return MailTestOutcome.Failed(MailFailureReason.NOT_CONFIGURED)
         if (!supported) return MailTestOutcome.Failed(MailFailureReason.UNSUPPORTED)
-        // A draft whose host, username or port changed keeps the saved password, as saving it would.
-        val saved = store.current().takeIf { it.isConfigured && it.accountKey != normalized.accountKey }
+        // Only the password saved for this server and username: another server is never sent it.
         val secret =
             password?.takeIf(String::isNotEmpty)
                 ?: storedPassword(normalized)
-                ?: saved?.let { storedPassword(it) }
                 ?: return MailTestOutcome.Failed(MailFailureReason.NO_PASSWORD)
         return when (val reason = transport.testConnection(normalized, secret)) {
             null -> MailTestOutcome.Ok
@@ -399,11 +401,16 @@ internal class MailService(
         runtime.update { if (it.checking) it.copy(cancelRequested = true) else it }
     }
 
-    /** One tick of the poller: check when the account is enabled and its interval has passed. */
+    /**
+     * One tick of the poller: check when the account is enabled, its interval has passed, and the
+     * server has not refused this login's password ([MailCursorStore.refusedLogin]): a wrong
+     * password tried again every few minutes can get the account locked.
+     */
     internal suspend fun pollIfDue() {
         if (!supported) return
         val account = store.current()
-        if (!account.isConfigured || !cursors.enabledHere()) return
+        if (!account.isConfigured || !cursors.choices().enabledHere) return
+        if (cursors.refusedLogin() == account.loginKey) return
         val cursor = cursors.get(account.accountKey, account.folder)
         val last = cursor?.lastCheckedAtMillis
         val intervalMillis = account.pollIntervalMinutes.coerceAtLeast(MailAccount.MIN_POLL_MINUTES) * 60_000L
@@ -440,8 +447,15 @@ internal class MailService(
         val link = Link(account, password)
         return try {
             when (val opened = link.open()) {
-                is MailOpenResult.Failed -> stop(account, empty, MailCheckError(opened.reason, opened.detail), now)
-                is MailOpenResult.Opened -> read(account, link, routine, retry, now)
+                is MailOpenResult.Failed -> {
+                    if (opened.reason == MailFailureReason.AUTHENTICATION_FAILED) refuseLogin(account)
+                    stop(account, empty, MailCheckError(opened.reason, opened.detail), now)
+                }
+
+                is MailOpenResult.Opened -> {
+                    if (runtime.value.loginRefused) acceptLogin()
+                    read(account, link, routine, retry, now)
+                }
             }
         } finally {
             withContext(NonCancellable) { link.close() }
@@ -458,24 +472,43 @@ internal class MailService(
         ) : PasswordLoad
     }
 
+    /** The server refused [account]'s password: routine checks here wait for a change. */
+    private suspend fun refuseLogin(account: MailAccount) {
+        cursors.setRefusedLogin(account.loginKey)
+        runtime.update { it.copy(loginRefused = true) }
+        log.warn("The mail server refused the password; automatic checks wait until it or the account changes")
+    }
+
+    private suspend fun acceptLogin() {
+        cursors.setRefusedLogin(null)
+        runtime.update { it.copy(loginRefused = false) }
+    }
+
+    private suspend fun refreshLoginRefused(account: MailAccount) {
+        val refused = account.isConfigured && cursors.refusedLogin() == account.loginKey
+        runtime.update { it.copy(loginRefused = refused) }
+    }
+
     /** Load the password from the secret store; a missing one or an unusable store is typed. */
     private suspend fun loadPassword(account: MailAccount): PasswordLoad {
         val password =
-            when (val stored = credentials.load(account.accountKey)) {
+            when (val stored = passwords.load(account)) {
                 is MailSecretResult.Success -> {
                     stored.value?.takeIf(String::isNotBlank)
                 }
 
                 is MailSecretResult.Failed -> {
-                    runtime.update { it.copy(hasPassword = false, credentialProblem = stored.reason) }
+                    runtime.update {
+                        it.copy(hasPassword = false, passwordKnown = false, credentialProblem = stored.reason)
+                    }
                     return PasswordLoad.Refused(MailFailureReason.SECRET_UNAVAILABLE)
                 }
             }
         if (password == null) {
-            runtime.update { it.copy(hasPassword = false) }
+            runtime.update { it.copy(hasPassword = false, passwordKnown = true) }
             return PasswordLoad.Refused(MailFailureReason.NO_PASSWORD)
         }
-        runtime.update { it.copy(hasPassword = true, credentialProblem = null) }
+        runtime.update { it.copy(hasPassword = true, passwordKnown = true, credentialProblem = null) }
         return PasswordLoad.Loaded(password)
     }
 
@@ -503,9 +536,9 @@ internal class MailService(
     }
 
     /** The checks that need no secret store and no network, in the order their refusals matter. */
-    private fun preflight(account: MailAccount): MailFailureReason? =
+    private suspend fun preflight(account: MailAccount): MailFailureReason? =
         when {
-            account.security == MailSecurity.PLAIN && !account.allowPlain -> MailFailureReason.PLAIN_REFUSED
+            account.security == MailSecurity.PLAIN && !cursors.choices().allowPlain -> MailFailureReason.PLAIN_REFUSED
             !account.isConfigured -> MailFailureReason.NOT_CONFIGURED
             !transport.available -> MailFailureReason.UNSUPPORTED
             else -> null
@@ -538,7 +571,7 @@ internal class MailService(
         if (!retry || cursor.passedOver.isEmpty()) {
             return readPages(account, link, routine, Position(cursor, start, remainingAtStart), now)
         }
-        val retried = retryPassedOver(account, link.current, cursor, start)
+        val retried = importer.retryPassedOver(account, link.current, cursor, start, ::cancelRequested)
         save(retried.cursor)
         val error =
             retried.error
@@ -586,10 +619,13 @@ internal class MailService(
         // Reconnects since the last page that moved the cursor: a connection the server drops every
         // few minutes of a long catch-up is reopened every time, while a dead server ends the check.
         var reconnects = 0
+        // The message every drop since the cursor last moved came under, while they all did.
+        var suspect: Long? = null
         while (!done && pages < pageLimit && !cancelRequested()) {
             pages++
             val previous = cursor.lastUid
             var lost: MailCheckError? = null
+            var lostUid: Long? = null
             when (val fetched = link.current.fetchAfter(previous)) {
                 is MailFetchResult.Failed -> {
                     lost = MailCheckError(fetched.reason, fetched.detail)
@@ -601,18 +637,31 @@ internal class MailService(
                     cursor = page.cursor
                     error = page.error
                     lost = page.lost
+                    lostUid = page.lostUid
                     exhausted = page.exhausted
                     done = page.done
                 }
             }
-            if (cursor.lastUid > previous) reconnects = 0
+            if (cursor.lastUid > previous) {
+                reconnects = 0
+                suspect = null
+            }
             if (lost != null) {
                 val cause = lost.detail ?: "no cause"
                 log.warn("Email fetch after UID ${cursor.lastUid} failed: ${lost.reason.name} ($cause)")
+                suspect = if (reconnects == 0) lostUid else suspect?.takeIf { it == lostUid }
                 val retry = lost.reason in RECONNECTABLE && reconnects < MAX_RECONNECTS
                 if (retry && reconnect(link, cursor, ++reconnects)) {
                     pages--
                 } else {
+                    // Every fresh connection opened, and each one dropped under the same message:
+                    // that message is what ends the check, not the network, so it uses up an attempt.
+                    val blamed = suspect?.takeIf { !retry && reconnects >= MAX_RECONNECTS }
+                    if (blamed != null) {
+                        val charged = charge(cursor, report, blamed, log)
+                        cursor = charged.first
+                        report = charged.second
+                    }
                     error = lost
                     done = true
                 }
@@ -654,57 +703,6 @@ internal class MailService(
 
     private fun cancelRequested(): Boolean = runtime.value.cancelRequested
 
-    private class Retried(
-        val report: MailCheckReport,
-        val cursor: MailCursor,
-        val error: MailCheckError?,
-    )
-
-    /**
-     * Read the passed-over messages again. One the folder no longer holds leaves the list; one that
-     * imports fully now leaves it too; one that still cannot is counted and stays. A lost
-     * connection ends the retry with what it did saved; the rest wait for the next retry.
-     */
-    private suspend fun retryPassedOver(
-        account: MailAccount,
-        connection: MailConnection,
-        start: MailCursor,
-        startReport: MailCheckReport,
-    ): Retried {
-        val described =
-            when (val fetched = connection.describe(start.passedOver)) {
-                is MailFetchResult.Failed -> return Retried(
-                    startReport,
-                    start,
-                    MailCheckError(fetched.reason, fetched.detail),
-                )
-
-                is MailFetchResult.Success -> fetched.messages.sortedBy(MailEnvelope::uid)
-            }
-        val held = described.mapTo(HashSet(), MailEnvelope::uid)
-        var cursor = start.copy(passedOver = start.passedOver.filter { it in held })
-        var report = startReport
-        for (message in described) {
-            if (cancelRequested()) break
-            val considered = importer.consider(account, connection, message)
-            val outcome = considered.outcome
-            if (outcome is MessageOutcome.Lost) return Retried(report, cursor, outcome.error)
-            report =
-                report
-                    .copy(
-                        messagesSeen = report.messagesSeen + 1,
-                        droppedAttachments = report.droppedAttachments + considered.dropped.size,
-                    ).tallied(outcome)
-            if (outcome is MessageOutcome.Failed) report = report.copy(unreadable = report.unreadable + 1)
-            val imported = outcome !is MessageOutcome.Unreadable && outcome !is MessageOutcome.Failed
-            if (imported && considered.dropped.isEmpty()) {
-                cursor = cursor.copy(passedOver = cursor.passedOver - message.uid)
-            }
-        }
-        log.info("Retried ${described.size} passed-over emails; ${cursor.passedOver.size} still left in the mailbox")
-        return Retried(report, cursor, null)
-    }
-
     private data class PageOutcome(
         val report: MailCheckReport,
         val cursor: MailCursor,
@@ -713,6 +711,8 @@ internal class MailService(
         val interrupted: Boolean,
         /** The connection failed under a download: the page stops before that message, to reconnect. */
         val lost: MailCheckError? = null,
+        /** The message whose download the connection failed under. */
+        val lostUid: Long? = null,
         /** The page reached the end of the folder. */
         val exhausted: Boolean = false,
         /** No further page may be read: the folder is exhausted, a message failed, or the page stalled. */
@@ -779,7 +779,14 @@ internal class MailService(
             val considered = importer.consider(account, connection, message)
             val outcome = considered.outcome
             if (outcome is MessageOutcome.Lost) {
-                return PageOutcome(report, cursor, null, interrupted = false, lost = outcome.error)
+                return PageOutcome(
+                    report,
+                    cursor,
+                    null,
+                    interrupted = false,
+                    lost = outcome.error,
+                    lostUid = message.uid,
+                )
             }
             val dropped = considered.dropped
             report =
@@ -876,21 +883,34 @@ internal class MailService(
     }
 
     private suspend fun refreshCredentials(account: MailAccount) {
-        if (account.host.isBlank() && account.username.isBlank()) {
-            // The untouched default account: looking up an empty key would only show a keyring
-            // error before the user has configured anything.
-            runtime.update { it.copy(hasPassword = false, credentialProblem = null) }
+        if (!supported || account.host.isBlank() || account.username.isBlank()) {
+            // The untouched default account, or a host without a keyring: looking up a key would
+            // only show a keyring error before the user has configured anything.
+            runtime.update { it.copy(hasPassword = false, passwordKnown = false, credentialProblem = null) }
             return
         }
-        when (val stored = credentials.load(account.accountKey)) {
+        when (val stored = passwords.load(account)) {
             is MailSecretResult.Success -> {
-                runtime.update { it.copy(hasPassword = !stored.value.isNullOrBlank(), credentialProblem = null) }
+                runtime.update {
+                    it.copy(hasPassword = !stored.value.isNullOrBlank(), passwordKnown = true, credentialProblem = null)
+                }
             }
 
             is MailSecretResult.Failed -> {
-                runtime.update { it.copy(hasPassword = false, credentialProblem = stored.reason) }
+                runtime.update {
+                    it.copy(
+                        hasPassword = false,
+                        passwordKnown = false,
+                        credentialProblem = stored.reason,
+                    )
+                }
             }
         }
+    }
+
+    /** What was read of the keyring no longer holds for the account: say nothing until it is read again. */
+    private fun forgetCredentials() {
+        runtime.update { it.copy(hasPassword = false, passwordKnown = false, credentialProblem = null) }
     }
 
     private suspend fun reloadCursor(account: MailAccount) {
@@ -903,7 +923,7 @@ internal class MailService(
     }
 
     private suspend fun storedPassword(account: MailAccount): String? =
-        when (val result = credentials.load(account.accountKey)) {
+        when (val result = passwords.load(account)) {
             is MailSecretResult.Success -> {
                 result.value?.takeIf(String::isNotBlank)
             }
@@ -914,12 +934,6 @@ internal class MailService(
             }
         }
 
-    private suspend fun clearQuietly(accountKey: String) {
-        runCatchingCancellable { credentials.clear(accountKey) }.onFailure {
-            log.warn("Removing an old email password failed", it)
-        }
-    }
-
     private companion object {
         /** How often the poller wakes to see whether an account is due; not the account's interval. */
         const val POLL_TICK_MILLIS = 30_000L
@@ -929,9 +943,6 @@ internal class MailService(
          * check the user asked for read until the folder is exhausted instead.
          */
         const val MAX_PAGES_PER_CHECK = 1
-
-        /** After this many failed checks, a message is passed over rather than stopping the folder. */
-        const val MAX_MESSAGE_ATTEMPTS = 3
 
         /**
          * Fresh connections a check may open in a row without the cursor moving in between, before
@@ -949,3 +960,27 @@ internal class MailService(
         const val IMPORT_EVENT_BUFFER = 8
     }
 }
+
+/**
+ * Count a check against [uid], the message whose download dropped every connection: after
+ * [MAX_MESSAGE_ATTEMPTS] such checks it is passed over, so the folder goes on past it, and kept on
+ * the list the user can retry.
+ */
+private fun charge(
+    cursor: MailCursor,
+    report: MailCheckReport,
+    uid: Long,
+    log: NpnLog,
+): Pair<MailCursor, MailCheckReport> {
+    val attempts = if (cursor.blockedUid == uid) cursor.blockedAttempts + 1 else 1
+    if (attempts < MAX_MESSAGE_ATTEMPTS) {
+        log.warn("Email UID $uid dropped the connection; retried next check ($attempts of $MAX_MESSAGE_ATTEMPTS)")
+        return cursor.copy(blockedUid = uid, blockedAttempts = attempts) to report
+    }
+    log.warn("Email UID $uid passed over after it dropped the connection in $attempts checks")
+    val passed = cursor.copy(lastUid = uid, blockedUid = null, blockedAttempts = 0).passingOver(uid)
+    return passed to report.copy(messagesSeen = report.messagesSeen + 1, unreadable = report.unreadable + 1)
+}
+
+/** After this many failed checks, a message is passed over rather than stopping the folder. */
+private const val MAX_MESSAGE_ATTEMPTS = 3

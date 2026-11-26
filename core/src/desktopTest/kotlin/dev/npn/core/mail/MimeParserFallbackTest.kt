@@ -81,7 +81,7 @@ class MimeParserFallbackTest {
     @Test
     fun aBodyInAnUnknownCharsetIsReadAsUtf8AndThePdfIsKept() {
         val parsed =
-            MimeParser.parseOrFailed(
+            MimeParser.read(
                 1,
                 message(
                     listOf(
@@ -102,7 +102,7 @@ class MimeParserFallbackTest {
     @Test
     fun anHtmlBodyInAnUnknownCharsetStillLetsTheImagesBeJudged() {
         val parsed =
-            MimeParser.parseOrFailed(
+            MimeParser.read(
                 1,
                 message(
                     related(
@@ -126,7 +126,7 @@ class MimeParserFallbackTest {
     @Test
     fun aMalformedCidLinkIsKeptAsWrittenAndAPlusIsNotASpace() {
         val parsed =
-            MimeParser.parseOrFailed(
+            MimeParser.read(
                 1,
                 message(
                     related(
@@ -149,7 +149,7 @@ class MimeParserFallbackTest {
         registry.registerServiceProvider(spi, ImageReaderSpi::class.java)
         try {
             val parsed =
-                MimeParser.parseOrFailed(
+                MimeParser.read(
                     1,
                     message(image("page.png", "page", ThrowingReaderSpi.MAGIC, disposition = "attachment"), invoice),
                 )

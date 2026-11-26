@@ -16,11 +16,11 @@
     <string name="email_username">Benutzername</string>
     <string name="email_password">Passwort</string>
     <string name="email_password_saved">Ein Passwort ist im Schlüsselbund des Systems gespeichert.</string>
-    <string name="email_password_help">Leer lassen, um das gespeicherte Passwort zu behalten. Es liegt im Schlüsselbund des Systems, nicht in der Bibliothek.</string>
+    <string name="email_password_help">Leer lassen, um das gespeicherte Passwort zu behalten; ein geänderter Server oder Benutzername braucht es neu. Es liegt im Schlüsselbund des Systems, nicht in der Bibliothek.</string>
     <string name="email_password_needed">Auf diesem Gerät ist kein Passwort für dieses Konto gespeichert. Gib es ein und speichere das Konto.</string>
     <string name="email_folder">Ordner</string>
     <string name="email_folder_help">Der zu lesende Ordner im Postfach, meist INBOX.</string>
-    <string name="email_allow_plain">Unverschlüsselte Verbindung erlauben</string>
+    <string name="email_allow_plain">Unverschlüsselte Verbindung auf diesem Gerät erlauben</string>
     <string name="email_allow_plain_help">Nur nutzen, wenn dein Server kein SSL oder STARTTLS kann. Dein Passwort würde ungeschützt übertragen.</string>
     <string name="email_interval">Prüfen alle</string>
     <string name="email_interval_help">Mindestens 5 Minuten. Die App prüft, solange sie geöffnet ist.</string>
@@ -37,8 +37,6 @@
     <string name="email_post_keep">Nachricht unverändert lassen</string>
     <string name="email_post_mark_read">Als gelesen markieren</string>
     <string name="email_post_move">In einen Ordner verschieben</string>
-    <string name="email_post_delete">In den Papierkorb verschieben</string>
-    <string name="email_post_delete_help">Die ganze E-Mail kommt in den Papierkorb des Postfachs, mit ihrem Text und allen Anhängen, die die Bibliothek nicht übernehmen kann, und lässt sich dort noch wiederherstellen.</string>
     <string name="email_move_folder">Zielordner</string>
     <string name="email_save_pdf">Die E-Mail zusätzlich als PDF speichern</string>
     <string name="email_save_pdf_help">Fügt der Bibliothek ein lesbares PDF mit Kopfzeilen und Text der Nachricht hinzu.</string>
@@ -50,6 +48,7 @@
     <string name="email_never_checked">Noch nicht geprüft</string>
     <string name="email_last_check">Letzte Prüfung: %1$s</string>
     <string name="email_last_error">Letzter Fehler: %1$s</string>
+    <string name="email_login_refused_paused">Der Server hat das Passwort abgelehnt, daher prüft dieses Gerät nicht mehr von selbst, bis sich das Passwort oder das Konto ändert. „Jetzt prüfen“ versucht es weiterhin.</string>
     <string name="email_checking">E-Mail wird geprüft…</string>
 
     <string name="email_saved">E-Mail-Konto gespeichert.</string>
@@ -75,8 +74,7 @@
     <string name="email_reason_pdf_render_failed">das E-Mail-PDF konnte nicht erstellt werden</string>
     <string name="email_reason_unsupported">der E-Mail-Import wird auf dieser Plattform nicht unterstützt</string>
     <string name="email_reason_move_folder_not_found">der Zielordner für importierte E-Mails existiert auf dem Server nicht</string>
-    <string name="email_reason_trash_not_found">der Server hat keinen Papierkorb, in den importierte E-Mails verschoben werden können</string>
-    <string name="email_reason_post_action_unsupported">der Server kann keine einzelne Nachricht verschieben oder löschen</string>
+    <string name="email_reason_post_action_unsupported">der Server kann keine einzelne Nachricht verschieben</string>
 
     <string name="email_secret_unsupported">der Schlüsselbund des Systems wird auf dieser Plattform nicht unterstützt</string>
     <string name="email_secret_unavailable">der Schlüsselbund des Systems ist nicht verfügbar</string>

@@ -21,9 +21,16 @@ internal fun MailMessage.envelope() =
         attachments = attachments.map { MailAttachmentInfo(it.fileName, it.contentType) },
         readFailure = readFailure,
         readFailureCause = readFailureCause,
+        messageId = messageId,
     )
 
 internal const val NOW = 1_000L * MailStartPoint.DAY_MILLIS
+
+/** The library's keyring scope in every test: what sets its entries apart from another library's. */
+internal const val KEY_SCOPE = "library-1"
+
+/** The keyring entry [account]'s password is kept under. */
+internal fun passwordKey(account: MailAccount = testAccount) = "$KEY_SCOPE/${account.accountKey}"
 
 internal val testAccount =
     MailAccount(
@@ -76,14 +83,17 @@ internal class FakeCredentials(
 ) : MailCredentialStore {
     val passwords = mutableMapOf<String, String>()
 
+    /** Every key read, in order: whether the keyring was touched at all. */
+    val loads = mutableListOf<String>()
+
     init {
-        if (password != null) passwords[testAccount.accountKey] = password
+        if (password != null) passwords[passwordKey()] = password
     }
 
     var password: String?
-        get() = passwords[testAccount.accountKey]
+        get() = passwords[passwordKey()]
         set(value) {
-            if (value == null) passwords.remove(testAccount.accountKey) else passwords[testAccount.accountKey] = value
+            if (value == null) passwords.remove(passwordKey()) else passwords[passwordKey()] = value
         }
 
     override val available: Boolean get() = failure != MailSecretFailure.UNSUPPORTED
@@ -98,6 +108,7 @@ internal class FakeCredentials(
     }
 
     override suspend fun load(accountKey: String): MailSecretResult<String?> {
+        loads += accountKey
         failure?.let { return MailSecretResult.Failed(it) }
         return MailSecretResult.Success(passwords[accountKey])
     }
@@ -111,20 +122,29 @@ internal class FakeCredentials(
 
 internal class FakeCursors(
     var enabled: Boolean = true,
+    var allowPlain: Boolean = false,
 ) : MailCursorStore {
     val saved = mutableMapOf<Pair<String, String>, MailCursor>()
-    var followed: String? = null
+    var refused: String? = null
+    var legacyMoved = false
 
-    override suspend fun enabledHere(): Boolean = enabled
+    override suspend fun choices(): MailDeviceChoices = MailDeviceChoices(enabled, allowPlain)
 
-    override suspend fun setEnabledHere(enabled: Boolean) {
-        this.enabled = enabled
+    override suspend fun setChoices(choices: MailDeviceChoices) {
+        enabled = choices.enabledHere
+        allowPlain = choices.allowPlain
     }
 
-    override suspend fun followedKey(): String? = followed
+    override suspend fun refusedLogin(): String? = refused
 
-    override suspend fun setFollowedKey(accountKey: String) {
-        followed = accountKey
+    override suspend fun setRefusedLogin(loginKey: String?) {
+        refused = loginKey
+    }
+
+    override suspend fun legacyPasswordMoved(): Boolean = legacyMoved
+
+    override suspend fun setLegacyPasswordMoved() {
+        legacyMoved = true
     }
 
     override suspend fun get(
@@ -145,10 +165,26 @@ internal class FakeSink : MailDocumentSink {
     val importedNames = mutableListOf<String>()
     var onImport: (String) -> MailImportResult = { MailImportResult.Imported("doc:$it") }
 
+    /** The Message-IDs email PDFs recorded, and what each one's PDF is now. */
+    val messageIds = mutableMapOf<String, MailImportResult>()
+
     override suspend fun importPdf(
         bytes: ByteArray,
         suggestedName: String,
     ): MailImportResult = record(suggestedName)
+
+    override suspend fun emailPdfOf(messageId: String): MailImportResult? = messageIds[messageId]
+
+    override suspend fun importEmailPdf(
+        bytes: ByteArray,
+        suggestedName: String,
+        messageId: String?,
+    ): MailImportResult =
+        record(suggestedName).also { result ->
+            if (messageId != null && (result is MailImportResult.Imported || result == MailImportResult.Duplicate)) {
+                messageIds[messageId] = MailImportResult.Duplicate
+            }
+        }
 
     override suspend fun importImage(
         bytes: ByteArray,
@@ -193,6 +229,10 @@ internal class FakeTransport(
     var failingDownloads: Set<Int> = emptySet(),
     /** UIDs whose download the server refuses (an IMAP NO), every time until removed. */
     var refusedUids: Set<Long> = emptySet(),
+    /** UIDs whose download drops the connection, on every connection, until removed. */
+    var droppingUids: Set<Long> = emptySet(),
+    /** Connections the server lets open; every one after fails, as an unreachable server's would. */
+    var opensAllowed: Int = Int.MAX_VALUE,
     /** When the server received a message, where it differs from when it was sent. */
     var receivedMillis: Map<Long, Long> = emptyMap(),
 ) : MailTransport {
@@ -209,7 +249,6 @@ internal class FakeTransport(
     val searchedSince = mutableListOf<Long>()
     val marked = mutableListOf<Long>()
     val moved = mutableListOf<Pair<Long, String>>()
-    val deleted = mutableListOf<Long>()
     val described = mutableListOf<List<Long>>()
 
     /** Calls made on a connection after it was closed; a correct check makes none. */
@@ -226,6 +265,7 @@ internal class FakeTransport(
     ): MailOpenResult {
         opens++
         openFailure?.let { return MailOpenResult.Failed(it) }
+        if (opens > opensAllowed) return MailOpenResult.Failed(MailFailureReason.CONNECTION_FAILED)
         return MailOpenResult.Opened(Connection(validity, (messages.maxOfOrNull(MailMessage::uid) ?: 0) + 1))
     }
 
@@ -285,7 +325,7 @@ internal class FakeTransport(
         ): MailDownloadResult {
             touch()
             downloadCalls++
-            if (downloadCalls in failingDownloads) {
+            if (downloadCalls in failingDownloads || uid in droppingUids) {
                 return MailDownloadResult.Failed(MailFailureReason.FETCH_FAILED, "FolderClosedException")
             }
             if (uid in
@@ -310,12 +350,6 @@ internal class FakeTransport(
         ): MailFailureReason? {
             touch()
             moved += uid to folder
-            return postFailure
-        }
-
-        override suspend fun delete(uid: Long): MailFailureReason? {
-            touch()
-            deleted += uid
             return postFailure
         }
 
@@ -347,6 +381,7 @@ internal class MailFixture(
         MailService(
             store = store,
             credentials = credentials,
+            keyScope = KEY_SCOPE,
             cursors = cursors,
             transport = transport,
             sink = sink,

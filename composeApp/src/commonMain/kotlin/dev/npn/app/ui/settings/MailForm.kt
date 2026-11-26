@@ -8,27 +8,30 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailAccountJson
+import dev.npn.core.mail.MailDeviceChoices
 
 /**
  * The pane's draft of the account, apart from the saved one until Save. [seed] is the saved account
- * the draft started from: when another device changes the account, an untouched draft follows it,
- * while one the user is editing keeps their edits. The same for this device's own switch.
+ * the draft started from: when another device changes the account, each field the user has not
+ * changed here follows it, while a field they changed keeps their edit. Saving then writes only
+ * what differs from the saved account, so another device's change to another field survives. The
+ * same for this device's own choices.
  */
 @Stable
 internal class MailForm(
     seed: MailAccount,
-    savedEnabledHere: Boolean,
+    savedChoices: MailDeviceChoices,
     draft: MailAccount = seed,
-    enabledHere: Boolean = savedEnabledHere,
+    choices: MailDeviceChoices = savedChoices,
     intervalText: String = seed.pollIntervalMinutes.toString(),
     portText: String = seed.port.toString(),
 ) {
     var seed by mutableStateOf(seed)
         private set
-    var savedEnabledHere by mutableStateOf(savedEnabledHere)
+    var savedChoices by mutableStateOf(savedChoices)
         private set
     var draft by mutableStateOf(draft)
-    var enabledHere by mutableStateOf(enabledHere)
+    var choices by mutableStateOf(choices)
     var intervalText by mutableStateOf(intervalText)
     var portText by mutableStateOf(portText)
 
@@ -46,50 +49,90 @@ internal class MailForm(
                 port = port ?: draft.port,
             ).normalized()
 
-    /** Take in the saved account and switch, unless the user has changed them here since. */
+    /** Take in the saved account and choices, field by field, but for the fields the user changed here. */
     fun follow(
         account: MailAccount,
-        enabled: Boolean,
+        saved: MailDeviceChoices,
     ) {
         if (account != seed) {
             // Untouched is judged by what Save would write, not the draft's own fields: the port and
-            // interval live in their text fields, and saving normalizes, so a draft just saved would
-            // otherwise count as edited for good and stop following other devices.
-            if (whenSaved() == seed.normalized()) take(account)
+            // interval live in their text fields, and saving normalizes.
+            val mine = whenSaved()
+            val base = seed.normalized()
+            // A port or interval being typed (not a number yet) is an edit too.
+            take(
+                merged(base, mine, account),
+                portFollows = port != null && mine.port == base.port,
+                intervalFollows = interval != null && mine.pollIntervalMinutes == base.pollIntervalMinutes,
+            )
             seed = account
         }
-        if (enabled != savedEnabledHere) {
-            if (enabledHere == savedEnabledHere) enabledHere = enabled
-            savedEnabledHere = enabled
+        if (saved != savedChoices) {
+            val mine = choices
+            val base = savedChoices
+            choices =
+                MailDeviceChoices(
+                    enabledHere = if (mine.enabledHere == base.enabledHere) saved.enabledHere else mine.enabledHere,
+                    allowPlain = if (mine.allowPlain == base.allowPlain) saved.allowPlain else mine.allowPlain,
+                )
+            savedChoices = saved
         }
     }
 
     /** A save of [account] went through: the draft is that account again, untouched. */
     fun saved(
         account: MailAccount,
-        enabled: Boolean,
+        device: MailDeviceChoices,
     ) {
-        take(account)
+        take(account, portFollows = true, intervalFollows = true)
         seed = account
-        enabledHere = enabled
-        savedEnabledHere = enabled
+        choices = device
+        savedChoices = device
     }
 
-    private fun take(account: MailAccount) {
+    private fun take(
+        account: MailAccount,
+        portFollows: Boolean,
+        intervalFollows: Boolean,
+    ) {
         draft = account
-        intervalText = account.pollIntervalMinutes.toString()
-        portText = account.port.toString()
+        if (intervalFollows) intervalText = account.pollIntervalMinutes.toString()
+        if (portFollows) portText = account.port.toString()
     }
 
     companion object {
+        /** [theirs] in each field [mine] left as [base] had it; [mine] where the user changed it. */
+        private fun merged(
+            base: MailAccount,
+            mine: MailAccount,
+            theirs: MailAccount,
+        ): MailAccount {
+            fun <T> pick(field: (MailAccount) -> T): T = if (field(mine) == field(base)) field(theirs) else field(mine)
+            return MailAccount(
+                host = pick { it.host },
+                port = pick { it.port },
+                security = pick { it.security },
+                username = pick { it.username },
+                folder = pick { it.folder },
+                pollIntervalMinutes = pick { it.pollIntervalMinutes },
+                filters = pick { it.filters },
+                postAction = pick { it.postAction },
+                moveToFolder = pick { it.moveToFolder },
+                saveEmailAsPdf = pick { it.saveEmailAsPdf },
+                startFrom = pick { it.startFrom },
+            )
+        }
+
         val Saver: Saver<MailForm, Any> =
             listSaver(
                 save = {
                     listOf(
                         MailAccountJson.encode(it.seed),
-                        it.savedEnabledHere,
+                        it.savedChoices.enabledHere,
+                        it.savedChoices.allowPlain,
                         MailAccountJson.encode(it.draft),
-                        it.enabledHere,
+                        it.choices.enabledHere,
+                        it.choices.allowPlain,
                         it.intervalText,
                         it.portText,
                     )
@@ -97,11 +140,11 @@ internal class MailForm(
                 restore = {
                     MailForm(
                         seed = MailAccountJson.decode(it[0] as String),
-                        savedEnabledHere = it[1] as Boolean,
-                        draft = MailAccountJson.decode(it[2] as String),
-                        enabledHere = it[3] as Boolean,
-                        intervalText = it[4] as String,
-                        portText = it[5] as String,
+                        savedChoices = MailDeviceChoices(it[1] as Boolean, it[2] as Boolean),
+                        draft = MailAccountJson.decode(it[3] as String),
+                        choices = MailDeviceChoices(it[4] as Boolean, it[5] as Boolean),
+                        intervalText = it[6] as String,
+                        portText = it[7] as String,
                     )
                 },
             )

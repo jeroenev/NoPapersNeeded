@@ -21,6 +21,7 @@ import dev.npn.core.mail.DeviceMailCursors
 import dev.npn.core.mail.MailDocumentSink
 import dev.npn.core.mail.MailImportResult
 import dev.npn.core.mail.MailService
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
@@ -120,7 +121,35 @@ internal class LibrarySessionImpl(
             override suspend fun importPdf(
                 bytes: ByteArray,
                 suggestedName: String,
-            ): MailImportResult = owned { importFromMail(suggestedName, bytes) }
+            ): MailImportResult = owned { importFromMail(suggestedName, bytes).first }
+
+            override suspend fun emailPdfOf(messageId: String): MailImportResult? =
+                owned {
+                    val known = deps.db.documentFieldDao().documentsWith(FieldKeys.EMAIL_MESSAGE_ID, messageId)
+                    when {
+                        known.any { it.isLive && fs.holdsDocument(it) } -> MailImportResult.Duplicate
+
+                        known.any { it.trashed || it.deleted } -> MailImportResult.Removed
+
+                        // None, or only one whose file is gone: made again, as any import brings it back.
+                        else -> null
+                    }
+                }
+
+            override suspend fun importEmailPdf(
+                bytes: ByteArray,
+                suggestedName: String,
+                messageId: String?,
+            ): MailImportResult =
+                owned {
+                    val (result, docId) = importFromMail(suggestedName, bytes)
+                    if (docId != null && messageId != null) {
+                        log.runLogged("Recording the Message-ID of an email PDF") {
+                            writer.fillExtracted(docId, mapOf(FieldKeys.EMAIL_MESSAGE_ID to messageId))
+                        }
+                    }
+                    result
+                }
 
             override suspend fun importImage(
                 bytes: ByteArray,
@@ -132,23 +161,38 @@ internal class LibrarySessionImpl(
                             log.warn("Making a PDF of an email image failed", it)
                             return@owned MailImportResult.Failed
                         }
-                    importFromMail(suggestedName, pdf)
+                    importFromMail(suggestedName, pdf).first
                 }
         }
 
+    /**
+     * What importing [bytes] from an email came to, and the document they are when they are one the
+     * library shows. [name] comes from the email (a subject, an attachment's name): no log line may
+     * carry it.
+     */
     private suspend fun importFromMail(
         name: String,
         bytes: ByteArray,
-    ): MailImportResult {
+    ): Pair<MailImportResult, String?> {
         val result = runCatchingCancellable { importService.importBytes(bytes, name, reviveRemoved = false) }
-        if (result.exceptionOrNull() is RemovedImportException) return MailImportResult.Removed
-        return fillEInvoiceFields(importing(name) { result.getOrThrow() }).toMailResult()
+        if (result.exceptionOrNull() is RemovedImportException) return MailImportResult.Removed to null
+        val outcome = fillEInvoiceFields(importing { result.getOrThrow() })
+        val docId =
+            when (outcome) {
+                is ImportOutcome.Imported -> outcome.docId
+                is ImportOutcome.Duplicate -> outcome.existingDocId
+                is ImportOutcome.Failed -> null
+            }
+        return outcome.toMailResult() to docId
     }
 
     private val mailService =
         MailService(
             store = JournalMailAccount(coordinator, lifetime),
             credentials = deps.mailCredentials,
+            // This installation's id in this library: one per library on the desktop, so two
+            // libraries' keyring entries stay apart.
+            keyScope = deviceId,
             cursors = DeviceMailCursors(deps.deviceDb.mailCursorDao(), deps.deviceDb.keyValueDao()),
             transport = deps.mailTransport,
             sink = mailSink,
@@ -164,15 +208,18 @@ internal class LibrarySessionImpl(
             override suspend fun saveAccount(
                 account: dev.npn.core.mail.MailAccount,
                 password: String?,
-                enabledHere: Boolean,
-            ) = lifetime.owned { mailService.saveAccount(account, password, enabledHere) }
+                device: dev.npn.core.mail.MailDeviceChoices,
+            ) = lifetime.owned { mailService.saveAccount(account, password, device) }
 
             override suspend fun clearPassword() = lifetime.owned { mailService.clearPassword() }
+
+            override suspend fun lookUpPassword() = lifetime.owned { mailService.lookUpPassword() }
 
             override suspend fun testConnection(
                 account: dev.npn.core.mail.MailAccount,
                 password: String?,
-            ) = lifetime.owned { mailService.testConnection(account, password) }
+                allowPlain: Boolean,
+            ) = lifetime.owned { mailService.testConnection(account, password, allowPlain) }
 
             override suspend fun checkNow() = lifetime.owned { mailService.checkNow() }
 
@@ -233,7 +280,7 @@ internal class LibrarySessionImpl(
         suggestedName: String,
     ): ImportOutcome =
         owned {
-            importing(suggestedName) { importService.importPdf(source, suggestedName) }
+            importing { importService.importPdf(source, suggestedName) }
                 .let { fillEInvoiceFields(it) }
         }
 
@@ -243,13 +290,13 @@ internal class LibrarySessionImpl(
             row != null && row.isLive && fs.holdsDocument(row)
         }
 
-    /** Import a PDF held in memory: for tests, and for email attachments. */
+    /** Import a PDF held in memory; see [IngestFacade.importPdfBytes]. Email has its own way in, [mailSink]. */
     override suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
     ): ImportOutcome =
         owned {
-            importing(suggestedName) { importService.importBytes(bytes, suggestedName) }
+            importing { importService.importBytes(bytes, suggestedName) }
                 .let { fillEInvoiceFields(it) }
         }
 
@@ -262,7 +309,8 @@ internal class LibrarySessionImpl(
      */
     private suspend fun fillEInvoiceFields(outcome: ImportOutcome): ImportOutcome {
         val imported = outcome as? ImportOutcome.Imported ?: return outcome
-        log.runLogged("Reading the e-invoice of ${imported.relPath}") {
+        // By its id: the path can hold an email's subject or a document's title.
+        log.runLogged("Reading the e-invoice of document ${imported.docId}") {
             val bytes = fs.readDocument(imported.relPath, imported.docId) ?: return@runLogged
             val invoice = EInvoiceDetector.detect(deps.pdfEngine.embeddedXmlFiles(bytes)) ?: return@runLogged
             writer.fillExtracted(imported.docId, invoice.documentFields())
@@ -285,14 +333,14 @@ internal class LibrarySessionImpl(
                     log.warn("Making a PDF of ${images.size} images failed", it)
                     return@owned ImportOutcome.Failed(ImportFailure.UNREADABLE_IMAGES)
                 }
-            importing(suggestedName) { importService.importBytes(pdf, suggestedName) }
+            importing { importService.importBytes(pdf, suggestedName) }
         }
 
-    /** Run one import, turning what can go wrong with the file into an [ImportFailure]. */
-    private inline fun importing(
-        name: String,
-        import: () -> ImportResult,
-    ): ImportOutcome =
+    /**
+     * Run one import, turning what can go wrong with the file into an [ImportFailure]. The failure is
+     * logged without the file's name, which can be an email's subject or a document's title.
+     */
+    private inline fun importing(import: () -> ImportResult): ImportOutcome =
         runCatchingCancellable(import).fold(
             onSuccess = ::map,
             onFailure = { failure ->
@@ -306,7 +354,7 @@ internal class LibrarySessionImpl(
                     }
 
                     else -> {
-                        log.warn("Importing $name failed", failure)
+                        log.warn("Importing a file failed", failure)
                         ImportOutcome.Failed(ImportFailure.COPY_FAILED)
                     }
                 }

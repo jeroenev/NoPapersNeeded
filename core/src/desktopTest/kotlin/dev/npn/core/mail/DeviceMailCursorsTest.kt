@@ -83,20 +83,27 @@ class DeviceMailCursorsTest {
         }
 
     @Test
-    fun whetherThisDeviceImportsIsKeptAndOffUntilTurnedOn() =
+    fun thisDevicesChoicesAreKeptAndOffUntilTurnedOn() =
         runTest {
-            cursors.enabledHere() shouldBe false
-            cursors.setEnabledHere(true)
-            DeviceMailCursors(db.mailCursorDao(), db.keyValueDao()).enabledHere() shouldBe true
-            cursors.setEnabledHere(false)
-            cursors.enabledHere() shouldBe false
+            cursors.choices() shouldBe MailDeviceChoices()
+            cursors.setChoices(MailDeviceChoices(enabledHere = true, allowPlain = true))
+            DeviceMailCursors(db.mailCursorDao(), db.keyValueDao()).choices() shouldBe
+                MailDeviceChoices(enabledHere = true, allowPlain = true)
+            cursors.setChoices(MailDeviceChoices(enabledHere = true))
+            cursors.choices() shouldBe MailDeviceChoices(enabledHere = true, allowPlain = false)
         }
 
     @Test
-    fun theFollowedAccountKeyIsKeptAcrossRestarts() =
+    fun aRefusedLoginAndTheLegacyPasswordMoveAreKeptAcrossRestarts() =
         runTest {
-            cursors.followedKey() shouldBe null
-            cursors.setFollowedKey("me@mail.example.com:993")
-            DeviceMailCursors(db.mailCursorDao(), db.keyValueDao()).followedKey() shouldBe "me@mail.example.com:993"
+            cursors.refusedLogin() shouldBe null
+            cursors.legacyPasswordMoved() shouldBe false
+            cursors.setRefusedLogin("me@mail.example.com:993:SSL")
+            cursors.setLegacyPasswordMoved()
+            val restarted = DeviceMailCursors(db.mailCursorDao(), db.keyValueDao())
+            restarted.refusedLogin() shouldBe "me@mail.example.com:993:SSL"
+            restarted.legacyPasswordMoved() shouldBe true
+            restarted.setRefusedLogin(null)
+            cursors.refusedLogin() shouldBe null
         }
 }

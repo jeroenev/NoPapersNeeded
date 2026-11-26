@@ -204,7 +204,7 @@ internal class ImportService(
         val imported = placed.result as? ImportResult.Imported ?: return placed.result
         val restored =
             runCatchingCancellable { journal.restoreReturned(imported.docId, imported.relPath) }.getOrElse { failure ->
-                log.runLogged("Taking back the import of ${imported.relPath}") { takeBack(placed, tmpPath) }
+                log.runLogged("Taking back the import of ${imported.docId}") { takeBack(placed, tmpPath) }
                 throw failure
             }
         return if (restored) imported.copy(broughtBack = true) else imported
@@ -315,7 +315,7 @@ internal class ImportService(
         existing: DocumentEntity?,
         placed: FileMeta?,
     ): Placement {
-        val meta = placed ?: fs.stat(target) ?: error("Imported file vanished: $target")
+        val meta = placed ?: fs.stat(target) ?: error("Imported file vanished")
         val now = clock.nowMillis()
         val imported = ImportDecision.row(hash, target, existing, meta)
         // No live row names the target ([uniqueTargetPath]); a hidden row naming it gives it up.
@@ -384,7 +384,7 @@ internal class ImportService(
                 }
 
                 else -> {
-                    val meta = fs.stat(placedAt) ?: error("Imported file vanished: $placedAt")
+                    val meta = fs.stat(placedAt) ?: error("Imported file vanished")
                     previous.copy(
                         relPath = placedAt,
                         fileName = NpnPaths.fileName(placedAt),

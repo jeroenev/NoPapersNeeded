@@ -22,6 +22,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -44,7 +45,6 @@ class JakartaMailTransportTest {
                 host = "127.0.0.1",
                 port = greenMail.imap.port,
                 security = MailSecurity.PLAIN,
-                allowPlain = true,
                 username = USER,
             )
     }
@@ -67,8 +67,12 @@ class JakartaMailTransportTest {
                 assertEquals(listOf("invoice.pdf"), page.messages[0].attachments.map { it.fileName })
                 assertEquals(emptyList(), page.messages[1].attachments)
                 assertTrue(page.scannedThroughUid >= page.messages.last().uid)
+                // The Message-ID comes with the envelope, without its angle brackets.
+                val messageId = assertNotNull(page.messages[0].messageId)
+                assertFalse(messageId.startsWith("<") || messageId.endsWith(">"), messageId)
 
                 val downloaded = assertIs<MailDownloadResult.Success>(connection.download(page.messages[0].uid, false))
+                assertEquals(messageId, downloaded.message.messageId)
                 assertContentEquals(
                     PDF,
                     downloaded.message.attachments
@@ -96,22 +100,6 @@ class JakartaMailTransportTest {
         }
 
     @Test
-    fun movingToTheTrashTakesTheMessageOutOfTheFolderIntoTheTrash() =
-        runTest {
-            createFolder("Trash")
-            deliver(subject = "Invoice", pdf = PDF)
-            val connection = open(account.copy(postAction = MailPostAction.DELETE))
-            try {
-                val uid = assertIs<MailFetchResult.Success>(connection.fetchAfter(0)).messages.single().uid
-                assertEquals(null, connection.delete(uid))
-            } finally {
-                connection.close()
-            }
-            assertEquals(emptyList(), flags("INBOX"))
-            assertEquals(listOf("Invoice"), flags("Trash").map { it.subject })
-        }
-
-    @Test
     fun movingToAFolderTakesTheMessageThere() =
         runTest {
             createFolder("Paperwork")
@@ -129,22 +117,12 @@ class JakartaMailTransportTest {
 
     /** A post-action the server cannot carry out fails the open, before anything is imported. */
     @Test
-    fun aMissingMoveTargetOrTrashFailsTheOpen() =
+    fun aMissingMoveTargetFailsTheOpen() =
         runTest {
-            val move =
-                transport.open(
-                    account.copy(postAction = MailPostAction.MOVE, moveToFolder = "Nowhere"),
-                    PASSWORD,
-                )
+            val nowhere = account.copy(postAction = MailPostAction.MOVE, moveToFolder = "Nowhere")
+            val move = transport.open(nowhere, PASSWORD)
             assertEquals(MailFailureReason.MOVE_FOLDER_NOT_FOUND, assertIs<MailOpenResult.Failed>(move).reason)
-
-            val delete = transport.open(account.copy(postAction = MailPostAction.DELETE), PASSWORD)
-            assertEquals(MailFailureReason.TRASH_NOT_FOUND, assertIs<MailOpenResult.Failed>(delete).reason)
-
-            assertEquals(
-                MailFailureReason.TRASH_NOT_FOUND,
-                transport.testConnection(account.copy(postAction = MailPostAction.DELETE), PASSWORD),
-            )
+            assertEquals(MailFailureReason.MOVE_FOLDER_NOT_FOUND, transport.testConnection(nowhere, PASSWORD))
         }
 
     @Test

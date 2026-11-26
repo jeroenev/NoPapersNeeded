@@ -37,6 +37,7 @@ import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailCheckReport
+import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.mail.MailSaveOutcome
 import dev.npn.core.mail.MailState
 import dev.npn.core.mail.MailTestOutcome
@@ -680,7 +681,9 @@ class FakeCloudSetup : CloudSetup {
 class FakeMailFacade : MailFacade {
     override val state = MutableStateFlow(MailState())
     val savedAccounts = mutableListOf<Pair<MailAccount, String?>>()
-    var enabledHere: Boolean? = null
+    var device: MailDeviceChoices? = null
+        private set
+    var lookUps = 0
         private set
     var retries = 0
         private set
@@ -695,11 +698,15 @@ class FakeMailFacade : MailFacade {
     override suspend fun saveAccount(
         account: MailAccount,
         password: String?,
-        enabledHere: Boolean,
+        device: MailDeviceChoices,
     ): MailSaveOutcome {
         savedAccounts += account to password
-        this.enabledHere = enabledHere
+        this.device = device
         return saveOutcome
+    }
+
+    override suspend fun lookUpPassword() {
+        lookUps++
     }
 
     override suspend fun clearPassword(): MailSaveOutcome {
@@ -710,6 +717,7 @@ class FakeMailFacade : MailFacade {
     override suspend fun testConnection(
         account: MailAccount,
         password: String?,
+        allowPlain: Boolean,
     ): MailTestOutcome = testOutcome
 
     var cancels = 0

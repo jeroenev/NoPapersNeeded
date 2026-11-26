@@ -36,7 +36,11 @@ class MailServiceTest {
             val fixture = fixture()
             fixture.store.failSave = true
             kotlin.test.assertFailsWith<IllegalStateException> {
-                fixture.service.saveAccount(account.copy(host = "other.example.com"), "new secret", enabledHere = true)
+                fixture.service.saveAccount(
+                    account.copy(host = "other.example.com"),
+                    "new secret",
+                    MailDeviceChoices(enabledHere = true),
+                )
             }
             assertEquals("secret", fixture.credentials.password)
             assertEquals(account, fixture.store.current())
@@ -232,7 +236,7 @@ class MailServiceTest {
     fun anUnapprovedPlainConnectionIsRefusedBeforeAnyTransportCall() =
         runTest {
             val transport = FakeTransport(messages = listOf(message()))
-            val plain = account.copy(security = MailSecurity.PLAIN, allowPlain = false)
+            val plain = account.copy(security = MailSecurity.PLAIN)
             val fixture = fixture(account = plain, transport = transport)
             val report = fixture.service.checkNow()
             assertEquals(MailFailureReason.PLAIN_REFUSED, report.errors.single().reason)
@@ -263,7 +267,7 @@ class MailServiceTest {
                 fixture.service.saveAccount(
                     account.copy(host = "other.example.com"),
                     "secret",
-                    enabledHere = true,
+                    MailDeviceChoices(enabledHere = true),
                 )
             assertIs<MailSaveOutcome.CredentialFailed>(outcome)
             // The account is saved; only the password did not land, so the user can fix the keyring
@@ -275,7 +279,11 @@ class MailServiceTest {
     fun savingWithoutAPasswordLeavesTheStoredOneAlone() =
         runTest {
             val fixture = fixture()
-            fixture.service.saveAccount(account.copy(pollIntervalMinutes = 30), null, enabledHere = true)
+            fixture.service.saveAccount(
+                account.copy(pollIntervalMinutes = 30),
+                null,
+                MailDeviceChoices(enabledHere = true),
+            )
             assertEquals(30, fixture.store.current().pollIntervalMinutes)
             assertEquals("secret", fixture.credentials.password)
         }
@@ -510,7 +518,7 @@ class MailServiceTest {
             fixture.service.saveAccount(
                 fixture.store.current().copy(host = "other.example.com"),
                 null,
-                enabledHere = true,
+                MailDeviceChoices(enabledHere = true),
             )
             runCurrent()
             assertEquals(null, fixture.service.state.value.lastReport)

@@ -13,6 +13,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,7 @@ import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.core.mail.MailAccount
+import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.mail.MailFilter
 import dev.npn.core.mail.MailPostAction
 import dev.npn.core.mail.MailSecurity
@@ -62,6 +64,7 @@ import no_papers_needed.composeapp.generated.resources.email_interval_help
 import no_papers_needed.composeapp.generated.resources.email_intro
 import no_papers_needed.composeapp.generated.resources.email_last_check
 import no_papers_needed.composeapp.generated.resources.email_last_error
+import no_papers_needed.composeapp.generated.resources.email_login_refused_paused
 import no_papers_needed.composeapp.generated.resources.email_move_folder
 import no_papers_needed.composeapp.generated.resources.email_never_checked
 import no_papers_needed.composeapp.generated.resources.email_no_keyring
@@ -71,8 +74,6 @@ import no_papers_needed.composeapp.generated.resources.email_password_needed
 import no_papers_needed.composeapp.generated.resources.email_password_saved
 import no_papers_needed.composeapp.generated.resources.email_port
 import no_papers_needed.composeapp.generated.resources.email_post_action
-import no_papers_needed.composeapp.generated.resources.email_post_delete
-import no_papers_needed.composeapp.generated.resources.email_post_delete_help
 import no_papers_needed.composeapp.generated.resources.email_post_keep
 import no_papers_needed.composeapp.generated.resources.email_post_mark_read
 import no_papers_needed.composeapp.generated.resources.email_post_move
@@ -105,8 +106,14 @@ internal fun EmailSettingsPane(
     val mail = state.mail
     // The form is one draft: every field is written when Save is pressed, not once per keystroke
     // (a journal event per character would be permanent). It survives recreation with the screen.
-    val form = rememberSaveable(saver = MailForm.Saver) { MailForm(mail.account, mail.enabledHere) }
-    SideEffect { form.follow(mail.account, mail.enabledHere) }
+    val savedChoices = MailDeviceChoices(enabledHere = mail.enabledHere, allowPlain = mail.allowPlainHere)
+    val form = rememberSaveable(saver = MailForm.Saver) { MailForm(mail.account, savedChoices) }
+    SideEffect { form.follow(mail.account, savedChoices) }
+    // The keyring is read for the pane, not at every start where this device does not import.
+    DisposableEffect(Unit) {
+        actions.mailPaneOpened()
+        onDispose {}
+    }
     val draft = form.draft
     var password by remember { mutableStateOf("") }
     val formValid = form.valid
@@ -122,8 +129,8 @@ internal fun EmailSettingsPane(
             SwitchRow(
                 label = stringResource(Res.string.email_enabled),
                 help = stringResource(Res.string.email_enabled_help),
-                checked = form.enabledHere,
-                onCheckedChange = { form.enabledHere = it },
+                checked = form.choices.enabledHere,
+                onCheckedChange = { form.choices = form.choices.copy(enabledHere = it) },
             )
             TextField(
                 value = draft.host,
@@ -169,9 +176,9 @@ internal fun EmailSettingsPane(
                 placeholder = stringResource(Res.string.email_password_saved).takeIf { mail.hasPassword },
             )
             HelpText(stringResource(Res.string.email_password_help))
-            // A saved account this device has no password for: set up elsewhere, or moved to a new
-            // server or port while the keyring could not take the password over.
-            if (mail.account.isConfigured && mail.transportAvailable && !mail.hasPassword) {
+            // A saved account this device has no password for: set up elsewhere, or moved to another
+            // server or username, here or on another device.
+            if (mail.passwordMissing) {
                 HelpText(stringResource(Res.string.email_password_needed))
             }
             TextField(
@@ -212,8 +219,8 @@ internal fun EmailSettingsPane(
                 SwitchRow(
                     label = stringResource(Res.string.email_allow_plain),
                     help = stringResource(Res.string.email_allow_plain_help),
-                    checked = draft.allowPlain,
-                    onCheckedChange = { form.draft = form.draft.copy(allowPlain = it) },
+                    checked = form.choices.allowPlain,
+                    onCheckedChange = { form.choices = form.choices.copy(allowPlain = it) },
                 )
             }
         }
@@ -250,17 +257,23 @@ internal fun EmailSettingsPane(
                 onClick = {
                     val submitted = password
                     val account = whenSaved()
-                    val enabled = form.enabledHere
-                    actions.saveMailAccount(account, submitted.ifBlank { null }, enabled) {
+                    val choices = form.choices
+                    actions.saveMailAccount(account, submitted.ifBlank { null }, choices) {
                         if (password == submitted) password = ""
                         // Edits made while the save ran are the user's newer intent; keep them.
-                        if (form.whenSaved() == account && form.enabledHere == enabled) form.saved(account, enabled)
+                        if (form.whenSaved() == account && form.choices == choices) form.saved(account, choices)
                     }
                 },
                 enabled = formValid,
             ) { Text(stringResource(Res.string.email_save)) }
             OutlinedButton(
-                onClick = { actions.testMailConnection(whenSaved(), password.ifBlank { null }) },
+                onClick = {
+                    actions.testMailConnection(
+                        whenSaved(),
+                        password.ifBlank { null },
+                        form.choices.allowPlain,
+                    )
+                },
                 enabled = formValid && mail.transportAvailable,
             ) { Text(stringResource(Res.string.email_test)) }
             CheckButtons(
@@ -279,6 +292,13 @@ internal fun EmailSettingsPane(
             mail.lastError?.takeUnless { mail.checking }?.let {
                 Text(
                     text = stringResource(Res.string.email_last_error, it.text()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            if (mail.loginRefused && !mail.checking) {
+                Text(
+                    text = stringResource(Res.string.email_login_refused_paused),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -316,11 +336,6 @@ private fun PostActionSection(
                     label = stringResource(Res.string.email_move_folder),
                     onChange = { onChange(draft.copy(moveToFolder = it)) },
                 )
-            }
-
-            // Where the email goes, said before it is chosen: the trash, with what the library left.
-            MailPostAction.DELETE -> {
-                HelpText(stringResource(Res.string.email_post_delete_help))
             }
 
             MailPostAction.KEEP, MailPostAction.MARK_READ -> {}
@@ -518,6 +533,5 @@ private fun MailPostAction.label(): String =
             MailPostAction.KEEP -> Res.string.email_post_keep
             MailPostAction.MARK_READ -> Res.string.email_post_mark_read
             MailPostAction.MOVE -> Res.string.email_post_move
-            MailPostAction.DELETE -> Res.string.email_post_delete
         },
     )

@@ -16,11 +16,11 @@
     <string name="email_username">Usuario</string>
     <string name="email_password">Contraseña</string>
     <string name="email_password_saved">Hay una contraseña guardada en el llavero del sistema.</string>
-    <string name="email_password_help">Déjalo vacío para conservar la contraseña guardada. Se almacena en el llavero del sistema, no en la biblioteca.</string>
+    <string name="email_password_help">Déjalo vacío para conservar la contraseña guardada; si cambias el servidor o el usuario, hará falta de nuevo. Se almacena en el llavero del sistema, no en la biblioteca.</string>
     <string name="email_password_needed">No hay ninguna contraseña de esta cuenta guardada en este dispositivo. Escríbela y guarda la cuenta.</string>
     <string name="email_folder">Carpeta</string>
     <string name="email_folder_help">La carpeta del buzón que se lee, normalmente INBOX.</string>
-    <string name="email_allow_plain">Permitir una conexión sin cifrar</string>
+    <string name="email_allow_plain">Permitir una conexión sin cifrar en este dispositivo</string>
     <string name="email_allow_plain_help">Úsalo solo si tu servidor no admite SSL ni STARTTLS. Tu contraseña viajaría sin protección.</string>
     <string name="email_interval">Comprobar cada</string>
     <string name="email_interval_help">Como mínimo 5 minutos. La aplicación comprueba mientras está abierta.</string>
@@ -37,8 +37,6 @@
     <string name="email_post_keep">Dejar el mensaje como está</string>
     <string name="email_post_mark_read">Marcarlo como leído</string>
     <string name="email_post_move">Moverlo a una carpeta</string>
-    <string name="email_post_delete">Moverlo a la papelera</string>
-    <string name="email_post_delete_help">El correo entero va a la papelera del buzón, con su texto y los adjuntos que la biblioteca no puede tomar, así que aún se puede recuperar allí.</string>
     <string name="email_move_folder">Mover a la carpeta</string>
     <string name="email_save_pdf">Guardar también el correo como PDF</string>
     <string name="email_save_pdf_help">Añade a la biblioteca un PDF legible con las cabeceras y el texto del mensaje.</string>
@@ -50,6 +48,7 @@
     <string name="email_never_checked">Aún no se ha comprobado</string>
     <string name="email_last_check">Última comprobación: %1$s</string>
     <string name="email_last_error">Último error: %1$s</string>
+    <string name="email_login_refused_paused">El servidor rechazó la contraseña, así que este dispositivo deja de comprobar por su cuenta hasta que cambie la contraseña o la cuenta. «Comprobar ahora» lo sigue intentando.</string>
     <string name="email_checking">Comprobando el correo…</string>
 
     <string name="email_saved">Cuenta de correo guardada.</string>
@@ -75,8 +74,7 @@
     <string name="email_reason_pdf_render_failed">no se pudo crear el PDF del correo</string>
     <string name="email_reason_unsupported">la importación de correo no es compatible con esta plataforma</string>
     <string name="email_reason_move_folder_not_found">la carpeta a la que mover el correo importado no existe en el servidor</string>
-    <string name="email_reason_trash_not_found">el servidor no tiene una papelera a la que mover el correo importado</string>
-    <string name="email_reason_post_action_unsupported">el servidor no puede mover ni eliminar un solo mensaje</string>
+    <string name="email_reason_post_action_unsupported">el servidor no puede mover un solo mensaje</string>
 
     <string name="email_secret_unsupported">el llavero del sistema no es compatible con esta plataforma</string>
     <string name="email_secret_unavailable">el llavero del sistema no está disponible</string>

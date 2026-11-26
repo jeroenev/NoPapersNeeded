@@ -82,10 +82,19 @@ class MailAccountTest {
     }
 
     @Test
-    fun aPlainConnectionIsRefusedUntilExplicitlyAllowed() {
-        val plain = account().copy(security = MailSecurity.PLAIN)
-        assertFalse(plain.isConfigured)
-        assertTrue(plain.copy(allowPlain = true).isConfigured)
+    fun thePasswordAndCursorKeyIsTheServerAndUsernameAlone() {
+        val key = account().accountKey
+        assertEquals(key, account().copy(port = 143, security = MailSecurity.STARTTLS).accountKey)
+        assertEquals(key, account().copy(host = " MAIL.example.com ", username = " SOMEONE@example.com ").accountKey)
+        assertFalse(key == account().copy(host = "imap.example.com").accountKey)
+        assertFalse(key == account().copy(username = "you").accountKey)
+    }
+
+    @Test
+    fun theDroppedMoveToTrashReadsAsKeep() {
+        val decoded = MailAccountJson.decode("""{"host":"mail.example.com","username":"me","postAction":"DELETE"}""")
+        assertEquals("mail.example.com", decoded.host)
+        assertEquals(MailPostAction.KEEP, decoded.postAction)
     }
 
     @Test

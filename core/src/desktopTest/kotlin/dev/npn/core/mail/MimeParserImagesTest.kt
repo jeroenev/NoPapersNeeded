@@ -120,7 +120,7 @@ class MimeParserImagesTest {
 
     @Test
     fun theHtmlBodysImagesAndIconSizedImagesAreNotDocuments() {
-        val parsed = MimeParser.parse(1, newsletter())
+        val parsed = MimeParser.read(1, newsletter())
         assertEquals(listOf("scan.jpg", "receipt.jpg", "invoice.pdf"), parsed.attachments.map { it.fileName })
     }
 
@@ -136,7 +136,7 @@ class MimeParserImagesTest {
                 Session.getInstance(Properties()),
                 ByteArrayInputStream(lines.joinToString("\r\n").toByteArray()),
             )
-        assertEquals(listOf("fax.tif"), MimeParser.parse(1, message).attachments.map { it.fileName })
+        assertEquals(listOf("fax.tif"), MimeParser.read(1, message).attachments.map { it.fileName })
     }
 
     @Test
@@ -169,6 +169,6 @@ class MimeParserImagesTest {
                 Session.getInstance(Properties()),
                 ByteArrayInputStream(lines.joinToString("\r\n").toByteArray()),
             )
-        assertEquals(listOf("IMG_0042.jpg"), MimeParser.parse(1, message).attachments.map { it.fileName })
+        assertEquals(listOf("IMG_0042.jpg"), MimeParser.read(1, message).attachments.map { it.fileName })
     }
 }
