@@ -2,8 +2,10 @@ package dev.npn.app.ui.nav
 
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.WorkCapabilities
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.app.WorkState
+import dev.npn.core.app.blockedBy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -13,10 +15,12 @@ import kotlinx.coroutines.flow.combine
  * Three numbers rather than one, because they ask different things of the user. [pending] is the app
  * being busy — documents owed text recognition or Auto-organize, bulk edits still buying
  * suggestions — and clears itself given time and a network; it is what the item's running
- * indicator shows. [failed] is work that stopped and will not start again unless the user retries
- * it, and [awaitingReview] a background bulk edit that has finished and will sit in Activity until
- * someone opens or discards it: work that is *owed the user*, and the only reasons to interrupt
- * them. The badge shows them in preference to [pending], a failure first.
+ * indicator shows. Work [blockedBy] something only the user can fix (Auto-organize with no
+ * assistant) is not pending: it would never clear, so Activity shows it as a problem instead.
+ * [failed] is work that stopped and will not start again unless the user retries it, and
+ * [awaitingReview] a background bulk edit that has finished and will sit in Activity until someone
+ * opens or discards it: work that is *owed the user*, and the only reasons to interrupt them. The
+ * badge shows them in preference to [pending], a failure first.
  */
 data class QueueStatus(
     val pending: Int = 0,
@@ -34,10 +38,11 @@ data class QueueStatus(
         fun of(
             work: List<QueuedWork>,
             editRuns: List<QueuedEditRun>,
+            capabilities: WorkCapabilities,
         ) = QueueStatus(
             // Entries rather than per-stage counts, so a stage added later still shows up.
             pending =
-                work.count { it.state != WorkState.FAILED } +
+                work.count { it.state != WorkState.FAILED && it.blockedBy(capabilities) == null } +
                     editRuns.count { it.state != WorkState.READY && it.state != WorkState.FAILED },
             awaitingReview = editRuns.count { it.state == WorkState.READY },
             failed = work.count { it.state == WorkState.FAILED } + editRuns.count { it.state == WorkState.FAILED },
@@ -45,6 +50,11 @@ data class QueueStatus(
     }
 }
 
-/** The [QueueStatus] as the queues change, for the shell's Activity item. */
-fun WorkFacade.queueStatus(): Flow<QueueStatus> =
-    combine(queue, editRuns) { work, editRuns -> QueueStatus.of(work, editRuns) }
+/**
+ * The [QueueStatus] as the queues change, for the shell's Activity item, with [aiConfigured]
+ * (whether this device has an assistant endpoint) telling blocked work from pending.
+ */
+fun WorkFacade.queueStatus(aiConfigured: Flow<Boolean>): Flow<QueueStatus> =
+    combine(queue, editRuns, aiConfigured) { work, editRuns, ai ->
+        QueueStatus.of(work, editRuns, WorkCapabilities(aiEndpointConfigured = ai))
+    }

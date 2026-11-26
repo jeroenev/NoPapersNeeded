@@ -25,9 +25,6 @@ class OcrEngineSelector(
     /** True when a vision endpoint is configured, i.e. an AI run can be asked for at all. */
     suspend fun aiAvailable(): Boolean = ai?.available() == true
 
-    /** True when either engine can run now: the local one, or a configured vision endpoint. */
-    suspend fun anyAvailable(): Boolean = local.available() || aiAvailable()
-
     /** True when [pageCount] is past [largeDocumentPages], i.e. an AI run is worth warning about. */
     fun isLargeForAi(pageCount: Int): Boolean = pageCount > largeDocumentPages
 

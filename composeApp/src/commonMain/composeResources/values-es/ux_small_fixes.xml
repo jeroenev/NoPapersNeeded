@@ -6,11 +6,14 @@
     <!-- Who made a change in a document's history. -->
     <string name="detail_history_this_device">Este dispositivo</string>
     <string name="detail_history_another_device">Otro dispositivo</string>
+    <!-- A change older than this device's record of its own writes, which may be either device's. -->
+    <string name="detail_history_unknown_origin">Origen no registrado</string>
 
-    <!-- Activity: queued work that cannot progress until something is fixed. -->
-    <string name="queue_block_ocr_missing">El reconocimiento de texto no está configurado en este dispositivo, así que este documento espera.</string>
-    <string name="queue_block_ocr_fix">Configurar el reconocimiento de texto</string>
-    <string name="queue_block_ai_unconfigured">La organización automática no tiene un asistente conectado, así que este documento espera.</string>
+    <!-- Activity: queued work that cannot progress until something is fixed, one row per problem. -->
+    <plurals name="queue_block_ai_unconfigured">
+        <item quantity="one">La organización automática no tiene un asistente conectado, así que %1$d documento espera.</item>
+        <item quantity="other">La organización automática no tiene un asistente conectado, así que %1$d documentos esperan.</item>
+    </plurals>
     <string name="queue_block_ai_fix">Conectar el asistente</string>
     <string name="queue_problem_storage_access">Esta biblioteca necesita permiso para acceder al almacenamiento de este dispositivo.</string>
 

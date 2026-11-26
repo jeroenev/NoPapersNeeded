@@ -65,6 +65,7 @@ import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.library.bannerText
 import dev.npn.app.ui.settings.MailLeftBehind
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.mailPositionText
 import dev.npn.app.ui.settings.text
 import dev.npn.core.app.LibrarySession
@@ -90,8 +91,6 @@ import no_papers_needed.composeapp.generated.resources.queue_ai_temporary_failur
 import no_papers_needed.composeapp.generated.resources.queue_attempts
 import no_papers_needed.composeapp.generated.resources.queue_block_ai_fix
 import no_papers_needed.composeapp.generated.resources.queue_block_ai_unconfigured
-import no_papers_needed.composeapp.generated.resources.queue_block_ocr_fix
-import no_papers_needed.composeapp.generated.resources.queue_block_ocr_missing
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_documents
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_failures
@@ -130,6 +129,7 @@ import no_papers_needed.composeapp.generated.resources.queue_sync_now
 import no_papers_needed.composeapp.generated.resources.queue_sync_running
 import no_papers_needed.composeapp.generated.resources.queue_sync_settings
 import no_papers_needed.composeapp.generated.resources.queue_title
+import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -149,10 +149,7 @@ fun QueueScreen(
     settings: SettingsRepository,
     onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
-    onOpenCloudSettings: () -> Unit,
-    onOpenOcrSettings: () -> Unit,
-    onOpenAiSettings: () -> Unit,
-    onOpenEmailSettings: () -> Unit,
+    onOpenSettings: (SettingsCategoryId) -> Unit,
     modifier: Modifier = Modifier,
     vm: QueueViewModel = viewModel { QueueViewModel(session, settings) },
 ) {
@@ -193,13 +190,10 @@ fun QueueScreen(
                         onDiscardEditRun = vm::discardEditRun,
                         onRetry = vm::retry,
                         onSyncNow = vm::syncNow,
-                        onOpenCloudSettings = onOpenCloudSettings,
-                        onOpenOcrSettings = onOpenOcrSettings,
-                        onOpenAiSettings = onOpenAiSettings,
+                        onOpenSettings = onOpenSettings,
                         onGrantStorage = storage.request,
                         onCheckMailNow = vm::checkMailNow,
                         onCancelMailCheck = vm::cancelMailCheck,
-                        onOpenEmailSettings = onOpenEmailSettings,
                     ),
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
@@ -222,8 +216,9 @@ private class Activity(
     val sync: ActivitySync?,
     val mail: ActivityMail?,
 ) {
-    /** Work that needs a fix before it can go on: no engine, no endpoint, an endpoint not answering. */
-    val blocked = items.filter { it.block != null }
+    /** Work that needs a fix before it can go on, by what it waits for: one row per problem. */
+    val blocked: Map<WorkBlock, Int> =
+        items.mapNotNull { it.block }.groupingBy { it }.eachCount()
 
     /** Work whose queue can progress. */
     private val active = items.filter { it.block == null }
@@ -259,13 +254,10 @@ private class ActivityActions(
     val onDiscardEditRun: (String) -> Unit,
     val onRetry: (String) -> Unit,
     val onSyncNow: () -> Unit,
-    val onOpenCloudSettings: () -> Unit,
-    val onOpenOcrSettings: () -> Unit,
-    val onOpenAiSettings: () -> Unit,
+    val onOpenSettings: (SettingsCategoryId) -> Unit,
     val onGrantStorage: () -> Unit,
     val onCheckMailNow: () -> Unit,
     val onCancelMailCheck: () -> Unit,
-    val onOpenEmailSettings: () -> Unit,
 )
 
 @Composable
@@ -346,8 +338,8 @@ private fun LazyListScope.problemRows(
     if (mail != null && mail.failed) {
         item(key = "mail") { MailRow(mail, actions) }
     }
-    items(activity.blocked, key = { "blocked:${it.entry.stage}:${it.entry.docId}" }) { entry ->
-        BlockedRow(entry, actions)
+    items(activity.blocked.entries.toList(), key = { "blocked:${it.key}" }) { (block, count) ->
+        BlockedRow(block, count, actions)
         HorizontalDivider()
     }
     workRows(activity.stopped.map { it.entry }, actions)
@@ -410,53 +402,53 @@ private fun StorageAccessProblemRow(actions: ActivityActions) {
 }
 
 /**
- * Work this device cannot get past: what is missing, said as a problem, and the one button that
- * fixes it. Its queue is not in motion meanwhile, so it never shows as a spinner.
+ * Work this device cannot get past, one row per reason: what is missing and how many documents wait
+ * for it, said as a problem, and the one button that fixes it. Its queue is not in motion meanwhile,
+ * so it never shows as a spinner.
  */
 @Composable
 private fun BlockedRow(
-    work: ActivityWork,
+    block: WorkBlock,
+    count: Int,
     actions: ActivityActions,
 ) {
-    val block = work.block ?: return
-    ActivityRow(work.entry.stage.icon) {
+    ActivityRow(block.stage.icon) {
         Text(
-            work.entry.displayTitle,
+            pluralStringResource(block.message, count, count),
             style = MaterialTheme.typography.titleSmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            stringResource(block.message),
-            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
-        TextButton(
-            onClick = {
-                when (block) {
-                    WorkBlock.OCR_ENGINE_MISSING -> actions.onOpenOcrSettings()
-                    WorkBlock.AI_ENDPOINT_UNCONFIGURED -> actions.onOpenAiSettings()
-                }
-            },
-        ) {
+        TextButton(onClick = { actions.onOpenSettings(block.settings) }) {
             Text(stringResource(block.fixLabel))
         }
     }
 }
 
-/** What a blocked queue is waiting for, and where the user can fix it. */
-private val WorkBlock.message: StringResource
+/** What a blocked queue is waiting for, with how many documents wait (`%1$d`). */
+private val WorkBlock.message: PluralStringResource
     get() =
         when (this) {
-            WorkBlock.OCR_ENGINE_MISSING -> Res.string.queue_block_ocr_missing
-            WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.string.queue_block_ai_unconfigured
+            WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.plurals.queue_block_ai_unconfigured
         }
 
 private val WorkBlock.fixLabel: StringResource
     get() =
         when (this) {
-            WorkBlock.OCR_ENGINE_MISSING -> Res.string.queue_block_ocr_fix
             WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.string.queue_block_ai_fix
+        }
+
+/** The settings pane where [this] is fixed. */
+private val WorkBlock.settings: SettingsCategoryId
+    get() =
+        when (this) {
+            WorkBlock.AI_ENDPOINT_UNCONFIGURED -> SettingsCategoryId.AI
+        }
+
+/** The queue whose work [this] holds up, for its row's icon. */
+private val WorkBlock.stage: WorkStage
+    get() =
+        when (this) {
+            WorkBlock.AI_ENDPOINT_UNCONFIGURED -> WorkStage.AI_ENRICHMENT
         }
 
 /** A library scan or import in progress: what it is doing, and how far along. */
@@ -509,7 +501,7 @@ private fun SyncRow(
             OutlinedButton(onClick = actions.onSyncNow, enabled = !sync.running) {
                 Text(stringResource(Res.string.queue_sync_now))
             }
-            TextButton(onClick = actions.onOpenCloudSettings) {
+            TextButton(onClick = { actions.onOpenSettings(SettingsCategoryId.CLOUD_SYNC) }) {
                 Text(stringResource(Res.string.queue_sync_settings))
             }
         }
@@ -576,7 +568,7 @@ private fun MailRow(
                     Text(stringResource(Res.string.email_check_now))
                 }
             }
-            TextButton(onClick = actions.onOpenEmailSettings) {
+            TextButton(onClick = { actions.onOpenSettings(SettingsCategoryId.EMAIL) }) {
                 Text(stringResource(Res.string.queue_email_settings))
             }
         }

@@ -444,18 +444,7 @@ private fun MainNavHost(
                 // does, so Back from detail returns to Activity.
                 onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
                 onOpenEditRun = { jobId -> nav.from(entry) { navigate(Route.AiEditReview(jobId)) } },
-                onOpenCloudSettings = {
-                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) }
-                },
-                onOpenOcrSettings = {
-                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.IMPORT.routeKey)) }
-                },
-                onOpenAiSettings = {
-                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.AI.routeKey)) }
-                },
-                onOpenEmailSettings = {
-                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.EMAIL.routeKey)) }
-                },
+                onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
             )
         }
         settingsRoutes(nav, settings, session, library, onOpenLibrary)
@@ -522,9 +511,7 @@ private fun NavGraphBuilder.aiRoutes(
             },
             onAiEditDocs = { docIds -> nav.from(entry) { openAiEdit(library, docIds) } },
             onBulkEdit = { nav.from(entry) { openAiEdit(library) } },
-            onOpenSettings = {
-                nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.AI.routeKey)) }
-            },
+            onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
         )
     }
     composable<Route.AiEdit> { entry ->

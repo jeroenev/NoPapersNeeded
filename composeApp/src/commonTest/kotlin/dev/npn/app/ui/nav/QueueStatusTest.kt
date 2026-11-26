@@ -2,6 +2,7 @@ package dev.npn.app.ui.nav
 
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.WorkCapabilities
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import kotlin.test.Test
@@ -17,14 +18,14 @@ import kotlin.test.assertTrue
 class QueueStatusTest {
     @Test
     fun anIdleQueueSaysNothing() {
-        assertTrue(QueueStatus.of(emptyList(), emptyList()).isEmpty)
-        assertEquals(QueueStatus.None, QueueStatus.of(emptyList(), emptyList()))
+        assertTrue(status(emptyList(), emptyList()).isEmpty)
+        assertEquals(QueueStatus.None, status(emptyList(), emptyList()))
     }
 
     @Test
     fun everyOutstandingWorkEntryCountsAsPending() {
         val status =
-            QueueStatus.of(
+            status(
                 listOf(work(WorkStage.OCR), work(WorkStage.AI_ENRICHMENT), work(WorkStage.OCR)),
                 emptyList(),
             )
@@ -38,12 +39,12 @@ class QueueStatusTest {
         val running =
             listOf(WorkState.WAITING, WorkState.RUNNING, WorkState.RETRYING).map { editRun(it) }
 
-        assertEquals(QueueStatus(pending = 3), QueueStatus.of(emptyList(), running))
+        assertEquals(QueueStatus(pending = 3), status(emptyList(), running))
     }
 
     @Test
     fun aFinishedEditRunIsWaitingForReviewRatherThanPending() {
-        val status = QueueStatus.of(emptyList(), listOf(editRun(WorkState.READY)))
+        val status = status(emptyList(), listOf(editRun(WorkState.READY)))
 
         assertEquals(QueueStatus(awaitingReview = 1), status)
     }
@@ -52,7 +53,7 @@ class QueueStatusTest {
     @Test
     fun reviewAndPendingWorkAreCountedSeparately() {
         val status =
-            QueueStatus.of(
+            status(
                 listOf(work(WorkStage.OCR)),
                 listOf(editRun(WorkState.READY), editRun(WorkState.RUNNING)),
             )
@@ -89,10 +90,29 @@ class QueueStatusTest {
     @Test
     fun stoppedWorkNeedsAttentionAndIsNotPending() {
         val stopped = work(WorkStage.OCR).copy(state = WorkState.FAILED)
-        val status = QueueStatus.of(listOf(stopped, work(WorkStage.AI_ENRICHMENT)), emptyList())
+        val status = status(listOf(stopped, work(WorkStage.AI_ENRICHMENT)), emptyList())
 
         assertEquals(QueueStatus(pending = 1, failed = 1), status)
         assertTrue(status.running)
-        assertFalse(QueueStatus.of(listOf(stopped), emptyList()).running)
+        assertFalse(status(listOf(stopped), emptyList()).running)
     }
+
+    /**
+     * Auto-organize with no assistant connected is blocked, not busy: it waits for a fix, so it must
+     * not keep the running indicator turning however many documents it holds.
+     */
+    @Test
+    fun blockedWorkIsNotPending() {
+        val unconfigured = WorkCapabilities(aiEndpointConfigured = false)
+        val status = status(listOf(work(WorkStage.AI_ENRICHMENT), work(WorkStage.OCR)), emptyList(), unconfigured)
+
+        assertEquals(QueueStatus(pending = 1), status)
+        assertFalse(status(listOf(work(WorkStage.AI_ENRICHMENT)), emptyList(), unconfigured).running)
+    }
+
+    private fun status(
+        work: List<QueuedWork>,
+        editRuns: List<QueuedEditRun>,
+        capabilities: WorkCapabilities = WorkCapabilities(aiEndpointConfigured = true),
+    ) = QueueStatus.of(work, editRuns, capabilities)
 }

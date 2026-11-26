@@ -80,6 +80,7 @@ import dev.npn.app.ui.common.expander
 import dev.npn.app.ui.common.previewKeyShortcuts
 import dev.npn.app.ui.common.reducedMotion
 import dev.npn.app.ui.common.rememberSnackbarMessages
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
@@ -142,8 +143,8 @@ fun AiChatScreen(
     onAiEditDocs: (List<String>) -> Unit,
     /** Switches the assistant to bulk edit, with no documents handed over. */
     onBulkEdit: () -> Unit,
-    /** Opens the assistant's settings, where a missing endpoint is configured. */
-    onOpenSettings: () -> Unit,
+    /** Opens a settings pane: the assistant's, where a missing endpoint is configured. */
+    onOpenSettings: (SettingsCategoryId) -> Unit,
     modifier: Modifier = Modifier,
     vm: AiChatViewModel = viewModel { AiChatViewModel(session, createSavedStateHandle()) },
 ) {
@@ -244,7 +245,7 @@ fun AiChatScreen(
                     onStop = vm::stop,
                 )
             } else {
-                ConfigureHint(onOpenSettings)
+                ConfigureHint(onOpenSettings = { onOpenSettings(SettingsCategoryId.AI) })
             }
         }
     }

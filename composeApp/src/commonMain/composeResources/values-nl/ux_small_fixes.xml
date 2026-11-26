@@ -6,11 +6,14 @@
     <!-- Who made a change in a document's history. -->
     <string name="detail_history_this_device">Dit apparaat</string>
     <string name="detail_history_another_device">Een ander apparaat</string>
+    <!-- A change older than this device's record of its own writes, which may be either device's. -->
+    <string name="detail_history_unknown_origin">Herkomst niet vastgelegd</string>
 
-    <!-- Activity: queued work that cannot progress until something is fixed. -->
-    <string name="queue_block_ocr_missing">Tekstherkenning is niet ingesteld op dit apparaat, dus dit document wacht.</string>
-    <string name="queue_block_ocr_fix">Tekstherkenning instellen</string>
-    <string name="queue_block_ai_unconfigured">Automatisch ordenen heeft geen assistent verbonden, dus dit document wacht.</string>
+    <!-- Activity: queued work that cannot progress until something is fixed, one row per problem. -->
+    <plurals name="queue_block_ai_unconfigured">
+        <item quantity="one">Automatisch ordenen heeft geen assistent verbonden, dus %1$d document wacht.</item>
+        <item quantity="other">Automatisch ordenen heeft geen assistent verbonden, dus %1$d documenten wachten.</item>
+    </plurals>
     <string name="queue_block_ai_fix">Assistent verbinden</string>
     <string name="queue_problem_storage_access">Deze bibliotheek heeft toegang tot de opslag van dit apparaat nodig.</string>
 

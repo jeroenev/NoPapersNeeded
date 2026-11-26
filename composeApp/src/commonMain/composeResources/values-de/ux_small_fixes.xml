@@ -6,11 +6,14 @@
     <!-- Who made a change in a document's history. -->
     <string name="detail_history_this_device">Dieses Gerät</string>
     <string name="detail_history_another_device">Anderes Gerät</string>
+    <!-- A change older than this device's record of its own writes, which may be either device's. -->
+    <string name="detail_history_unknown_origin">Herkunft nicht erfasst</string>
 
-    <!-- Activity: queued work that cannot progress until something is fixed. -->
-    <string name="queue_block_ocr_missing">Die Texterkennung ist auf diesem Gerät nicht eingerichtet, daher wartet dieses Dokument.</string>
-    <string name="queue_block_ocr_fix">Texterkennung einrichten</string>
-    <string name="queue_block_ai_unconfigured">Für „Automatisch ordnen“ ist kein Assistent verbunden, daher wartet dieses Dokument.</string>
+    <!-- Activity: queued work that cannot progress until something is fixed, one row per problem. -->
+    <plurals name="queue_block_ai_unconfigured">
+        <item quantity="one">Für „Automatisch ordnen“ ist kein Assistent verbunden, daher wartet %1$d Dokument.</item>
+        <item quantity="other">Für „Automatisch ordnen“ ist kein Assistent verbunden, daher warten %1$d Dokumente.</item>
+    </plurals>
     <string name="queue_block_ai_fix">Assistent verbinden</string>
     <string name="queue_problem_storage_access">Diese Bibliothek benötigt Zugriff auf den Speicher dieses Geräts.</string>
 

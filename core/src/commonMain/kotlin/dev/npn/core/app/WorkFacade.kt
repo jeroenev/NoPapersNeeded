@@ -117,9 +117,6 @@ data class QueuedEditRun(
  * out, never as work in motion.
  */
 enum class WorkBlock {
-    /** Text recognition is owed, but this device has neither a local engine nor a vision endpoint. */
-    OCR_ENGINE_MISSING,
-
     /** Auto-organize is owed, but no assistant endpoint is configured on this device. */
     AI_ENDPOINT_UNCONFIGURED,
 }

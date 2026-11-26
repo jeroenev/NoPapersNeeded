@@ -193,11 +193,6 @@ class FakeOcrFacade : OcrFacade {
     /** What [ocrWithAi] answers once it has recorded the request. */
     var aiOcrOutcome: AiOcrOutcome = AiOcrOutcome.QUEUED
 
-    /** What [anyEngineAvailable] answers, so Activity can be tested with and without an engine. */
-    var anyEngine: Boolean = true
-
-    override suspend fun anyEngineAvailable(): Boolean = anyEngine
-
     override suspend fun ocrWithAi(docId: String): AiOcrOutcome {
         failAiOcr?.invoke()
         aiOcrIds += docId

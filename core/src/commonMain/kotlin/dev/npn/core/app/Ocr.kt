@@ -49,14 +49,6 @@ interface OcrFacade {
     suspend fun ocrVersions(docId: String): List<OcrVersion>
 
     /**
-     * Whether this device can read any document's text at all: a local engine is installed, or a
-     * vision endpoint is configured. Activity asks this to tell "owed" from "blocked": a queue with
-     * no engine would otherwise show as work in motion for ever. Cheap and unobserved, like
-     * [aiOcrOffer], because the answer comes from the device rather than from the session.
-     */
-    suspend fun anyEngineAvailable(): Boolean
-
-    /**
      * Pin (or clear, when [engine] is null) the OCR engine used for search on [docId], then
      * immediately re-select and re-index the matching stored version on this device. The pin
      * itself syncs via the journal; other devices re-select on ingesting the event. An engine this

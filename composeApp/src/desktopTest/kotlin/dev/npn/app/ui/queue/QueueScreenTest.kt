@@ -10,9 +10,12 @@ import dev.npn.app.ui.closing
 import dev.npn.app.ui.has
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.text
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.QueuedEditRun
+import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailCheckReport
@@ -75,7 +78,7 @@ class QueueScreenTest : EnglishLocaleTest() {
                 has { it.text() == "Could not check email: no password is saved" } shouldBe true
                 click { it.text() == "Email settings" }
                 render()
-                openedEmailSettings shouldBe 1
+                openedSettings shouldContainExactly listOf(SettingsCategoryId.EMAIL)
             }
         }
 
@@ -127,7 +130,38 @@ class QueueScreenTest : EnglishLocaleTest() {
 
     private val configured = MailAccount(host = "mail.example.com", username = "someone")
 
-    private var openedEmailSettings = 0
+    private val openedSettings = mutableListOf<SettingsCategoryId>()
+
+    /**
+     * Auto-organize with no assistant blocks every document it holds for the same reason: one row
+     * says so with how many, and one button leads to the fix, however many documents wait.
+     */
+    @Test
+    fun blockedWorkIsOneRowPerProblem() =
+        onUiThread {
+            val session =
+                FakeLibrarySession().apply {
+                    work.queueEntries.value =
+                        (1..3).map {
+                            QueuedWork(
+                                "doc-$it",
+                                "Document $it",
+                                WorkStage.AI_ENRICHMENT,
+                                WorkState.WAITING,
+                                0,
+                                0L,
+                            )
+                        }
+                }
+            scene(session).closing {
+                render()
+                has { it.text() == "Auto-organize has no assistant connected, so 3 documents wait." } shouldBe true
+                has { it.text() == "Document 1" } shouldBe false
+                click { it.text() == "Connect the assistant" }
+                render()
+                openedSettings shouldContainExactly listOf(SettingsCategoryId.AI)
+            }
+        }
 
     private fun withMail(state: MailState) = FakeLibrarySession().apply { mail.state.value = state }
 
@@ -158,10 +192,7 @@ class QueueScreenTest : EnglishLocaleTest() {
                     settings = FakeSettingsRepository(),
                     onOpenDoc = {},
                     onOpenEditRun = {},
-                    onOpenCloudSettings = {},
-                    onOpenOcrSettings = {},
-                    onOpenAiSettings = {},
-                    onOpenEmailSettings = { openedEmailSettings++ },
+                    onOpenSettings = { openedSettings += it },
                 )
             }
         }

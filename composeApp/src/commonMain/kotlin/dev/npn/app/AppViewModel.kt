@@ -184,8 +184,9 @@ class AppViewModel(
      */
     val queueStatus: StateFlow<QueueStatus> =
         env.session
-            .flatMapLatest { session -> session?.work?.queueStatus() ?: flowOf(QueueStatus.None) }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, QueueStatus.None)
+            .flatMapLatest { session ->
+                session?.work?.queueStatus(env.settings.aiConfigured()) ?: flowOf(QueueStatus.None)
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, QueueStatus.None)
 
     /**
      * Why the open library refuses writes now, for the shell's read-only banner: the session's
