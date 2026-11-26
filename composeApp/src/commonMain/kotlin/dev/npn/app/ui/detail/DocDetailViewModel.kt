@@ -7,7 +7,6 @@ import dev.npn.app.platform.PrintOutcome
 import dev.npn.app.platform.printPdf
 import dev.npn.app.ui.common.MessageSink
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.colorsByName
@@ -15,6 +14,7 @@ import dev.npn.app.ui.common.newViewModelScope
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.common.undoAction
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
@@ -98,7 +98,6 @@ import no_papers_needed.composeapp.generated.resources.detail_split_failed_unava
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
 import no_papers_needed.composeapp.generated.resources.detail_tag_removed
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
-import no_papers_needed.composeapp.generated.resources.library_undo
 import org.jetbrains.compose.resources.StringResource
 
 /**
@@ -474,7 +473,7 @@ class DocDetailViewModel private constructor(
             if (removed) {
                 message(
                     uiText(Res.string.detail_tag_removed, tag),
-                    UiMessage.Action(uiText(Res.string.library_undo)) { addTag(tag) },
+                    undoAction { addTag(tag) },
                 )
             }
         }
@@ -514,7 +513,7 @@ class DocDetailViewModel private constructor(
                 notices.message(
                     title?.let { uiText(Res.string.detail_moved_to_trash, it) }
                         ?: uiText(Res.string.detail_moved_to_trash_untitled),
-                    UiMessage.Action(uiText(Res.string.library_undo)) { undoTrash(receipt) },
+                    undoAction { undoTrash(receipt) },
                 )
             }
         }

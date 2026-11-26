@@ -2,8 +2,8 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
-import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.common.undoAction
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.model.FieldKeys
@@ -25,7 +25,6 @@ import kotlinx.serialization.encodeToString
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_saved_changes
 import no_papers_needed.composeapp.generated.resources.detail_undo_save_failed
-import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.time.Duration.Companion.seconds
 
 /** How long the editor keeps confirming a save before the settled draft is dropped. */
@@ -538,7 +537,7 @@ internal class DocumentDrafts(
         dropUndo(docId)
         notices.message(
             uiText(Res.string.detail_saved_changes, changes.title),
-            UiMessage.Action(uiText(Res.string.library_undo)) { revert(docId, changes) },
+            undoAction { revert(docId, changes) },
         )
     }
 

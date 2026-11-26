@@ -69,18 +69,10 @@ class SnackbarMessagesTest {
             val snackbar = SnackbarHostState()
             var firstUndone = 0
             var secondUndone = 0
-
-            fun undo(
-                message: String,
-                onUndo: () -> Unit,
-            ) = UiMessage(
-                UiText.Raw(message),
-                UiMessage.Action(UiText.Raw("Undo")) { onUndo() },
-            )
-            withScene(
-                flowOf(undo("Trashed 2 documents") { firstUndone++ }, undo("Trashed 5 documents") { secondUndone++ }),
-                snackbar,
-            ) { scene ->
+            val sink = MessageSink()
+            sink.message(UiText.Raw("Trashed 2 documents"), undo { firstUndone++ })
+            sink.message(UiText.Raw("Trashed 5 documents"), undo { secondUndone++ })
+            withScene(sink.messages, snackbar) { scene ->
                 snackbar.shownMessage() shouldBe "Trashed 5 documents"
 
                 snackbar.currentSnackbarData?.visuals?.actionLabel shouldBe "Undo"
@@ -98,18 +90,13 @@ class SnackbarMessagesTest {
             val snackbar = SnackbarHostState()
             var first = 0
             var second = 0
-
-            fun undo(
-                label: String,
-                action: () -> Unit,
-            ) = UiMessage(UiText.Raw(label), UiMessage.Action(UiText.Raw("Undo")) { action() })
-            val messages = Channel<UiMessage>(Channel.UNLIMITED)
-            messages.trySend(undo("first") { first++ })
-            withScene(messages.receiveAsFlow(), snackbar) { scene ->
+            val sink = MessageSink()
+            sink.message(UiText.Raw("first"), undo { first++ })
+            withScene(sink.messages, snackbar) { scene ->
                 snackbar.shownMessage() shouldBe "first"
-                messages.trySend(text("failure"))
+                sink.message(UiText.Raw("failure"))
                 scene.render()
-                messages.trySend(undo("second") { second++ })
+                sink.message(UiText.Raw("second"), undo { second++ })
                 scene.render()
                 snackbar.shownMessage() shouldBe "failure"
                 snackbar.currentSnackbarData?.dismiss()
@@ -122,7 +109,46 @@ class SnackbarMessagesTest {
             }
         }
 
+    /** Only an Undo replaces one: an import's Show waits its turn rather than wiping a pending Undo. */
+    @Test
+    fun anActionThatIsNotUndoQueuesBehindAnUndo() =
+        onUiThread {
+            val snackbar = SnackbarHostState()
+            var undone = 0
+            val sink = MessageSink()
+            sink.message(UiText.Raw("Trashed 2 documents"), undo { undone++ })
+            withScene(sink.messages, snackbar) { scene ->
+                sink.message(UiText.Raw("Imported 3 files"), UiMessage.Action(UiText.Raw("Show")) {})
+                scene.render()
+                snackbar.shownMessage() shouldBe "Trashed 2 documents"
+                snackbar.currentSnackbarData?.performAction()
+                scene.render()
+                undone shouldBe 1
+                scene.render()
+                snackbar.shownMessage() shouldBe "Imported 3 files"
+            }
+        }
+
+    /**
+     * Messages are taken one at a time, as each gets its turn: the ones still waiting when the screen
+     * goes stay with the viewmodel for the next screen to show, rather than being lost with this one.
+     */
+    @Test
+    fun messagesNotShownYetStayQueuedWhenTheScreenCloses() =
+        onUiThread {
+            val snackbar = SnackbarHostState()
+            val messages = Channel<UiMessage>(Channel.UNLIMITED)
+            listOf("first", "second", "third").forEach { messages.trySend(text(it)) }
+            withScene(messages.receiveAsFlow(), snackbar) {
+                snackbar.shownMessage() shouldBe "first"
+            }
+            generateSequence { messages.tryReceive().getOrNull()?.text }.toList() shouldBe
+                listOf(UiText.Raw("second"), UiText.Raw("third"))
+        }
+
     private fun text(value: String) = UiMessage(UiText.Raw(value))
+
+    private fun undo(onUndo: () -> Unit) = UiMessage.Action(UiText.Raw("Undo"), undo = true) { onUndo() }
 
     private fun SnackbarHostState.shownMessage(): String? = currentSnackbarData?.visuals?.message
 

@@ -4,11 +4,13 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.runtime.Composable
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
+import kotlinx.coroutines.flow.MutableStateFlow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
 import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
 import no_papers_needed.composeapp.generated.resources.common_writes_need_newer_app
 import no_papers_needed.composeapp.generated.resources.common_writes_reconcile_failed
+import no_papers_needed.composeapp.generated.resources.library_undo
 import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.ResourceEnvironment
 import org.jetbrains.compose.resources.StringResource
@@ -53,13 +55,25 @@ data class UiMessage(
      * The snackbar's action button: [label], and [onPerform] run when the user taps it. A message
      * with an action stays up [duration]; the default is Long rather than Material's indefinite,
      * since a snackbar nobody dismisses would hold up every later message.
+     *
+     * An [undo] reverses the write it reports, so only the latest one may be offered: a newer Undo
+     * sent through the same [MessageSink] marks this one [superseded], and [SnackbarMessages] takes
+     * it off screen, or skips it while it waits. Every other action waits its turn.
      */
     class Action(
         val label: UiText,
         val duration: SnackbarDuration = SnackbarDuration.Long,
+        val undo: Boolean = false,
         val onPerform: () -> Unit,
-    )
+    ) {
+        /** Set once a newer Undo was sent after this one ([undo] only). */
+        internal val superseded = MutableStateFlow(false)
+    }
 }
+
+/** The Undo of a write: it replaces an earlier Undo still offered ([UiMessage.Action.undo]). */
+fun undoAction(onPerform: () -> Unit): UiMessage.Action =
+    UiMessage.Action(uiText(Res.string.library_undo), undo = true, onPerform = onPerform)
 
 fun uiText(
     res: StringResource,

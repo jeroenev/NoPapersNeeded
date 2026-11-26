@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.PluralStringResource
@@ -30,9 +32,10 @@ class BulkFailure(
  * The one-shot user-facing messages a [MessagesViewModel] sends its screen.
  *
  * Messages go through one unbounded channel: each is delivered exactly once, in the order sent, to
- * the one collector the screen runs. A message sent while no screen collects (between lifecycles,
- * during navigation) waits for the next collector instead of being dropped, however many pile up,
- * and two sent together both show, one after the other.
+ * the one collector the screen runs, which takes the next only once the one before has shown. A
+ * message sent while no screen collects (between lifecycles, during navigation) waits for the next
+ * collector instead of being dropped, however many pile up, and two sent together both show, one
+ * after the other. An Undo sent supersedes the one before it ([UiMessage.Action.undo]).
  *
  * Its own class so that a helper a viewmodel delegates to, built before the viewmodel, reports
  * through the same messages (see the [MessagesViewModel] constructor taking one).
@@ -43,6 +46,9 @@ class MessageSink(
 ) {
     private val channel = Channel<UiMessage>(Channel.UNLIMITED)
 
+    /** The latest Undo sent, which the next one supersedes ([UiMessage.Action.undo]). */
+    private val lastUndo = MutableStateFlow<UiMessage.Action?>(null)
+
     /** The messages to show; collect it from one place only, normally [SnackbarMessages]. */
     val messages: Flow<UiMessage> = channel.receiveAsFlow()
 
@@ -51,6 +57,7 @@ class MessageSink(
         text: UiText,
         action: UiMessage.Action? = null,
     ) {
+        if (action?.undo == true) lastUndo.getAndUpdate { action }?.superseded?.value = true
         channel.trySend(UiMessage(text, action))
     }
 

@@ -3,9 +3,9 @@ package dev.npn.app.ui.ai
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.BulkFailure
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.common.undoAction
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.MetadataWriter
@@ -21,7 +21,6 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_fail
 import no_papers_needed.composeapp.generated.resources.ai_edit_undo_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_undo_failed_some
 import no_papers_needed.composeapp.generated.resources.ai_edit_undone
-import no_papers_needed.composeapp.generated.resources.library_undo
 import org.jetbrains.compose.resources.StringResource
 
 /**
@@ -174,7 +173,7 @@ abstract class ReviewViewModel(
         val count = undo.docIds.size
         message(
             uiText(Res.plurals.ai_edit_applied, count, count),
-            UiMessage.Action(uiText(Res.string.library_undo)) { undo(undo) },
+            undoAction { undo(undo) },
         )
     }
 

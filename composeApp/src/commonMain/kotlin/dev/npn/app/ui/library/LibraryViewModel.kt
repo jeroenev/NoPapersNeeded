@@ -21,6 +21,7 @@ import dev.npn.app.ui.common.saveUiState
 import dev.npn.app.ui.common.text
 import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.common.undoAction
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
@@ -83,7 +84,6 @@ import no_papers_needed.composeapp.generated.resources.library_review_failed
 import no_papers_needed.composeapp.generated.resources.library_save_view_failed
 import no_papers_needed.composeapp.generated.resources.library_show
 import no_papers_needed.composeapp.generated.resources.library_trash_failed
-import no_papers_needed.composeapp.generated.resources.library_undo
 import no_papers_needed.composeapp.generated.resources.library_view_deleted
 import org.jetbrains.compose.resources.StringResource
 import kotlin.uuid.ExperimentalUuidApi
@@ -781,7 +781,7 @@ class LibraryViewModel(
                 if (trashed.isNotEmpty()) {
                     message(
                         uiText(Res.plurals.library_moved_to_trash, trashed.size, trashed.size),
-                        UiMessage.Action(uiText(Res.string.library_undo)) { undoTrash(trashed) },
+                        undoAction { undoTrash(trashed) },
                     )
                 }
             }
@@ -885,7 +885,7 @@ class LibraryViewModel(
             savedViewRepository.delete(view.id)
             message(
                 uiText(Res.string.library_view_deleted, view.name),
-                UiMessage.Action(uiText(Res.string.library_undo)) {
+                undoAction {
                     viewModelScope.launch {
                         reporting(Res.string.library_save_view_failed) { savedViewRepository.save(view) }
                     }
