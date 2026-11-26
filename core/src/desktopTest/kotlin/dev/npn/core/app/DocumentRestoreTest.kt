@@ -92,7 +92,8 @@ class DocumentRestoreTest {
 
     /**
      * A sync tool that puts a deleted file back long after the delete: the rescan prefers the file,
-     * and records that, so an edit afterwards does not hide it again.
+     * and once it has been back for the settle window too, records that, so an edit afterwards does
+     * not hide it again.
      */
     @Test
     fun aFileBroughtBackLongAfterItsDeleteIsRestoredForGood() =
@@ -105,6 +106,8 @@ class DocumentRestoreTest {
 
             rig.clock.advance(2 * DAY)
             rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            rig.clock.advance(DAY + 1)
             rig.session.rescan()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
 
@@ -122,6 +125,8 @@ class DocumentRestoreTest {
 
             rig.clock.advance(2 * DAY)
             rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            rig.clock.advance(DAY + 1)
             rig.session.rescan()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
 

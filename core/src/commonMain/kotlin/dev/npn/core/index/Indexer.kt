@@ -42,7 +42,7 @@ import kotlinx.coroutines.sync.withLock
  *  3. reconciles hashed files against the DB projection (move / external duplicate / external edit /
  *     brand-new),
  *  4. flags disappeared files as missing and builds relink candidates,
- *  5. handles trash resurrection (reported through `onResurrected` at the end of the scan),
+ *  5. handles trash resurrection (reported through `onResurrected` at the end of every scan),
  *  6. folds the journals and applies effective views (tags, props, trash, deletes, relinks) into the
  *     DB, then updates FTS,
  *  7. moves documents to the paths their intents name, and records where each was seen,
@@ -211,8 +211,9 @@ internal class Indexer(
             removeSupersededOriginals(present, hashes, contentAt, metadataState)
 
             // Last: recording a return is a journal write, which must not cost the scan its
-            // duplicates or its sweep if it fails.
-            if (resurrected.isNotEmpty()) onResurrected(resurrected)
+            // duplicates or its sweep if it fails. Reported even when none came back, as a return
+            // the previous scan found and this one does not has left again.
+            onResurrected(resurrected)
 
             ScanReport(
                 added = plan.added,

@@ -526,9 +526,12 @@ Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `Writ
 - When the bytes of a trashed or deleted document come back, the return must be recorded in the
   journal, or the next fold hides the document again. An import records it at once (section 6.2).
   A rescan that finds the file back writes it once the event that hid the document is a day old
-  (`RESTORE_SETTLE_MS`), as the scan's last step; sooner, the file may be one a sync tool has not
-  taken away yet, and the rescan shows it for that scan only. A failed write is logged and left to
-  the next rescan.
+  (`RESTORE_SETTLE_MS`) and the session's rescans have found the file back, scan after scan, for a
+  day as well, as the scan's last step; sooner, the file may be one a sync tool has not taken away
+  yet, and the rescan shows it for that scan only. The second day counts from this device's own
+  sighting because a device that trashes and syncs a day later delivers its event and its file move
+  after the first day has passed, in either order. A new session starts that count again. A failed
+  write is logged and left to the next rescan.
 - The file wins only with the document's own bytes: the rescan must know the hash of the file at
   the document's path, or at the path it was trashed from when no other row holds that, and the
   hash must be the document's. Another file under the same name, or a file still being written,

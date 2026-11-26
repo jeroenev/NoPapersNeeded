@@ -73,6 +73,15 @@ private class SyncedSettings {
     }
 }
 
+/**
+ * A hidden document's bytes found back by a rescan ([JournalCoordinator.recordRestores]): the time of
+ * the event that hides it, and when this session's rescans first found them back since it.
+ */
+private class ReturnSeen(
+    val hiddenAtMillis: Long,
+    val sinceMillis: Long,
+)
+
 /** A document's file moving from [from] to [to], as a lifecycle change moves it. */
 internal data class FileMove(
     val from: String,
@@ -528,6 +537,12 @@ internal class JournalCoordinator(
      */
     private val returnedUnrecorded = HashSet<String>()
 
+    /**
+     * The hidden documents whose own bytes the last rescan found back, each with when this session's
+     * rescans first found them so ([recordRestores]). Read and written under [mutex].
+     */
+    private val returnsSeen = HashMap<String, ReturnSeen>()
+
     /** The live fold, for a [serialized] block, which holds the lock it is read and written under. */
     private val lockedJournal =
         object : LockedJournal {
@@ -720,11 +735,20 @@ internal class JournalCoordinator(
      * Record as a restore the rescan's preference for a file that is back in the library, so the next
      * fold that is not a rescan does not hide the document again (and every replica shows it).
      *
-     * Only for a document hidden at least [RESTORE_SETTLE_MS] ago. Sooner, a file still in place may
-     * be one a sync tool has not taken away yet: it delivers another device's trash or delete event
-     * before the file move that went with it, and writing a restore then would undo that device's
-     * decision and leave the document pointing at a file about to disappear. Such a file is shown
-     * for this scan only, as before, and restored for good by a rescan once the window has passed.
+     * Only for a document hidden at least [RESTORE_SETTLE_MS] ago, whose bytes this session's rescans
+     * have found back, scan after scan, for that long too. Sooner, a file still in place may be one a
+     * sync tool has not taken away yet: it delivers another device's trash or delete event before the
+     * file move that went with it, and writing a restore then would undo that device's decision and
+     * leave the document pointing at a file about to disappear. Such a file is shown for this scan
+     * only, as before, and restored for good by a rescan once the window has passed.
+     *
+     * The trash's own time alone is no such window: a device that trashes and syncs a day later
+     * delivers its event and its move a day after the trash, and a device that sees the event first
+     * would restore the document onto the file the move then takes away. Its bytes are then only in
+     * the trash, which a device that had not seen the restore yet purges by the retention. The window
+     * runs from when the return was first seen here as well, so it covers the move's delivery
+     * however late the trash reached this device. A session knows only what its own rescans saw, so a
+     * new one (a restart, a rebuilt index) waits the window again before it records a return.
      *
      * A failure to publish is logged, not thrown: the scan has projected what it found, and the next
      * rescan finds the same return and tries again. Thrown, it would fail the scan and block every
@@ -734,8 +758,18 @@ internal class JournalCoordinator(
         state: FoldedState,
         resurrected: List<Resurrected>,
     ) {
-        val settled = clock.nowMillis() - RESTORE_SETTLE_MS
-        val returned = resurrected.filter { it.hiddenAtMillis <= settled }
+        val now = clock.nowMillis()
+        val seen =
+            resurrected.associate { back ->
+                val earlier = returnsSeen[back.docId]?.takeIf { it.hiddenAtMillis == back.hiddenAtMillis }
+                back.docId to (earlier ?: ReturnSeen(back.hiddenAtMillis, sinceMillis = now))
+            }
+        // A document not found back by this scan starts again when it is: its file may have left since.
+        returnsSeen.clear()
+        returnsSeen.putAll(seen)
+        val settled = now - RESTORE_SETTLE_MS
+        val returned =
+            resurrected.filter { it.hiddenAtMillis <= settled && seen.getValue(it.docId).sinceMillis <= settled }
         val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
         if (ops.isEmpty()) return
         log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {
@@ -902,7 +936,10 @@ internal class JournalCoordinator(
     }
 
     companion object {
-        /** How long a document must have been hidden before a rescan records its file's return. */
+        /**
+         * How long a document must have been hidden, and its file seen back by this session's
+         * rescans, before a rescan records the file's return.
+         */
         const val RESTORE_SETTLE_MS = 24L * 60L * 60L * 1000L
     }
 }

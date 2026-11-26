@@ -233,8 +233,9 @@ would leave another device's trash unannounced, and the file still at its path w
 window as one come back), and then a virtual day (`RESTORE_SETTLE_MS`) passes, so every trash is
 older than the restore settle window by the rescans
 that follow: the app records the return of a trashed document's own bytes as a restore only once
-that window has passed (`JournalCoordinator.recordRestores`), and before it a rescan shows such a
-file for that scan only. The day runs everything time brings (the 15-minute tick, the queues'
+that window has passed (`JournalCoordinator.recordRestores`), counted both from the trash and from
+when the session's rescans first found the file back, and before it a rescan shows such a file for
+that scan only. The day runs everything time brings (the 15-minute tick, the queues'
 backoffs, and a trash purge after any rescan the watch starts). Then 20 virtual minutes pass and
 every replica rescans. Half the time, and always at the end, that comes after a full sync, round
 after round until a round leaves every folder equal; replicas that keep changing their folders
@@ -246,7 +247,7 @@ after six rounds do not converge, which fails the run. Then:
   was hashed and its row given the new stat); and every settled PDF in its folder is
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
   written, a document deleted for good). A trashed document's own bytes back at its path is no
-  exception: past the window, the rescan has recorded its restore.
+  exception: the rescan shows it, and records its restore once both windows have passed.
 - Verification does not report an already-missing row as new damage or expose its internal sentinel
   path in any problem or note, including after a synced deletion.
 - Every file in the trash holds the bytes of the document its name names (the hash prefix

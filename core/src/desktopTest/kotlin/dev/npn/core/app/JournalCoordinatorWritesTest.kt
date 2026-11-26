@@ -142,8 +142,10 @@ class JournalCoordinatorWritesTest {
             rig.writePdf("b.pdf", "bravo")
             coordinator.rescan()
             val doc = rig.fs.sha256("a.pdf")
-            // Trashed on another device long ago; a sync tool has since put the file back.
+            // Trashed on another device long ago; a sync tool has since put the file back, and this
+            // device's rescans have seen it back for the whole window.
             coordinator.commitAndApply(listOf(PendingOp.docTrash(doc, "a.pdf")))
+            coordinator.rescan()
             rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + 1)
             rig.copyFile("b.pdf", "b-copy.pdf")
 
@@ -236,9 +238,10 @@ class JournalCoordinatorWritesTest {
         }
 
     /**
-     * A rescan records a file's return once its document has been hidden for
-     * [JournalCoordinator.RESTORE_SETTLE_MS], to the millisecond. One millisecond sooner the file
-     * may be one a sync tool has not taken away yet, and the rescan only shows it for that scan.
+     * A rescan records a file's return once its document has been hidden, and its file seen back by
+     * this session's rescans, for [JournalCoordinator.RESTORE_SETTLE_MS], to the millisecond. One
+     * millisecond sooner the file may be one a sync tool has not taken away yet, and the rescan only
+     * shows it for that scan.
      */
     @Test
     fun aReturnIsRecordedExactlyWhenTheSettleWindowHasPassed() =
@@ -255,9 +258,53 @@ class JournalCoordinatorWritesTest {
                     .hiddenBy(doc)
                     .shouldNotBeNull()
                     .physicalMillis
+            rig.clock.now = hiddenAt
+            coordinator.rescan()
             val objects = rig.fs.journalObjects().size
 
             rig.clock.now = hiddenAt + JournalCoordinator.RESTORE_SETTLE_MS - 1
+            coordinator.rescan()
+            rig.fs.journalObjects() shouldHaveSize objects
+            rig.accumulator
+                .loadState()
+                .isTrashed(doc)
+                .shouldBeTrue()
+
+            rig.clock.advance()
+            coordinator.rescan()
+            rig.fs.journalObjects() shouldHaveSize objects + 1
+            rig.accumulator
+                .loadState()
+                .isTrashed(doc)
+                .shouldBeFalse()
+        }
+
+    /**
+     * A trash that reaches this device after the window, as one from a device that trashed and
+     * synced a day later does, starts the window again: its event can land before the move that went
+     * with it, and the file still at the path is the one the move takes away. Restored onto it, the
+     * document would keep its bytes only in the trash, for another device's purge to take. A rescan
+     * that no longer finds the file back forgets it, so a return seen again waits the whole window.
+     */
+    @Test
+    fun aTrashThatArrivesAfterTheWindowWaitsTheWindowFromWhenTheFileWasSeenBack() =
+        runTest {
+            val coordinator = JournalCoordinator(rig.writer(), rig.indexer, rig.accumulator, clock = rig.clock)
+            rig.writePdf("a.pdf", "alpha")
+            coordinator.rescan()
+            val doc = rig.fs.sha256("a.pdf")
+            // Trashed on another device a day and more ago, its event only now delivered here.
+            coordinator.commitAndApply(listOf(PendingOp.docTrash(doc, "a.pdf")))
+            rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + 1)
+            val objects = rig.fs.journalObjects().size
+
+            coordinator.rescan()
+            rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS - 1)
+            rig.moveFile("a.pdf", "elsewhere/a.bin")
+            coordinator.rescan()
+            rig.moveFile("elsewhere/a.bin", "a.pdf")
+            coordinator.rescan()
+            rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS - 1)
             coordinator.rescan()
             rig.fs.journalObjects() shouldHaveSize objects
             rig.accumulator
