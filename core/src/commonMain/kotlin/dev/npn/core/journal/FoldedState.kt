@@ -465,12 +465,37 @@ internal class FoldedState {
     /** Effective style for a tag, or null if none set. */
     internal fun tagStyle(tag: String): StyleVal? = tagStyles[tag]
 
-    /** Explicitly created tags remain visible even when no document carries them. */
-    internal fun retainedTags(): Set<String> =
-        settings
-            .mapNotNull { (key, value) ->
-                TagRetention.tag(key)?.takeIf { value.value == "1" }
-            }.toSet()
+    /**
+     * Explicitly created tags, which remain visible even when no document carries them: the name
+     * of every set marker ([TagRetention]), carried along by the renames at or after it as a tag
+     * add is ([applyRenames]), and dropped by a merge. A build since 0.1.0 moves the marker in the
+     * rename's own write, so this changes nothing for its renames; 0.1.0's left the marker under
+     * the old name, which would otherwise come back as an empty tag.
+     */
+    internal fun retainedTags(): Set<String> {
+        val sortedRenames = sortedRenames
+        return settings.mapNotNullTo(HashSet()) { (key, value) ->
+            TagRetention.tag(key)?.takeIf { value.value == "1" }?.let { retainedName(it, value.hlc, sortedRenames) }
+        }
+    }
+
+    private fun retainedName(
+        marked: String,
+        markerHlc: Hlc,
+        sortedRenames: List<RenameOp>,
+    ): String? {
+        var name = marked
+        for (r in sortedRenames) {
+            if (r.hlc < markerHlc || r.from != name) continue
+            if (r.isMerge) return null
+            name = r.to
+        }
+        return name
+    }
+
+    /** Whether a document that is not deleted carries [tag] (after renames). */
+    internal fun isCarried(tag: String): Boolean =
+        tagAdds.keys.any { doc -> !isDeleted(resolveDocId(doc)) && tag in effectiveTags(doc) }
 
     /** Effective value of a library-wide synced setting, or null if never set/cleared. */
     fun effectiveSetting(key: String): String? = settings[key]?.value

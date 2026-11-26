@@ -73,7 +73,7 @@ internal fun tagRows(tags: List<TagInfo>): List<TagRow> {
  * passes one, the selection passes all of it, and both go through the same write.
  */
 interface TagWrites {
-    /** Create a tag no document carries yet; [color] is what keeps it in the list. */
+    /** Create a tag no document carries yet, kept in the list until deleted; [color] is optional. */
     fun create(
         name: String,
         color: String?,

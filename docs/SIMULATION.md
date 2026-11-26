@@ -261,7 +261,8 @@ after six rounds do not converge, which fails the run. Then:
   databases, rescans to rest, and must show the same library (`LibraryView`, `diff`). That covers
   live documents with their path, tags, field values and reviewed flag, the documents in the trash
   with the path each was trashed from and the same metadata, the deleted state of documents both
-  indexes have, field definitions, the styles of the tags in use, review mode, storage path rule,
+  indexes have, field definitions, the styles of the tags in use and every tag no document carries
+  (a created tag, styled or not), review mode, storage path rule,
   trash retention, saved views and auto-match rules. Device-local data is left out on purpose:
   device id, queues, enrichment marks, thumbnails, OCR state and page counts, the creation date
   each document's PDF gives (`createdAt`, read from the file again), a row's stat, rows hidden as
@@ -381,7 +382,10 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   exercise folding a snapshot beside the objects it replaced; `CompactionReconcileTest`,
   `OlderBuildSnapshotTest` and `UndoneCompactionTest` do.
 - **Mixed-build libraries**: another build's writes and fold, and a build newer than this one (an
-  op or a field type this build refuses), are not modelled: every replica runs this build.
+  op or a field type this build refuses), are not modelled: every replica runs this build. Two of
+  0.1.0's tag writes are, as operations of their own: a style left on a name nothing carries
+  (`LEGACY_UNUSED_STYLE`) and a rename of a created tag that leaves its marker behind
+  (`LEGACY_RENAME_TAG`).
 - **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
   its own, and an overwrite in place gives the file a new mtime. Where storage reports no mtimes,
   same-size replacements are modelled: every generated PDF has one of a few sizes, so only a hash

@@ -35,8 +35,14 @@ internal data class LibraryView(
     val trashed: Map<String, DocView>,
     /** Field definitions by key, as `label|type|showByDefault|aiEnabled|position|hint|perDocument`. */
     val fieldDefs: Map<String, String>,
-    /** Tag styles: a tag's color and icon, for tags that have one. */
-    val tagStyles: Map<String, String>,
+    /**
+     * Tags as `color|icon`: every styled tag, and every tag no document_tags row names, styled or
+     * not (a created tag its marker alone keeps). An unstyled tag documents carry shows in their
+     * [DocView]s instead.
+     */
+    val tags: Map<String, String>,
+    /** Every tag some document_tags row names, hidden documents' included. */
+    val carriedTags: Set<String>,
     val reviewMode: ReviewMode,
     val storagePath: String,
     val trashRetentionDays: Int,
@@ -95,10 +101,12 @@ internal data class LibraryView(
                             "FROM field_defs",
                     ).associate { it[0]!! to it.drop(1).joinToString("|") }
                     .toSortedMap()
-            val styles =
+            val tagRows =
                 db
-                    .rows("SELECT name, color, icon FROM tags WHERE color IS NOT NULL OR icon IS NOT NULL")
-                    .associate { it[0]!! to "${it[1]}|${it[2]}" }
+                    .rows(
+                        "SELECT name, color, icon FROM tags WHERE color IS NOT NULL OR icon IS NOT NULL " +
+                            "OR name NOT IN (SELECT tag FROM document_tags)",
+                    ).associate { it[0]!! to "${it[1]}|${it[2]}" }
                     .toSortedMap()
             val storage = session.storagePath.storagePath.first()
             return LibraryView(
@@ -106,7 +114,8 @@ internal data class LibraryView(
                 hidden = hidden.toSortedMap(),
                 trashed = trashed.toSortedMap(),
                 fieldDefs = defs,
-                tagStyles = styles,
+                tags = tagRows,
+                carriedTags = tags.values.flatten().toSortedSet(),
                 reviewMode = session.reviewConfig.reviewMode.first(),
                 storagePath = "${storage.template}|${storage.enabled}",
                 trashRetentionDays = session.trashRetention.trashRetentionDays.first(),
@@ -188,7 +197,15 @@ internal fun diff(
         if (a != b) out += "$what differs:\n    live:    $a\n    rebuilt: $b"
     }
     same("field definitions", live.fieldDefs, rebuilt.fieldDefs)
-    same("tag styles", live.tagStyles, rebuilt.tagStyles)
+    // A tag a document_tags row names has a row as long as that document does, and a rebuild may
+    // have no row for a missing or deleted document: such a tag compares only where both list it.
+    val carried = live.carriedTags + rebuilt.carriedTags
+
+    fun comparable(
+        tags: Map<String, String>,
+        other: Map<String, String>,
+    ) = tags.filter { (name, _) -> name !in carried || name in other }
+    same("tags", comparable(live.tags, rebuilt.tags), comparable(rebuilt.tags, live.tags))
     same("review mode", live.reviewMode, rebuilt.reviewMode)
     same("storage path", live.storagePath, rebuilt.storagePath)
     same("trash retention", live.trashRetentionDays, rebuilt.trashRetentionDays)

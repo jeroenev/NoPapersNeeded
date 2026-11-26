@@ -137,14 +137,15 @@ class MetadataWriterTest {
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.session.rescan()
 
-            rig.session.tagAdmin.createTag("unused", "#ff0000")
+            // No color needed: the marker keeps it, not a style.
+            rig.session.tagAdmin.createTag("unused", color = null)
             val created =
                 rig.session.tags
                     .observeTags()
                     .first()
                     .first { it.name == "unused" }
             created.count shouldBe 0
-            created.color shouldBe "#ff0000"
+            created.color shouldBe null
 
             rig.session.tagAdmin.deleteTag("unused")
             rig.session.tags

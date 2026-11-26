@@ -58,7 +58,9 @@ internal class LibrarySessionImpl(
     /** This installation's device id in the library's journal ([DeviceIdentity]). */
     internal val deviceId: String = graph.deviceId
     private val lifetime = graph.lifetime
-    private val coordinator = graph.coordinator
+
+    /** Internal, not private, for the library simulation, which writes as a released build would. */
+    internal val coordinator = graph.coordinator
     private val ocrFacade = graph.ocr
     private val ocrPipeline = graph.ocrPipeline
     private val staleFiles = graph.staleFiles

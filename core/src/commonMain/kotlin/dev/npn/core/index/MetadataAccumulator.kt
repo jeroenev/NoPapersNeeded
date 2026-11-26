@@ -528,7 +528,7 @@ internal class MetadataAccumulator(
          * that already drop the affected tables. Bump it too when a [SourceKind]
          * goes, so the source rows of that kind are cleared before any is read.
          */
-        const val PROJECTION_VERSION = 14
+        const val PROJECTION_VERSION = 15
     }
 }
 

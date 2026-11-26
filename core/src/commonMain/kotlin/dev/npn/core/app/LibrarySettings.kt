@@ -60,6 +60,12 @@ internal object LibrarySettingKeys {
     /** Each saved view is the setting of this prefix and its id, its JSON the value. */
     const val SAVED_VIEW_PREFIX = "savedView:"
 
+    /**
+     * Each tag the user created is kept listed, documents carry it or not, by the setting of this
+     * prefix and its name, `1` for kept ([dev.npn.core.journal.TagRetention]).
+     */
+    const val KEPT_TAG_PREFIX = "npn.kept-tag/"
+
     const val STORAGE_PATH_TEMPLATE = "storagePathTemplate"
     const val STORAGE_PATH_ENABLED = "storagePathEnabled"
 

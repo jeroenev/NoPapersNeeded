@@ -78,8 +78,6 @@ fun TagFormDialog(
     nameEditable: Boolean = true,
     /** Hidden for bulk styling, where a single dialog applies one color to many tags. */
     showNameField: Boolean = true,
-    /** Require a color: a tag this dialog creates is kept by its style, so it needs one. */
-    requireColor: Boolean = false,
 ) {
     var name by rememberSaveable { mutableStateOf(initialName) }
     var color by rememberSaveable { mutableStateOf(initialColor) }
@@ -108,14 +106,12 @@ fun TagFormDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.selectableGroup(),
                 ) {
-                    // "None" swatch, unless a color is required to keep what this dialog creates.
-                    if (!requireColor) {
-                        ColorSwatch(
-                            color = null,
-                            selected = color == null,
-                            onClick = { color = null },
-                        )
-                    }
+                    // "None" swatch: a color is optional, a created tag being kept by its marker.
+                    ColorSwatch(
+                        color = null,
+                        selected = color == null,
+                        onClick = { color = null },
+                    )
                     Palette.forEach { hex ->
                         ColorSwatch(
                             color = hex,
@@ -128,7 +124,7 @@ fun TagFormDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = (!showNameField || name.isNotBlank()) && (!requireColor || color != null),
+                enabled = !showNameField || name.isNotBlank(),
                 onClick = { onConfirm(name.trim(), color) },
             ) { Text(confirmLabel) }
         },

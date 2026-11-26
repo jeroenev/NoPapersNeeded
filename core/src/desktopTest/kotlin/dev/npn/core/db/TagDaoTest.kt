@@ -67,7 +67,7 @@ class TagDaoTest {
 
     /** Only an explicitly retained tag survives without a document, even if another tag is styled. */
     @Test
-    fun pruneKeepsStyledTagsAndDropsUnreferencedUnstyledOnes() =
+    fun pruneKeepsRetainedTagsAndDropsOtherUnreferencedOnes() =
         runTest {
             val docDao = db.documentDao()
             val tagDao = db.tagDao()
@@ -84,7 +84,7 @@ class TagDaoTest {
 
             tagDao.pruneUnreferenced(setOf("created"))
 
-            // The empty styled tag survives; the unreferenced unstyled one goes; the carried one stays.
+            // The retained (created) tag survives; the unreferenced one goes, styled or not; the carried one stays.
             tagDao.names() shouldContainExactly listOf("carried", "created")
         }
 

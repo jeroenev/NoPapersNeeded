@@ -9,6 +9,8 @@ import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.TagRetention
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -45,7 +47,10 @@ enum class OpKind(
     REMOVE_TAG(3),
     CREATE_EMPTY_TAG(2),
     DELETE_EMPTY_TAG(2),
+    RENAME_TAG(2),
+    MERGE_TAG(2),
     LEGACY_UNUSED_STYLE(3),
+    LEGACY_RENAME_TAG(1),
     DEFINE_FIELD(1),
     CUSTOMIZE_SEEDED_FIELD(1),
     LIBRARY_SETTING(2),
@@ -224,7 +229,10 @@ internal class SimGenerator(
             OpKind.REMOVE_TAG -> s.live.pickOrNull()?.let { removeTag(it, s.tags) }
             OpKind.CREATE_EMPTY_TAG -> emptyTag(random, create = true)
             OpKind.DELETE_EMPTY_TAG -> emptyTag(random, create = false)
+            OpKind.RENAME_TAG -> retag(random, sim, s, merge = false)
+            OpKind.MERGE_TAG -> retag(random, sim, s, merge = true)
             OpKind.LEGACY_UNUSED_STYLE -> legacyUnusedStyle(random)
+            OpKind.LEGACY_RENAME_TAG -> legacyRenameTag(random)
             OpKind.DEFINE_FIELD -> defineField()
             OpKind.CUSTOMIZE_SEEDED_FIELD -> customizeSeededField(s)
             OpKind.LIBRARY_SETTING -> librarySetting()
@@ -955,16 +963,82 @@ private val WATCHED_KINDS =
         OpKind.WATCHED_SWEEP,
     )
 
+private val EMPTY_TAGS = List(3) { "empty-$it" }
+
 private fun emptyTag(
     random: Random,
     create: Boolean,
 ): Planned.Act {
-    val tag = "empty-${random.nextInt(3)}"
-    return Planned.Act("${if (create) "create" else "delete"} empty tag $tag") { session ->
-        if (create) session.tagAdmin.createTag(tag, color = "#123456") else session.tagAdmin.deleteTag(tag)
+    val tag = random.pick(EMPTY_TAGS)
+    // A created tag needs no style: its marker keeps it.
+    val color = "#123456".takeIf { random.nextBoolean() }
+    return Planned.Act(
+        "${if (create) "create" else "delete"} empty tag $tag${color?.let { " ($it)" }.orEmpty()}",
+    ) { session ->
+        if (create) session.tagAdmin.createTag(tag, color = color) else session.tagAdmin.deleteTag(tag)
         "updated $tag"
     }
 }
+
+/**
+ * A released build (0.1.0) renaming a created tag: it writes the rename alone, leaving the marker
+ * and the style under the old name. The old name must not come back as an empty tag.
+ */
+private fun legacyRenameTag(random: Random): Planned.Act {
+    val n = random.nextInt(3)
+    val from = "legacy-created-$n"
+    val to = "legacy-renamed-$n"
+    return Planned.Act("legacy rename of created tag $from -> $to") { session ->
+        session.tagAdmin.createTag(from, color = "#654321")
+        session.coordinator.commitAndApply(listOf(PendingOp.tagRename(from, to)))
+        val tags = session.tags.observeTags().first()
+        check(tags.none { it.name == from && it.count == 0 }) { "legacy rename left $from behind as an empty tag" }
+        check(tags.any { it.name == to }) { "legacy rename lost the created tag $to" }
+        "renamed $from"
+    }
+}
+
+/**
+ * Rename or merge a tag, documents carry it or not, onto a name documents may already carry.
+ * A created tag merged into one documents carry stays a tag only while they do: the target is
+ * not kept by the source's marker. That is checked when a live document carried the target and
+ * still does after the write, and the target had no marker of its own.
+ */
+private fun retag(
+    random: Random,
+    sim: Simulation,
+    s: Snapshot,
+    merge: Boolean,
+): Planned.Act? {
+    fun List<String>.pickOrNull(): String? = if (isEmpty()) null else this[random.nextInt(size)]
+    val from = (s.tags + EMPTY_TAGS).distinct().pickOrNull() ?: return null
+    val to = (if (merge) s.tags + EMPTY_TAGS else TAGS + EMPTY_TAGS).filter { it != from }.pickOrNull() ?: return null
+    val verb = if (merge) "merge" else "rename"
+    return Planned.Act("$verb tag $from -> $to") { session ->
+        val keptBefore = session.keptTag(to)
+        val carriersBefore = liveCarriers(sim, to)
+        if (merge) session.tagAdmin.mergeTag(from, to) else session.tagAdmin.renameTag(from, to)
+        val stillCarried = carriersBefore.intersect(liveCarriers(sim, to)).isNotEmpty()
+        check(keptBefore || !stillCarried || !session.keptTag(to)) {
+            "$verb of $from made $to, which documents carry, a kept tag"
+        }
+        "done"
+    }
+}
+
+/** The live documents [sim]'s index shows carrying [tag] (a name of [TAGS] or [EMPTY_TAGS]). */
+private suspend fun liveCarriers(
+    sim: Simulation,
+    tag: String,
+): Set<String> =
+    sim.replica.indexDb
+        .rows(
+            "SELECT dt.docId FROM document_tags dt JOIN documents d ON d.docId = dt.docId " +
+                "WHERE dt.tag = '$tag' AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0",
+        ).mapTo(HashSet()) { it[0]!! }
+
+/** Whether [tag] carries the explicitly-created marker in [this] session's fold. */
+private fun LibrarySessionImpl.keptTag(tag: String): Boolean = coordinator.setting(TagRetention.key(tag)) == "1"
 
 // A released build can leave this style after deleting or renaming its last document's tag.
 private fun legacyUnusedStyle(random: Random): Planned.Act {

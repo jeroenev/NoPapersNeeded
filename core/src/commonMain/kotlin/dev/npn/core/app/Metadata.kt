@@ -79,8 +79,8 @@ interface MetadataWriter {
 interface TagAdmin {
     /**
      * Bring [name] into the vocabulary with no document carrying it: the Tags screen's "new tag".
-     * It shows in the tag list at zero documents until deleted or renamed, using a per-tag marker.
-     * A call with neither [color] nor [icon] writes nothing.
+     * A per-tag marker keeps it in the tag list at zero documents until deleted; a rename carries
+     * the marker along. [color] and [icon] are optional: the marker keeps the tag, not a style.
      */
     suspend fun createTag(
         name: String,

@@ -298,8 +298,6 @@ private fun TagDialogHost(
                     onDone()
                 },
                 onDismiss = onClose,
-                // The style is what keeps a tag no document carries yet, so a new tag needs one.
-                requireColor = true,
             )
         }
 

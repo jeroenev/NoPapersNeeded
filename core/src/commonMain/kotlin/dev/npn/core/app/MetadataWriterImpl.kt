@@ -259,10 +259,10 @@ internal class MetadataWriterImpl(
         icon: String?,
     ) = owned {
         val t = name.trim()
-        if (t.isEmpty() || (color == null && icon == null)) return@owned
-        coordinator.commitAndApply(
-            listOf(PendingOp.tagStyle(t, color, icon), PendingOp.settingSet(TagRetention.key(t), "1")),
-        )
+        if (t.isEmpty()) return@owned
+        // The marker keeps the tag; a style is optional.
+        val style = if (color != null || icon != null) listOf(PendingOp.tagStyle(t, color, icon)) else emptyList()
+        coordinator.commitAndApply(style + PendingOp.settingSet(TagRetention.key(t), "1"))
     }
 
     override suspend fun renameTag(
@@ -281,6 +281,10 @@ internal class MetadataWriterImpl(
      * A style is vocabulary, so it follows the name: the target keeps its own style, or takes the
      * source's when it has none, and the source's is cleared in the same write. Without that, a
      * style would stay behind under the old name and the name it moved to would lose its color.
+     *
+     * A created tag's marker ([TagRetention]) goes with it only onto a name no document carries:
+     * a tag documents already carry stays one only while they do, so merging an empty created tag
+     * into it does not make it permanent.
      */
     private suspend fun retag(
         from: String,
@@ -297,7 +301,7 @@ internal class MetadataWriterImpl(
                 add(op(f, t))
                 if (state.effectiveSetting(TagRetention.key(f)) == "1") {
                     add(PendingOp.settingSet(TagRetention.key(f), null))
-                    add(PendingOp.settingSet(TagRetention.key(t), "1"))
+                    if (!state.isCarried(t)) add(PendingOp.settingSet(TagRetention.key(t), "1"))
                 }
                 if (source != null && (source.color != null || source.icon != null)) {
                     add(PendingOp.tagStyle(f, null, null))
