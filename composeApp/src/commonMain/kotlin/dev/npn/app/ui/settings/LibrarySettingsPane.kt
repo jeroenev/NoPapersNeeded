@@ -37,6 +37,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
+import no_papers_needed.composeapp.generated.resources.common_settings_devices
+import no_papers_needed.composeapp.generated.resources.common_settings_devices_help
 import no_papers_needed.composeapp.generated.resources.common_settings_no_library
 import no_papers_needed.composeapp.generated.resources.common_settings_storage
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_access_missing
@@ -123,6 +125,11 @@ internal fun LibrarySettingsPane(
         )
         AddDeviceAction(state)
         VerifyLibraryAction(state.verification, actions)
+        SettingsActionRow(
+            label = stringResource(Res.string.common_settings_devices),
+            onClick = actions::openDevices,
+            help = stringResource(Res.string.common_settings_devices_help),
+        )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_storage)) {

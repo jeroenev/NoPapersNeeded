@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_devices">Apparaten</string>
+    <string name="common_settings_devices_help">De apparaten die deze bibliotheek delen. Een document blijft na de bewaartermijn in de prullenbak tot elk actief apparaat bij is, zodat geen apparaat het nog kan terugzetten. Zet een apparaat dat je niet meer gebruikt buiten gebruik, zodat het niets tegenhoudt; een apparaat dat 90 dagen stil blijft, telt vanzelf niet meer mee.</string>
+    <string name="common_devices_this_device">Dit apparaat</string>
+    <string name="common_devices_device">Apparaat %1$s</string>
+    <string name="common_devices_last_heard">Laatst bij: %1$s</string>
+    <string name="common_devices_not_yet_heard">Nog niet bij</string>
+    <string name="common_devices_retired">Buiten gebruik: de prullenbak wacht niet op dit apparaat.</string>
+    <string name="common_devices_silent">Meer dan 90 dagen stil: de prullenbak wacht niet op dit apparaat.</string>
+    <string name="common_devices_retire">Buiten gebruik zetten</string>
+    <string name="common_devices_unretire">Weer in gebruik nemen</string>
+    <string name="common_devices_empty">Nog geen ander apparaat is bij met deze bibliotheek. Apparaten met een oudere versie van de app staan hier niet, en de prullenbak wacht niet op hen.</string>
+    <string name="common_devices_retire_failed">Kan het apparaat niet buiten gebruik zetten: %1$s</string>
+    <string name="common_devices_unretire_failed">Kan het apparaat niet weer in gebruik nemen: %1$s</string>
+</resources>

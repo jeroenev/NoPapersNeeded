@@ -29,6 +29,7 @@ interface LibrarySession {
     val reviewConfig: ReviewConfigFacade
     val storagePath: StoragePathFacade
     val trashRetention: TrashRetentionFacade
+    val devices: DevicesFacade
     val reminders: RemindersFacade
     val maintenance: MaintenanceFacade
     val work: WorkFacade

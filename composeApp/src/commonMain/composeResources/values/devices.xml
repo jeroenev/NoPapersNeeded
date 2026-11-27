@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_devices">Devices</string>
+    <string name="common_settings_devices_help">The devices that share this library. A document stays in the trash past its retention until every active device has caught up, so no device can still be restoring it. Retire a device you no longer use, so it holds nothing back; one that stays silent for 90 days is left out by itself.</string>
+    <string name="common_devices_this_device">This device</string>
+    <string name="common_devices_device">Device %1$s</string>
+    <string name="common_devices_last_heard">Last caught up: %1$s</string>
+    <string name="common_devices_not_yet_heard">Has not caught up yet</string>
+    <string name="common_devices_retired">Retired: the trash does not wait for this device.</string>
+    <string name="common_devices_silent">Silent for more than 90 days: the trash does not wait for this device.</string>
+    <string name="common_devices_retire">Retire</string>
+    <string name="common_devices_unretire">Bring back</string>
+    <string name="common_devices_empty">No other device has caught up with this library yet. Devices on an older version of the app are not listed, and the trash does not wait for them.</string>
+    <string name="common_devices_retire_failed">Could not retire the device: %1$s</string>
+    <string name="common_devices_unretire_failed">Could not bring the device back: %1$s</string>
+</resources>

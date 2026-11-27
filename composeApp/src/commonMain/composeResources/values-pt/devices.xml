@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_devices">Dispositivos</string>
+    <string name="common_settings_devices_help">Os dispositivos que partilham esta biblioteca. Um documento fica no lixo além do seu período de retenção até que cada dispositivo ativo esteja atualizado, para que nenhum dispositivo o possa ainda restaurar. Retire um dispositivo que já não usa para que não retenha nada; um que fique em silêncio durante 90 dias deixa de contar por si.</string>
+    <string name="common_devices_this_device">Este dispositivo</string>
+    <string name="common_devices_device">Dispositivo %1$s</string>
+    <string name="common_devices_last_heard">Atualizado pela última vez: %1$s</string>
+    <string name="common_devices_not_yet_heard">Ainda não atualizado</string>
+    <string name="common_devices_retired">Retirado: o lixo não espera por este dispositivo.</string>
+    <string name="common_devices_silent">Em silêncio há mais de 90 dias: o lixo não espera por este dispositivo.</string>
+    <string name="common_devices_retire">Retirar</string>
+    <string name="common_devices_unretire">Voltar a usar</string>
+    <string name="common_devices_empty">Nenhum outro dispositivo está ainda atualizado com esta biblioteca. Os dispositivos com uma versão anterior da app não aparecem, e o lixo não espera por eles.</string>
+    <string name="common_devices_retire_failed">Não foi possível retirar o dispositivo: %1$s</string>
+    <string name="common_devices_unretire_failed">Não foi possível voltar a usar o dispositivo: %1$s</string>
+</resources>

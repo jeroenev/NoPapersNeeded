@@ -571,7 +571,7 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   setting `device.retired.<deviceId>`), and wrote one within 90 days. A build that writes none is
   unknown, and goes by the retention alone. A device writes its first record at once, then at most
   daily when something changed and at least weekly. Cloud sync's remote trash still goes by the
-  retention alone.
+  retention alone. Settings > Library > Devices (`DevicesFacade`) lists them, with Retire.
 
 ### 6.4 Rescan, settling and resurrection
 

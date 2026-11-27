@@ -113,6 +113,7 @@ fun SettingsScreen(
     onAutoMatchRules: () -> Unit,
     onAiSpendKind: (kind: String) -> Unit,
     revealAdvanced: Boolean = false,
+    onDevices: () -> Unit = {},
     vm: SettingsViewModel =
         viewModel {
             SettingsViewModel(
@@ -168,6 +169,7 @@ fun SettingsScreen(
     val currentChangeLibrary by rememberUpdatedState(onChangeLibrary)
     val currentAutoMatchRules by rememberUpdatedState(onAutoMatchRules)
     val currentAiSpendKind by rememberUpdatedState(onAiSpendKind)
+    val currentDevices by rememberUpdatedState(onDevices)
     val currentSelect by rememberUpdatedState(select)
     val currentOpenDocument by rememberUpdatedState(onOpenDocument)
     val paneActions =
@@ -178,6 +180,8 @@ fun SettingsScreen(
                 override fun openAutoMatchRules() = currentAutoMatchRules()
 
                 override fun openAiSpendKind(kind: String) = currentAiSpendKind(kind)
+
+                override fun openDevices() = currentDevices()
 
                 override fun openCategory(id: SettingsCategoryId) = currentSelect(id, false)
 

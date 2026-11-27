@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_devices">Appareils</string>
+    <string name="common_settings_devices_help">Les appareils qui partagent cette bibliothèque. Un document reste dans la corbeille au-delà de sa durée de conservation jusqu’à ce que chaque appareil actif soit à jour, pour qu’aucun appareil ne puisse encore le restaurer. Retirez un appareil que vous n’utilisez plus pour qu’il ne retienne rien ; un appareil silencieux pendant 90 jours n’est plus pris en compte de lui-même.</string>
+    <string name="common_devices_this_device">Cet appareil</string>
+    <string name="common_devices_device">Appareil %1$s</string>
+    <string name="common_devices_last_heard">Dernière mise à jour : %1$s</string>
+    <string name="common_devices_not_yet_heard">Pas encore à jour</string>
+    <string name="common_devices_retired">Retiré : la corbeille n’attend pas cet appareil.</string>
+    <string name="common_devices_silent">Silencieux depuis plus de 90 jours : la corbeille n’attend pas cet appareil.</string>
+    <string name="common_devices_retire">Retirer</string>
+    <string name="common_devices_unretire">Remettre en service</string>
+    <string name="common_devices_empty">Aucun autre appareil n’est encore à jour avec cette bibliothèque. Les appareils sur une version plus ancienne de l’app ne sont pas listés, et la corbeille ne les attend pas.</string>
+    <string name="common_devices_retire_failed">Impossible de retirer l’appareil : %1$s</string>
+    <string name="common_devices_unretire_failed">Impossible de remettre l’appareil en service : %1$s</string>
+</resources>

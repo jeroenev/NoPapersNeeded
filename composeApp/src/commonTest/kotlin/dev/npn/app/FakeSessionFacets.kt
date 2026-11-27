@@ -6,8 +6,10 @@ import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.AiSpendFacade
+import dev.npn.core.app.DevicesFacade
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
+import dev.npn.core.app.LibraryDevice
 import dev.npn.core.app.LibraryDiagnostics
 import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
@@ -261,6 +263,28 @@ class FakeStoragePathFacade : StoragePathFacade {
 
     override suspend fun setStoragePathEnabled(enabled: Boolean) {
         storagePathFlow.update { it.copy(enabled = enabled) }
+    }
+}
+
+/** The devices sharing the library: [list] as given, with each retirement applied to it. */
+class FakeDevices : DevicesFacade {
+    val list = MutableStateFlow(listOf(LibraryDevice("this-device", true, null, retired = false, silent = false)))
+
+    /** If set, [retire] and [unretire] throw this. */
+    var fail: (() -> Nothing)? = null
+
+    override suspend fun devices(): List<LibraryDevice> = list.value
+
+    override suspend fun retire(deviceId: String) = setRetired(deviceId, true)
+
+    override suspend fun unretire(deviceId: String) = setRetired(deviceId, false)
+
+    private fun setRetired(
+        deviceId: String,
+        retired: Boolean,
+    ) {
+        fail?.invoke()
+        list.update { devices -> devices.map { if (it.deviceId == deviceId) it.copy(retired = retired) else it } }
     }
 }
 

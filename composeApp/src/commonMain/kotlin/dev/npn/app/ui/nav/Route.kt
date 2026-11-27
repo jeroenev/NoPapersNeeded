@@ -44,6 +44,10 @@ sealed interface Route {
         val kind: String,
     ) : Route
 
+    /** The devices that share the library, and their retirement, opened from the Library settings pane. */
+    @Serializable
+    data object Devices : Route
+
     /** The reminder window over the library's watched dates, opened from the Inbox area. */
     @Serializable
     data object Upcoming : Route

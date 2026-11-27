@@ -196,6 +196,9 @@ internal class SessionGraph(
             ids = deps.ids,
         )
 
+    /** The devices that share the library, and their retirement. */
+    val devices = JournalDevices(coordinator, ackRecords, lifetime, deps.clock, deviceId)
+
     /** The trash auto-purge by [trashRetention], run after each watch-triggered rescan. */
     val trashPurge =
         TrashPurge(

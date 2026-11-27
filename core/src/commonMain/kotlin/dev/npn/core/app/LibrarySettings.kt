@@ -76,6 +76,12 @@ internal object LibrarySettingKeys {
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
 
     /**
+     * A device retired from the library is the setting of this prefix and its device id, set to when
+     * (epoch millis): the trash purge no longer waits for its acknowledgment ([CausalPurge]).
+     */
+    const val DEVICE_RETIRED_PREFIX = "device.retired."
+
+    /**
      * The one IMAP account email import reads, as earlier builds stored it: one
      * [dev.npn.core.mail.MailAccountJson] value. Read only for a field that has no setting of its
      * own below; never written again.

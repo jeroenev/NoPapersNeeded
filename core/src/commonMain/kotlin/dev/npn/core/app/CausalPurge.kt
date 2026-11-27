@@ -71,6 +71,6 @@ internal class CausalPurge(
         const val SILENT_AFTER_MILLIS = 90L * 24 * 60 * 60 * 1000
 
         /** The synced setting that retires [deviceId]: set, by any device, it holds nothing back. */
-        fun retiredKey(deviceId: String): String = "device.retired.$deviceId"
+        fun retiredKey(deviceId: String): String = "${LibrarySettingKeys.DEVICE_RETIRED_PREFIX}$deviceId"
     }
 }

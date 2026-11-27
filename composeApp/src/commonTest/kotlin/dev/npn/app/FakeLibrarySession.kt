@@ -35,6 +35,7 @@ class FakeLibrarySession : LibrarySession {
     override val reviewConfig = FakeReviewConfigFacade()
     override val storagePath = FakeStoragePathFacade()
     override val trashRetention = FakeTrashRetention()
+    override val devices = FakeDevices()
     override val reminders = FakeRemindersFacade()
     override val maintenance = FakeMaintenanceFacade()
     override val work = FakeWorkFacade()

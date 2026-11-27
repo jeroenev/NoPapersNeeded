@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_devices">Dispositivos</string>
+    <string name="common_settings_devices_help">Los dispositivos que comparten esta biblioteca. Un documento permanece en la papelera más allá de su periodo de conservación hasta que cada dispositivo activo esté al día, para que ningún dispositivo pueda seguir restaurándolo. Retira un dispositivo que ya no uses para que no retenga nada; uno que permanezca en silencio 90 días deja de contar por sí solo.</string>
+    <string name="common_devices_this_device">Este dispositivo</string>
+    <string name="common_devices_device">Dispositivo %1$s</string>
+    <string name="common_devices_last_heard">Al día por última vez: %1$s</string>
+    <string name="common_devices_not_yet_heard">Aún no está al día</string>
+    <string name="common_devices_retired">Retirado: la papelera no espera a este dispositivo.</string>
+    <string name="common_devices_silent">En silencio desde hace más de 90 días: la papelera no espera a este dispositivo.</string>
+    <string name="common_devices_retire">Retirar</string>
+    <string name="common_devices_unretire">Volver a usar</string>
+    <string name="common_devices_empty">Ningún otro dispositivo está al día con esta biblioteca todavía. Los dispositivos con una versión anterior de la app no aparecen, y la papelera no los espera.</string>
+    <string name="common_devices_retire_failed">No se pudo retirar el dispositivo: %1$s</string>
+    <string name="common_devices_unretire_failed">No se pudo volver a usar el dispositivo: %1$s</string>
+</resources>

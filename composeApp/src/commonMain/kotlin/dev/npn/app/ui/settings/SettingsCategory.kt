@@ -67,6 +67,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_set
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_status
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sync_now
 import no_papers_needed.composeapp.generated.resources.common_settings_default_view
+import no_papers_needed.composeapp.generated.resources.common_settings_devices
 import no_papers_needed.composeapp.generated.resources.common_settings_document_fields
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_ai
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_inbox
@@ -239,6 +240,9 @@ internal interface SettingsPaneActions :
     /** Open the spend page of one kind of AI work, by its [AiSpendKinds] key. */
     fun openAiSpendKind(kind: String)
 
+    /** Open the devices that share the library ([DevicesScreen]). */
+    fun openDevices()
+
     /** Open another category's pane, as picking it in the list does. */
     fun openCategory(id: SettingsCategoryId)
 
@@ -295,6 +299,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_advanced,
                     Res.string.common_settings_clear_thumbnail_cache,
                     Res.string.common_settings_verify_library,
+                    Res.string.common_settings_devices,
                 ),
             content = { state, actions -> LibrarySettingsPane(state, actions) },
             advancedKeywords =

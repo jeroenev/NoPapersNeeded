@@ -130,6 +130,9 @@ internal class AckRecords(
         return record
     }
 
+    /** When this device wrote its latest record, or null for none yet. */
+    suspend fun lastWrittenMillis(): Long? = chains(includeUnlinked = true)[deviceId]?.last()?.first?.atMillis
+
     /** Every other device that writes records, and how far this device has applied each. */
     suspend fun devices(): List<AckedDevice> {
         val applied = appliedObjects()

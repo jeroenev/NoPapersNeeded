@@ -95,6 +95,7 @@ internal class LibrarySessionImpl(
     override val content: DocContentFacade = graph.content
     override val reviewConfig: ReviewConfigFacade = graph.reviewConfig
     override val trashRetention: TrashRetentionFacade = graph.trashRetention
+    override val devices: DevicesFacade = graph.devices
     override val reminders: RemindersFacade = graph.reminders
     override val maintenance: MaintenanceFacade = graph.maintenance
     private val editQueue = graph.edits.queue
