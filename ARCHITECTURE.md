@@ -514,6 +514,16 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
 - Restore records its final destination: the path the document was trashed from (or the inbox under
   its file name when that is no document path), or a `(restored)` name beside it when a file is
   there now or another live row names it.
+- A restore on a device that had another device's trash event but not yet its file move finds no
+  copy in the trash and keeps the file still at the document's path; the move then lands, taking
+  that file away and leaving the bytes in the trash. So does an Undo, or an import of the same bytes.
+  A rescan that leaves a document the journal shows as missing brings such a copy back
+  (`StrandedTrashCopies`), to its intended path or a `(restored)` name beside it, and scans again:
+  only a copy that hashes to the document and whose name's trash episode
+  (`NpnPaths.trashEpisodeMillis`) is no later than the restore that took it out of the trash last.
+  A later episode is a trash whose event has not arrived yet, and an entry with no episode says
+  nothing; both stay. Left there, the copy would go with the first purge on a device that had not
+  seen the restore yet, the library's last copy.
 - The trash auto-purge runs after a watch-triggered rescan. It lists the trash before the writer
   lock and deletes an entry under it, in batches, once every document its name's hash prefix ties it
   to was trashed or deleted longer ago than the retention, by the journal and the rows as they

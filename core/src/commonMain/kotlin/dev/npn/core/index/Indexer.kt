@@ -49,7 +49,9 @@ import kotlinx.coroutines.sync.withLock
  *  7. moves documents to the paths their intents name, and records where each was seen,
  *  8. deletes the app's own temporary files a crash left behind ([TempFileSweep]), and a bake's
  *     original its relink superseded ([removeSupersededOriginals]),
- *  9. returns a [ScanReport].
+ *  9. brings back from the trash a shown document's bytes a restore left there
+ *     ([StrandedTrashCopies]), and scans again when it did,
+ * 10. returns a [ScanReport].
  *
  * Steps 3 to 6 write in one database transaction, as every fold does; step 7 is filesystem work
  * and runs after it commits (see [projection]). The fold itself is [FoldProjection]'s.
@@ -76,6 +78,7 @@ internal class Indexer(
     private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids, bakeAsides)
     private val folds = FoldProjection(db, documentPaths)
     private val tempFiles = TempFileSweep(fs, log)
+    private val strandedCopies = StrandedTrashCopies(fs, db, log)
 
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 
@@ -130,10 +133,28 @@ internal class Indexer(
         documentDao.upsertAll(rows)
     }
 
+    /**
+     * Scan the library ([scan]). When that leaves a document the journal shows as missing while the
+     * trash holds its bytes from a trash since restored, the copy comes back ([StrandedTrashCopies])
+     * and the library is scanned again, to find it there.
+     */
     suspend fun rescan(
         metadataState: FoldedState,
         onExternalMoves: suspend (List<PendingOp>) -> Unit = {},
         onResurrected: suspend (List<Resurrected>) -> Unit = {},
+    ): ScanReport {
+        val report = scan(metadataState, onExternalMoves, onResurrected)
+        val reclaimed =
+            runCatchingCancellable { strandedCopies.reclaim(metadataState) }
+                .onFailure { log.warn("Bringing stranded documents back from the trash failed", it) }
+                .getOrDefault(false)
+        return if (reclaimed) scan(metadataState, onExternalMoves, onResurrected) else report
+    }
+
+    private suspend fun scan(
+        metadataState: FoldedState,
+        onExternalMoves: suspend (List<PendingOp>) -> Unit,
+        onResurrected: suspend (List<Resurrected>) -> Unit,
     ): ScanReport {
         check(!documentPaths.collecting) { "A rescan does filesystem work, so it cannot run inside a projection" }
         val started = clock.nowMillis()

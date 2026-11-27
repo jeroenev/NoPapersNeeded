@@ -260,6 +260,10 @@ interface DocumentDao {
     @Query("SELECT * FROM documents d WHERE missing = 1 AND deleted = 0 ORDER BY $NEWEST_FIRST")
     fun observeMissing(): Flow<List<DocumentEntity>>
 
+    /** The rows of documents neither trashed nor deleted whose file a rescan found gone. */
+    @Query("SELECT * FROM documents WHERE missing = 1 AND trashed = 0 AND deleted = 0")
+    suspend fun liveMissing(): List<DocumentEntity>
+
     // --- Counts ---
 
     @Query(

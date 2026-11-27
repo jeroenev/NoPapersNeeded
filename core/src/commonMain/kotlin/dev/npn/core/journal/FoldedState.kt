@@ -413,6 +413,15 @@ internal class FoldedState {
         return if (t.trashed) t.hlc.physicalMillis else null
     }
 
+    /**
+     * Wall time of the HLC of the restore (or undelete) that took [doc] out of the trash last, while
+     * the library shows it ([isCurrent]); null for a document never trashed, or not shown.
+     */
+    fun restoredAtMillis(doc: String): Long? {
+        val t = trash[doc]?.takeIf { !it.trashed } ?: return null
+        return if (isCurrent(doc)) t.hlc.physicalMillis else null
+    }
+
     /** Wall time of the winning doc-delete's HLC, while the document is deleted. */
     private fun deletedAtMillis(doc: String): Long? = if (isDeleted(doc)) deleted[doc]?.physicalMillis else null
 
