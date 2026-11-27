@@ -17,6 +17,7 @@
         <item quantity="one">Anfragen gesamt: %1$s · %2$s ein / %3$s aus · mindestens %4$s + %5$d Anfrage ohne Preis</item>
         <item quantity="other">Anfragen gesamt: %1$s · %2$s ein / %3$s aus · mindestens %4$s + %5$d Anfragen ohne Preis</item>
     </plurals>
+    <string name="common_settings_ai_spend_by_kind">Nach Art der Arbeit</string>
     <string name="common_settings_ai_spend_approx">≈%1$s</string>
     <string name="common_settings_ai_spend_kind_chat">Assistent-Chat</string>
     <string name="common_settings_ai_spend_kind_suggest">Bearbeitungsvorschläge</string>

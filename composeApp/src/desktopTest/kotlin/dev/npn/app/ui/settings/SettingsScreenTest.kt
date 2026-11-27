@@ -63,6 +63,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                             onResumeDraft = {},
                             onOpenDocument = {},
                             onAutoMatchRules = {},
+                            onAiSpendKind = {},
                         )
                     }
                 }
@@ -111,6 +112,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                                 onResumeDraft = {},
                                 onOpenDocument = {},
                                 onAutoMatchRules = {},
+                                onAiSpendKind = {},
                             )
                         }
                     }
@@ -160,6 +162,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                             onResumeDraft = {},
                             onOpenDocument = {},
                             onAutoMatchRules = {},
+                            onAiSpendKind = {},
                             vm = vm,
                         )
                     }

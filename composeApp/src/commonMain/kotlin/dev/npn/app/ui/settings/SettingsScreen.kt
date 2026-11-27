@@ -111,6 +111,7 @@ fun SettingsScreen(
     onResumeDraft: (docId: String) -> Unit,
     onOpenDocument: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
+    onAiSpendKind: (kind: String) -> Unit,
     revealAdvanced: Boolean = false,
     vm: SettingsViewModel =
         viewModel {
@@ -168,6 +169,7 @@ fun SettingsScreen(
     // calling whichever callbacks the latest composition passed.
     val currentChangeLibrary by rememberUpdatedState(onChangeLibrary)
     val currentAutoMatchRules by rememberUpdatedState(onAutoMatchRules)
+    val currentAiSpendKind by rememberUpdatedState(onAiSpendKind)
     val currentSelect by rememberUpdatedState(select)
     val currentOpenDocument by rememberUpdatedState(onOpenDocument)
     val paneActions =
@@ -176,6 +178,8 @@ fun SettingsScreen(
                 override fun changeLibrary() = currentChangeLibrary()
 
                 override fun openAutoMatchRules() = currentAutoMatchRules()
+
+                override fun openAiSpendKind(kind: String) = currentAiSpendKind(kind)
 
                 override fun openCategory(id: SettingsCategoryId) = currentSelect(id, false)
 

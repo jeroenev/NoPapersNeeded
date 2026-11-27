@@ -33,6 +33,7 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.NavigationRow
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
@@ -72,6 +73,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_provid
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_request_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_all_time
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_by_kind
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_estimated
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_last30
@@ -148,7 +150,11 @@ internal fun AiSettingsPane(
             AiBehaviourSettings(state = settings, actions = actions)
             // Last, because it is a verdict on everything above it.
             AiSelfTestSection(state = settings, selfTest = state.aiSelfTest, onRun = actions::runAiSelfTest)
-            AiSpendSection(spend = settings.aiSpend, onReset = actions::resetAiSpend)
+            AiSpendSection(
+                spend = settings.aiSpend,
+                onOpenKind = actions::openAiSpendKind,
+                onReset = actions::resetAiSpend,
+            )
         }
     }
 }
@@ -600,20 +606,36 @@ private fun AiTagCapDefaults(
 }
 
 /**
- * This library's spend ledger on this device, as two windows: the rolling last 30 days and
- * everything recorded. One line per provider, model and kind of work ([SpendText]), so a switch of
- * model is visible. Reset asks first; the ledger is not synced and cannot be recovered.
+ * This library's spend ledger on this device: the total of the rolling last 30 days and of
+ * everything recorded, then one row per kind of work that opens its own page ([AiSpendKindScreen]),
+ * where it is broken down per provider and model. Reset asks first; the ledger is not synced and
+ * cannot be recovered.
  */
 @Composable
 private fun AiSpendSection(
     spend: AiSpendSummary,
+    onOpenKind: (kind: String) -> Unit,
     onReset: () -> Unit,
 ) {
     var confirming by rememberSaveable { mutableStateOf(false) }
     Column {
         SettingsSection(title = stringResource(Res.string.common_settings_ai_spend)) {
-            SpendWindow(stringResource(Res.string.common_settings_ai_spend_last30), spend.last30Days)
-            SpendWindow(stringResource(Res.string.common_settings_ai_spend_all_time), spend.allTime)
+            SpendTotal(stringResource(Res.string.common_settings_ai_spend_last30), spend.last30Days)
+            SpendTotal(stringResource(Res.string.common_settings_ai_spend_all_time), spend.allTime)
+            val kinds = AiSpendKinds.kindsIn(spend.allTime)
+            if (kinds.isNotEmpty()) {
+                Text(
+                    stringResource(Res.string.common_settings_ai_spend_by_kind),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                kinds.forEach { kind ->
+                    NavigationRow(
+                        headline = SpendText.kindLabel(kind).resolve(),
+                        supporting = SpendText.total(AiSpendKinds.linesOf(spend.allTime, kind)).resolve(),
+                        onClick = { onOpenKind(AiSpendKinds.key(kind)) },
+                    )
+                }
+            }
             HelpText(stringResource(Res.string.common_settings_ai_spend_estimated))
             OutlinedButton(onClick = { confirming = true }) {
                 Text(stringResource(Res.string.common_settings_ai_spend_reset))
@@ -636,7 +658,7 @@ private fun AiSpendSection(
 }
 
 @Composable
-private fun SpendWindow(
+private fun SpendTotal(
     title: String,
     totals: List<AiUsageTotals>,
 ) {
@@ -644,9 +666,8 @@ private fun SpendWindow(
         Text(title, style = MaterialTheme.typography.titleSmall)
         if (totals.isEmpty()) {
             HelpText(stringResource(Res.string.common_settings_ai_spend_empty))
-            return@Column
+        } else {
+            Text(SpendText.total(totals).resolve(), style = MaterialTheme.typography.bodyMedium)
         }
-        totals.forEach { line -> Text(SpendText.line(line).resolve(), style = MaterialTheme.typography.bodyMedium) }
-        Text(SpendText.total(totals).resolve(), style = MaterialTheme.typography.bodyMedium)
     }
 }

@@ -17,6 +17,7 @@
         <item quantity="one">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida · al menos %4$s + %5$d solicitud sin precio</item>
         <item quantity="other">Total de solicitudes: %1$s · %2$s de entrada / %3$s de salida · al menos %4$s + %5$d solicitudes sin precio</item>
     </plurals>
+    <string name="common_settings_ai_spend_by_kind">Por tipo de trabajo</string>
     <string name="common_settings_ai_spend_approx">≈%1$s</string>
     <string name="common_settings_ai_spend_kind_chat">Chat del asistente</string>
     <string name="common_settings_ai_spend_kind_suggest">Sugerencias de edición</string>

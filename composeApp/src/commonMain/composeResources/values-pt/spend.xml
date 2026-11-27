@@ -17,6 +17,7 @@
         <item quantity="one">Total de pedidos: %1$s · %2$s de entrada / %3$s de saída · pelo menos %4$s + %5$d pedido sem preço</item>
         <item quantity="other">Total de pedidos: %1$s · %2$s de entrada / %3$s de saída · pelo menos %4$s + %5$d pedidos sem preço</item>
     </plurals>
+    <string name="common_settings_ai_spend_by_kind">Por tipo de trabalho</string>
     <string name="common_settings_ai_spend_approx">≈%1$s</string>
     <string name="common_settings_ai_spend_kind_chat">Conversa com o assistente</string>
     <string name="common_settings_ai_spend_kind_suggest">Sugestões de edição</string>

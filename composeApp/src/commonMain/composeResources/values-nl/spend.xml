@@ -17,6 +17,7 @@
         <item quantity="one">Aanvragen totaal: %1$s · %2$s in / %3$s uit · minstens %4$s + %5$d aanvraag zonder prijs</item>
         <item quantity="other">Aanvragen totaal: %1$s · %2$s in / %3$s uit · minstens %4$s + %5$d aanvragen zonder prijs</item>
     </plurals>
+    <string name="common_settings_ai_spend_by_kind">Per soort werk</string>
     <string name="common_settings_ai_spend_approx">≈%1$s</string>
     <string name="common_settings_ai_spend_kind_chat">Chat met de assistent</string>
     <string name="common_settings_ai_spend_kind_suggest">Bewerkingsvoorstellen</string>

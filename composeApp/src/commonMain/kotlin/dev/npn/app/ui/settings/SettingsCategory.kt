@@ -238,6 +238,9 @@ internal interface SettingsPaneActions :
 
     fun openAutoMatchRules()
 
+    /** Open the spend page of one kind of AI work, by its [AiSpendKinds] key. */
+    fun openAiSpendKind(kind: String)
+
     /** Open another category's pane, as picking it in the list does. */
     fun openCategory(id: SettingsCategoryId)
 

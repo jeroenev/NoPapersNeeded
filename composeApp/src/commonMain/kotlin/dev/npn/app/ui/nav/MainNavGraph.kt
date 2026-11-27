@@ -49,6 +49,7 @@ import dev.npn.app.ui.queue.QueueScreen
 import dev.npn.app.ui.reminders.ReminderChecks
 import dev.npn.app.ui.reminders.UpcomingScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
+import dev.npn.app.ui.settings.AiSpendKindScreen
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
@@ -63,6 +64,7 @@ import dev.npn.core.sync.SyncStatus
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_rules_title
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend
 import no_papers_needed.composeapp.generated.resources.reminders_upcoming_title
 import org.jetbrains.compose.resources.stringResource
 
@@ -223,6 +225,8 @@ private fun windowTitle(
             destination?.hasRoute<Route.DocDetail>() == true -> return null
 
             destination?.hasRoute<Route.AutoMatchRules>() == true -> Res.string.common_rules_title
+
+            destination?.hasRoute<Route.AiSpendKind>() == true -> Res.string.common_settings_ai_spend
 
             destination?.hasRoute<Route.Upcoming>() == true -> Res.string.reminders_upcoming_title
 
@@ -471,6 +475,14 @@ private fun NavGraphBuilder.settingsRoutes(
             onResumeDraft = { docId -> nav.from(entry) { resumeDraft(docId, browse) } },
             onOpenDocument = { docId -> nav.from(entry) { openDoc(docId, browse) } },
             onAutoMatchRules = { nav.from(entry) { navigate(Route.AutoMatchRules) } },
+            onAiSpendKind = { kind -> nav.from(entry) { navigate(Route.AiSpendKind(kind)) } },
+        )
+    }
+    composable<Route.AiSpendKind> { entry ->
+        AiSpendKindScreen(
+            session = session,
+            kind = entry.toRoute<Route.AiSpendKind>().kind,
+            onBack = { nav.from(entry) { popBackStack() } },
         )
     }
     composable<Route.AutoMatchRules> { entry ->

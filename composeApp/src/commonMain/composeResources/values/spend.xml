@@ -17,6 +17,7 @@
         <item quantity="one">Total requests: %1$s · %2$s in / %3$s out · at least %4$s + %5$d unpriced request</item>
         <item quantity="other">Total requests: %1$s · %2$s in / %3$s out · at least %4$s + %5$d unpriced requests</item>
     </plurals>
+    <string name="common_settings_ai_spend_by_kind">By kind of work</string>
     <string name="common_settings_ai_spend_approx">≈%1$s</string>
     <string name="common_settings_ai_spend_kind_chat">Assistant chat</string>
     <string name="common_settings_ai_spend_kind_suggest">Edit suggestions</string>

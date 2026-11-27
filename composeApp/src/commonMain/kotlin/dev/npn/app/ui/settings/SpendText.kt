@@ -35,7 +35,7 @@ internal object SpendText {
             arrayOf(
                 provider,
                 totals.model,
-                kind(totals.kind),
+                kindLabel(totals.kind),
                 totals.requests,
                 tokens(totals.inputTokens, estimated),
                 tokens(totals.outputTokens, estimated),
@@ -96,7 +96,8 @@ internal object SpendText {
         estimated: Boolean,
     ): Any = if (estimated) uiText(Res.string.common_settings_ai_spend_approx, count) else count
 
-    private fun kind(kind: AiUsageKind?): UiText =
+    /** The name of [kind] of work; "Other" for a kind a newer build recorded. */
+    fun kindLabel(kind: AiUsageKind?): UiText =
         uiText(
             when (kind) {
                 AiUsageKind.CHAT -> Res.string.common_settings_ai_spend_kind_chat
@@ -106,4 +107,25 @@ internal object SpendText {
                 null -> Res.string.common_settings_ai_spend_kind_other
             },
         )
+}
+
+/**
+ * The kinds of work the spend ledger tells apart, as the AI pane lists them and as the spend page
+ * of one kind is addressed: by the [AiUsageKind]'s name, or [OTHER] for one a newer build recorded.
+ */
+internal object AiSpendKinds {
+    const val OTHER = "OTHER"
+
+    fun key(kind: AiUsageKind?): String = kind?.name ?: OTHER
+
+    fun parse(key: String): AiUsageKind? = AiUsageKind.entries.firstOrNull { it.name == key }
+
+    /** The kinds [lines] recorded, in [AiUsageKind]'s order, an unknown kind last. */
+    fun kindsIn(lines: List<AiUsageTotals>): List<AiUsageKind?> =
+        lines.map { it.kind }.distinct().sortedBy { it?.ordinal ?: Int.MAX_VALUE }
+
+    fun linesOf(
+        lines: List<AiUsageTotals>,
+        kind: AiUsageKind?,
+    ): List<AiUsageTotals> = lines.filter { it.kind == kind }
 }

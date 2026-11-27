@@ -35,6 +35,15 @@ sealed interface Route {
     @Serializable
     data object AutoMatchRules : Route
 
+    /**
+     * The AI spend of one kind of work, opened from the AI settings pane. [kind] is an
+     * [dev.npn.app.ui.settings.AiSpendKinds] key; an unknown one shows the "Other" kind.
+     */
+    @Serializable
+    data class AiSpendKind(
+        val kind: String,
+    ) : Route
+
     /** The reminder window over the library's watched dates, opened from the Inbox area. */
     @Serializable
     data object Upcoming : Route

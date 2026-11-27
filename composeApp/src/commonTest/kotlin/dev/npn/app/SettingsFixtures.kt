@@ -188,6 +188,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun openAutoMatchRules() = Unit
 
+    override fun openAiSpendKind(kind: String) = Unit
+
     override fun openCategory(id: SettingsCategoryId) = Unit
 
     override fun openFieldDialog(dialog: FieldDialog?) = Unit
