@@ -172,12 +172,12 @@ class InMemoryLibraryFileSystem(
         return result
     }
 
-    /** [SimFaults.check]; a fault it injects cuts a trash short ([SimTrashStats.forget]). */
+    /** [SimFaults.check]; a fault it injects cuts a trash short ([SimPublications.forget]). */
     private fun faultChecked(
         method: FsMethod,
         path: String,
         point: SimFaults.Point,
-    ) = runCatching { faults.check(method, path, point) }.onFailure { trashStats.forget() }.getOrThrow()
+    ) = runCatching { faults.check(method, path, point) }.onFailure { publications.forget() }.getOrThrow()
 
     override suspend fun listAllIndexable(): List<FileMeta> =
         io(FsMethod.LIST_INDEXABLE, "") {
@@ -228,7 +228,7 @@ class InMemoryLibraryFileSystem(
         bytes: ByteArray,
     ) {
         val norm = NpnPaths.normalize(relPath)
-        io(FsMethod.WRITE_ONCE, norm) { create(norm, bytes.copyOf()).also { trashStats.wrote(norm) } }
+        io(FsMethod.WRITE_ONCE, norm) { create(norm, bytes.copyOf()).also { publications.wrote(norm) } }
     }
 
     override suspend fun publishVerifiedObjectOnce(
@@ -258,7 +258,7 @@ class InMemoryLibraryFileSystem(
                 files[canonical] = node
                 touch(canonical)
                 recordWrite(canonical, node.bytes)
-                trashStats.published(staging, canonical, node.bytes)
+                publications.published(staging, canonical, node.bytes)
             }
             check(sha256Bytes(files.getValue(canonical).bytes) == expectedHash) {
                 "Published object hash mismatch: $canonical"
@@ -644,11 +644,11 @@ class InMemoryLibraryFileSystem(
                 files[to] = node
                 touch(from)
                 touch(to)
-                trashStats.left(from)
+                publications.left(from)
                 if (byApp) {
                     appRemovals += from
                     recordWrite(to, node.bytes)
-                    trashStats.moved(from, to, node.bytes, node.mtime)
+                    publications.moved(from, to, node.bytes, node.mtime)
                 }
             }
 
@@ -675,7 +675,7 @@ class InMemoryLibraryFileSystem(
         norm: String,
         byApp: Boolean = false,
     ) {
-        trashStats.left(norm)
+        publications.left(norm)
         files.remove(norm)?.let { node ->
             if (byApp) appRemovals += norm
             lost(norm, node, byApp)
@@ -731,7 +731,7 @@ class InMemoryLibraryFileSystem(
     }
 
     /** Whether each `doc-trash` the app publishes records the stat of the file its trash moved. */
-    val trashStats = SimTrashStats { path -> files[path]?.bytes }
+    val publications = SimPublications { path -> files[path]?.bytes }
 
     /** The app's call taking effect right now, or null for the outside world. */
     private var actor: FsMethod? = null

@@ -49,13 +49,17 @@ internal object SimNames {
 
     /**
      * Names the library writes once and never again: a journal object or snapshot, an OCR sidecar,
-     * a device marker. Two versions of one under the same name is a broken invariant.
+     * a device marker, an acknowledgment record. Two versions of one under the same name is a broken invariant.
      */
     fun isWriteOnce(path: String): Boolean =
         isJournalObject(path) ||
             (
                 path.endsWith(".json") &&
-                    (path.startsWith("${NpnPaths.OCR_DIR}/") || path.startsWith("${NpnPaths.DEVICES_DIR}/"))
+                    (
+                        path.startsWith("${NpnPaths.OCR_DIR}/") ||
+                            path.startsWith("${NpnPaths.DEVICES_DIR}/") ||
+                            path.startsWith("${NpnPaths.ACKS_DIR}/")
+                    )
             )
 
     private fun beside(

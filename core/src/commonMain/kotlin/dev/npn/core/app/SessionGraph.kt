@@ -10,6 +10,8 @@ import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.fs.DocumentFacts
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
+import dev.npn.core.index.AckRecords
+import dev.npn.core.index.AuthoredObjects
 import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
@@ -179,8 +181,32 @@ internal class SessionGraph(
             log = log,
         )
 
+    /**
+     * This library's devices' acknowledgment records: this installation writes its own after each
+     * background rescan, and the purge waits for every active device's.
+     */
+    val ackRecords =
+        AckRecords(
+            fs = deps.fs,
+            db = db,
+            authored = AuthoredObjects(deps.deviceDb.keyValueDao()),
+            clock = deps.clock,
+            deviceId = deviceId,
+            installationId = deps.installationId,
+            ids = deps.ids,
+        )
+
     /** The trash auto-purge by [trashRetention], run after each watch-triggered rescan. */
-    val trashPurge = TrashPurge(coordinator, db, trash, trashRetention, deps.clock, log)
+    val trashPurge =
+        TrashPurge(
+            coordinator,
+            db,
+            trash,
+            trashRetention,
+            deps.clock,
+            log,
+            CausalPurge(ackRecords, coordinator::setting, deps.clock),
+        )
 
     val writer =
         MetadataWriterImpl(

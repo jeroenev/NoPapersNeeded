@@ -63,8 +63,14 @@ object SyncPaths {
             JournalPath.Unknown -> {
                 when {
                     isChild(path, NpnPaths.OCR_DIR, depth = 1) && name.endsWith(".json") -> SyncPathClass.WriteOnce
+
                     isChild(path, NpnPaths.DEVICES_DIR, depth = 2) && name.endsWith(".json") -> SyncPathClass.WriteOnce
+
+                    // Acknowledgment records: every device's, carried both ways like the markers.
+                    isChild(path, NpnPaths.ACKS_DIR, depth = 2) && name.endsWith(".json") -> SyncPathClass.WriteOnce
+
                     isChild(path, NpnPaths.TRASH_DIR, depth = 1) -> SyncPathClass.Trash
+
                     else -> SyncPathClass.Ignored
                 }
             }

@@ -614,6 +614,10 @@ internal class SyncSimulation(
                         marker && ids.any { path.startsWith("${NpnPaths.DEVICES_DIR}/$it/") }
                     }
 
+                    path.startsWith("${NpnPaths.ACKS_DIR}/") -> {
+                        ids.any { path.startsWith("${NpnPaths.ACKS_DIR}/$it/") }
+                    }
+
                     else -> {
                         true
                     }

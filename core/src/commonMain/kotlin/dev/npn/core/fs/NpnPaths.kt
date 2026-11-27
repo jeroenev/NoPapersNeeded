@@ -20,6 +20,13 @@ object NpnPaths {
     const val DEVICES_DIR = ".npn/devices"
 
     /**
+     * `<deviceId>/<n>.json`: each device's write-once acknowledgment records, a chain numbered from
+     * 1 (`dev.npn.core.index.AckRecords`). Not under [DEVICES_DIR], whose `*.json` files are
+     * installation markers.
+     */
+    const val ACKS_DIR = ".npn/acks"
+
+    /**
      * Import staging: a file is copied here, hashed, dedup-checked, then moved into place or
      * deleted. Under `.npn/` so it is never indexed; `.part` so an interrupted import is
      * recognizable as incomplete rather than mistaken for a document.
@@ -129,7 +136,7 @@ object NpnPaths {
         /** One import attempt's staging file, `.npn/tmp/<nonce>.part`; [nonce] keeps concurrent imports apart. */
         fun importPath(nonce: String): String = "$TMP_DIR/$nonce$PART"
 
-        /** A device marker's staging file beside it: `.<installationId>.<nonce>.part`. */
+        /** A device marker's or acknowledgment record's staging file beside it: `.<installationId>.<nonce>.part`. */
         fun markerStagingName(
             installationId: String,
             nonce: String,
@@ -188,7 +195,9 @@ object NpnPaths {
                     Kind.IMPORT
                 }
 
-                relPath.startsWith("$DEVICES_DIR/") && name.startsWith('.') && name.endsWith(PART) -> {
+                (relPath.startsWith("$DEVICES_DIR/") || relPath.startsWith("$ACKS_DIR/")) &&
+                    name.startsWith('.') &&
+                    name.endsWith(PART) -> {
                     Kind.MARKER_STAGING
                 }
 

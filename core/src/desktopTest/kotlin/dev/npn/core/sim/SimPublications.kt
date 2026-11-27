@@ -2,22 +2,33 @@ package dev.npn.core.sim
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.AckRecord
+import dev.npn.core.index.AckRecords
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.util.NpnJson
 
 /**
- * Whether each `doc-trash` the app publishes in one folder records the stat of the file its trash
- * moved into `.npn/trash/` (`JournalOp.DocTrash.stat`), and none when it moved none. The folder's
- * [InMemoryLibraryFileSystem] reports the files the app writes ([wrote]) and moves ([moved]), every
- * file leaving a path ([left]) and every object it publishes ([published]); [bytesAt] reads a path's
- * bytes.
+ * What the app publishes in one folder, checked as it lands:
+ * - each `doc-trash` records the stat of the file its trash moved into `.npn/trash/`
+ *   (`JournalOp.DocTrash.stat`), and none when it moved none;
+ * - each acknowledgment record (`AckRecords`) links to its device's previous one, vouches only for
+ *   journal objects this folder's app published itself, and claims of another device's chain only
+ *   records whose objects are all in this folder.
+ *
+ * The folder's [InMemoryLibraryFileSystem] reports the files the app writes ([wrote]) and moves
+ * ([moved]), every file leaving a path ([left]) and every object it publishes ([published]);
+ * [bytesAt] reads a path's bytes.
  */
-class SimTrashStats(
+class SimPublications(
     private val bytesAt: (path: String) -> ByteArray?,
 ) {
+    /** The journal objects, by hash, this folder's app published from a transaction it made. */
+    private val ownObjects = HashSet<String>()
+
     /** A file the app moved into the trash: its bytes' hash, and the size and mtime the move kept. */
     private class TrashMove(
         val hash: String,
@@ -88,10 +99,55 @@ class SimTrashStats(
         bytes: ByteArray,
     ) {
         val own = written.remove(staging)
+        if (own && path.startsWith(ACKS_PREFIX)) checkAck(path, bytes)
         if (JournalPaths.classify(path) !is JournalPath.ObjectV2) return
-        if (own) trashesIn(bytes).forEach { (doc, trash) -> check(path, doc, trash) }
+        if (own) {
+            ownObjects += sha256Bytes(bytes)
+            trashesIn(bytes).forEach { (doc, trash) -> check(path, doc, trash) }
+        }
         pending.clear()
     }
+
+    /** The acknowledgment record [bytes] the app published at [path]: its link, what it vouches for, what it claims. */
+    private fun checkAck(
+        path: String,
+        bytes: ByteArray,
+    ) {
+        val record = parseAck(bytes)
+        val foreign = record?.authored.orEmpty().filter { it !in ownObjects }
+        val problem =
+            when {
+                record == null -> "does not parse"
+                AckRecords.path(record.device, record.n) != path -> "is record ${record.n} of ${record.device}"
+                record.prev != hashOf(record.device, record.n - 1) -> "does not link to the record before it"
+                foreign.isNotEmpty() -> "vouches for objects its device did not publish: ${foreign.map { it.take(ID) }}"
+                else -> record.seen.entries.firstNotNullOfOrNull { (device, n) -> unseen(device, n) }
+            }
+        problem?.let { ackViolations += "the acknowledgment record '$path' $it" }
+    }
+
+    /** The hash of [device]'s record [n] here; null for record 0, which no record has, or one not here. */
+    private fun hashOf(
+        device: String,
+        n: Long,
+    ): String? = if (n < 1) null else bytesAt(AckRecords.path(device, n))?.let(::sha256Bytes)
+
+    /** Why a claim to have applied [device]'s chain through record [n] is false here, or null when it holds. */
+    private fun unseen(
+        device: String,
+        n: Long,
+    ): String? =
+        (1..n)
+            .firstOrNull { i ->
+                val earlier = bytesAt(AckRecords.path(device, i))?.let(::parseAck)
+                earlier == null || earlier.authored.any { bytesAt(JournalPaths.objectPath(it)) == null }
+            }?.let { "claims record $n of $device, but record $it or an object it vouches for is not here" }
+
+    private fun parseAck(bytes: ByteArray): AckRecord? =
+        runCatching { NpnJson.Persisted.decodeFromString(AckRecord.serializer(), bytes.decodeToString()) }.getOrNull()
+
+    /** Where an acknowledgment record the app published breaks its chain, or vouches or claims what it may not. */
+    val ackViolations = ArrayList<String>()
 
     private fun check(
         path: String,
@@ -127,6 +183,7 @@ class SimTrashStats(
 
     private companion object {
         const val TRASH_PREFIX = "${NpnPaths.TRASH_DIR}/"
+        const val ACKS_PREFIX = "${NpnPaths.ACKS_DIR}/"
         const val ID = 8
     }
 }

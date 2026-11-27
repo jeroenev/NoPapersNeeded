@@ -223,6 +223,10 @@ After every step, on every replica:
   the trash, or superseded by a relink (`SimDeleteAuthority`). A delete that leaves another copy in
   the folder is an extra copy's. The harness tests of the last-copy check across replicas, which
   delete as the app with no fact on purpose, turn this one off.
+- Acknowledgment records keep their rules: each one a replica publishes links to its previous
+  record's hash, vouches only for journal objects that replica published from a transaction of its
+  own, and claims another device's chain only through records whose objects are all in its folder
+  (`SimPublications`). They are write-once, and under the writing device's own name.
 - A trash records what it moved: each `doc-trash` a replica publishes carries the size and mtime of
   the file its trash moved into `.npn/trash/` (a stat the app moved that document's bytes there
   with), and none when it moved none. The app's moves into the trash still waiting for their event

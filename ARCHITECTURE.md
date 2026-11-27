@@ -560,6 +560,18 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   to was trashed or deleted longer ago than the retention, by the journal and the rows as they
   stand there. The retention is the library's (`TrashRetentionFacade`, a synced setting); one this
   build cannot read purges nothing. An entry it cannot tie to such a document stays, however old.
+- And only once every active device has acknowledged past the retention (`CausalPurge`): a device
+  writes acknowledgment records (`AckRecords`, `.npn/acks/<deviceId>/<n>.json`, a write-once chain,
+  each linking to the hash of the one before) that vouch for exactly the journal objects it
+  published (`AuthoredObjects`, noted in `device.db` before each object is published, as no object
+  says which device wrote it), and say how far it had applied every other device's chain. A trash
+  at T counts once each active device has a record written at T + retention or later whose chain's
+  objects are all applied here: any restore it made before that record is folded here, and one
+  after is a restore past the retention. Active: it writes records, is not retired (the synced
+  setting `device.retired.<deviceId>`), and wrote one within 90 days. A build that writes none is
+  unknown, and goes by the retention alone. A device writes its first record at once, then at most
+  daily when something changed and at least weekly. Cloud sync's remote trash still goes by the
+  retention alone.
 
 ### 6.4 Rescan, settling and resurrection
 

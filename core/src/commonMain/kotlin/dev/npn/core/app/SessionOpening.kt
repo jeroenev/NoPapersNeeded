@@ -5,6 +5,7 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.defs
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.index.AuthoredObjects
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
@@ -100,6 +101,7 @@ private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJourn
         fs = deps.fs,
         installationId = deps.installationId,
         ids = deps.ids,
+        beforePublish = AuthoredObjects(deps.deviceDb.keyValueDao())::add,
         allocator =
             HlcWatermarkAllocator(
                 clock = deps.clock,

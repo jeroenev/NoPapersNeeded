@@ -143,7 +143,7 @@ internal class SimReplica(
         session = null
         // Let the cancelled work unwind (its NonCancellable cleanups, Room's rollbacks).
         world.advance(UNWIND_MILLIS)
-        fs.trashStats.forget()
+        fs.publications.forget()
     }
 
     /**
@@ -185,7 +185,7 @@ internal class SimReplica(
             return false
         }
         dying.kill()
-        fs.trashStats.forget()
+        fs.publications.forget()
         session = null
         scopeJob = null
         ocr.forgetWaiting()
@@ -202,7 +202,7 @@ internal class SimReplica(
         scopeJob?.cancel()
         scopeJob = null
         session = null
-        fs.trashStats.forget()
+        fs.publications.forget()
     }
 
     /** Drop the index, as a user deleting `index.db` (or a schema bump) does; the next [open] rebuilds it. */

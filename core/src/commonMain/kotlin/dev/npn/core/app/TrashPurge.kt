@@ -31,6 +31,8 @@ internal class TrashPurge(
     private val retention: JournalTrashRetention,
     private val clock: EpochClock,
     private val log: NpnLog,
+    /** What every active device has acknowledged: what a trash time counts by ([CausalPurge]). */
+    private val causal: CausalPurge? = null,
 ) {
     /** [purge] by the library's retention as it stands now; one this build cannot read purges nothing. */
     suspend fun purgeExpired() {
@@ -44,11 +46,16 @@ internal class TrashPurge(
 
     /** Delete the entries whose documents all left the library more than [olderThanDays] ago. */
     suspend fun purge(olderThanDays: Int) {
-        val cutoff = clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
+        val retentionMillis = olderThanDays.toLong() * MILLIS_PER_DAY
+        val cutoff = clock.nowMillis() - retentionMillis
+        // Read once, before the lock: what the other devices acknowledged only grows, so an
+        // earlier read keeps entries longer, never shorter.
+        val acknowledged = causal?.acknowledgedUntil() ?: CausalPurge.Acknowledged.ALL
         for (batch in trash.listTrash().chunked(PURGE_BATCH)) {
             coordinator.serialized { journal ->
                 val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
-                trash.purgeOlderThan(cutoff, keptLonger(journal.trashTimes(), rows), journal, batch)
+                val times = acknowledged.filter(keptLonger(journal.trashTimes(), rows), retentionMillis)
+                trash.purgeOlderThan(cutoff, times, journal, batch)
             }
         }
     }

@@ -26,6 +26,11 @@ internal class ContentAddressedJournalWriter(
     private val installationId: String,
     private val allocator: HlcWatermarkAllocator,
     private val ids: IdSource = IdSource.Random,
+    /**
+     * Run with each object's hash before it is published: where this installation notes what it
+     * wrote ([dev.npn.core.index.AuthoredObjects]), as no object says which device wrote it.
+     */
+    private val beforePublish: suspend (hash: String) -> Unit = {},
 ) {
     fun observeHlc(remote: Hlc) = allocator.observe(remote)
 
@@ -59,6 +64,7 @@ internal class ContentAddressedJournalWriter(
             }
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val hash = sha256Bytes(bytes)
+        beforePublish(hash)
         val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, ids)
         return PublishedTransaction(canonicalPath, hash, events)
     }

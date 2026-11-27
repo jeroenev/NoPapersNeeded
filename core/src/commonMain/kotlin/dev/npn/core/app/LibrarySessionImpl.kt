@@ -103,6 +103,7 @@ internal class LibrarySessionImpl(
 
     /** The trash auto-purge, run after each [backgroundRescan]. */
     internal val trashPurge: TrashPurge = graph.trashPurge
+    private val ackRecords = graph.ackRecords
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
     // [MetadataWriterImpl] backs two write facets, and [AiFacadeImpl] both AI facets.
@@ -521,13 +522,16 @@ internal class LibrarySessionImpl(
     /**
      * A rescan the session runs itself: at start, for a change in the folder, after a file settled.
      * Then every queue is kicked, as the rescan may have lifted a write block the AI drains wait out
-     * or settled a file an OCR run waited for, a cloud sync pass is asked for soon, and the trash is
-     * purged.
+     * or settled a file an OCR run waited for, a cloud sync pass is asked for soon, this device's
+     * acknowledgment record is written when it has something new to say, and the trash is purged.
      */
     private suspend fun backgroundRescan() {
         rescan()
         queues.kickAll()
         syncService?.requestSoon()
+        log.runLogged("Writing this device's acknowledgment record") {
+            coordinator.serialized { ackRecords.publish() }
+        }
         trashPurge.purgeExpired()
     }
 

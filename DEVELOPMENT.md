@@ -577,6 +577,7 @@ Library/
     journal/objects-snap-v2-<00..ff>/   # snapshots earlier builds compacted (read, never written)
     ocr/<sha256>.<deviceId>.<engine>.json # OCR sidecars, adopted across devices
     devices/<deviceId>/<installationId>.json # which installations use a device id
+    acks/<deviceId>/<n>.json            # each device's acknowledgment records (write-once chain)
     trash/                              # soft-deleted files (synced, not indexed)
     tmp/                                # import staging; crash leftovers swept after a day
 ```
@@ -597,6 +598,8 @@ tool handles them like any other files.
 A storage-v1 segment (`journal/<deviceId>/<seq>.jsonl`), a format no released build ever wrote, is
 no longer read. The `devices/` markers tie each device id to the one installation that uses it, so a
 restored or cloned installation takes a fresh id rather than writing under another's name.
+The `acks/` records are each device's write-once chain of what it published and how far it had
+applied every other device's: the trash purge waits for them (ARCHITECTURE.md, section 6.3).
 
 ### Android storage
 

@@ -41,6 +41,18 @@ interface KeyValueDao {
     @Query("DELETE FROM kv WHERE key = :key")
     suspend fun delete(key: String)
 
+    /** Every key starting with [prefix] (which holds no LIKE wildcard), in order. */
+    @Query("SELECT key FROM kv WHERE key LIKE :prefix || '%' ORDER BY key")
+    suspend fun keysWithPrefix(prefix: String): List<String>
+
+    @Query("DELETE FROM kv WHERE key IN (:keys)")
+    suspend fun deleteChunk(keys: List<String>)
+
+    /** Delete [keys], in bind-limit slices. */
+    suspend fun deleteAll(keys: List<String>) {
+        keys.chunkedBind { deleteChunk(it).let { emptyList<Unit>() } }
+    }
+
     /** How many keys start with [prefix] (which holds no LIKE wildcard). */
     @Query("SELECT COUNT(*) FROM kv WHERE key LIKE :prefix || '%'")
     suspend fun countWithPrefix(prefix: String): Int

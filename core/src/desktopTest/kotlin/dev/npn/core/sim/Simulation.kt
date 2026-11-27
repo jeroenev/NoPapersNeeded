@@ -328,9 +328,12 @@ internal class Simulation(
     fun checkCheap() {
         fs.writeOnceViolations.firstOrNull()?.let { fail("write-once broken: $it") }
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
-        fs.trashStats.violations
+        fs.publications.violations
             .firstOrNull()
             ?.let { fail("trash stat not recorded as moved: $it") }
+        fs.publications.ackViolations
+            .firstOrNull()
+            ?.let { fail("an acknowledgment record breaks its rules: $it") }
         fs.deleteAuthority.violations
             .firstOrNull()
             ?.let { fail("a delete without authority: $it") }
@@ -703,7 +706,13 @@ internal class Simulation(
             val name = OcrSidecarName.parse(NpnPaths.fileName(path)) ?: return false
             return OcrSidecarName.writer(name.writerKey).deviceId == deviceId && name.hash !in sidecarsHeld
         }
-        val unexpected = copy.appPublished.filterNot { it.startsWith(marker) || ownSidecarOfANewDocument(it) }
+        // Its own acknowledgment records vouch for nothing a live replica owed: they say what it applied.
+        val ownAcks = "${NpnPaths.ACKS_DIR}/$deviceId/"
+        val unexpected =
+            copy.appPublished.filterNot {
+                it.startsWith(marker) || it.startsWith(ownAcks) ||
+                    ownSidecarOfANewDocument(it)
+            }
         if (unexpected.isNotEmpty()) {
             fail(
                 "the rebuild published what the live replica owed the library:\n  " +
