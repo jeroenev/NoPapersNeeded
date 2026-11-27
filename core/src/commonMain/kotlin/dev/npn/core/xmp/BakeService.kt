@@ -227,7 +227,10 @@ internal class BakeService(
      * holds [oldSha]: with the move's own failure where the storage refused it, an I/O failure like
      * the swap's, rather than a failed check. A rename keeps the original's size and mtime, which its
      * row still stores. One that reports a failure may still have landed: where the bytes are
-     * afterwards is what counts.
+     * afterwards is what counts. One that succeeded put the original back: another hand that
+     * replaces the file there since (a sync tool carrying another device's bake of the document,
+     * seed 4230002) takes it from the document's path as it could at any later time, which leaves the
+     * bake nothing to restore.
      */
     private suspend fun moveOriginalBack(
         norm: String,
@@ -236,7 +239,7 @@ internal class BakeService(
         asideHolds: Boolean,
     ) {
         val back = if (asideHolds) runCatchingCancellable { fs.move(aside, norm) } else null
-        if (fs.holds(norm, oldSha)) return
+        if (back?.isSuccess == true || fs.holds(norm, oldSha)) return
         throw back?.exceptionOrNull() ?: IllegalStateException("$norm does not read back as its original")
     }
 
@@ -291,8 +294,10 @@ internal class BakeService(
         }.onSuccess {
             // The original is back: the baked bytes are a leftover now, which the next bake of the
             // document removes first if this cannot, and so is a copy of the original left aside.
+            // Only while it is still there: another hand that replaced it since may have made the
+            // baked bytes something else's last copy (a relink of them that landed before the failure).
             log.runLogged("Removing the baked bytes of $norm after its bake was undone") {
-                if (fs.exists(tmpPath)) fs.delete(tmpPath)
+                if (fs.exists(tmpPath) && normHolds()) fs.delete(tmpPath)
                 if (asideHolds()) fs.delete(aside)
             }
         }.onFailure { failure ->

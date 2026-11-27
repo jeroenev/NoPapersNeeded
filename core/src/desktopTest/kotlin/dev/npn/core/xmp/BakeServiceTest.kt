@@ -375,6 +375,44 @@ class BakeServiceTest {
                 }.shouldBeTrue()
         }
 
+    /**
+     * The move aside lands and reports a failure, the original goes back, and only then does another
+     * process (a sync tool carrying another device's bake of the same document) replace the file at
+     * the path. The restore did its part: what took the original afterwards is another hand's, so a
+     * refused bake with no error, not "the original is on disk nowhere" (seed 4230002, 400 steps).
+     */
+    @Test
+    fun aFileReplacedAfterTheOriginalWentBackIsNoError() =
+        runTest {
+            fs.writeBytesOnce("doc.pdf", fixturePdf())
+            val oldSha = fs.sha256("doc.pdf")
+            val other = "another device's bake of the document".encodeToByteArray()
+            val log = RecordingLog()
+            val racing =
+                object : LibraryFileSystem by fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        fs.move(fromRelPath, toRelPath)
+                        if (NpnPaths.Temp.isRecovery(toRelPath)) throw IOException("moved, then reported a failure")
+                        if (NpnPaths.Temp.isRecovery(fromRelPath) && toRelPath == "doc.pdf") {
+                            fs.delete("doc.pdf")
+                            fs.writeBytesOnce("doc.pdf", other)
+                        }
+                    }
+                }
+
+            assertFailsWith<IOException> {
+                BakeService(racing, io, log).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ -> }
+            }
+
+            fs.readBytes("doc.pdf") shouldBe other
+            log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
+            // The path holds neither version now, so the baked bytes stay, a leftover.
+            fs.exists(NpnPaths.Temp.bakePath("doc.pdf")).shouldBeTrue()
+        }
+
     /** The rename landed, but the provider reported a failure: undone, the document is back as it was. */
     @Test
     fun aMoveThatLandsAndThenFailsEndsWithTheOriginalBytesAndNoRelink() =
