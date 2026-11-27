@@ -54,9 +54,10 @@ class WatchedFolderSweepTest {
         override suspend fun delete(
             file: WatchedFolderFile,
             docId: String,
+            libraryHolds: suspend () -> Boolean,
         ): Boolean {
             deleteFailure?.let { throw it }
-            return true
+            return libraryHolds()
         }
 
         override fun changes(): Flow<Unit> = events

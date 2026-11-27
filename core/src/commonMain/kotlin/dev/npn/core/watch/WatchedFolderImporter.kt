@@ -136,8 +136,9 @@ class WatchedFolderImporter(
         if (delete) {
             log.runLogged("Deleting ${sensitive(file.name, DOCUMENT)} from the watched folder after import") {
                 // The library file may have gone while the import ran (deleted or moved out from
-                // outside): the source is then the document's last copy, and stays.
-                if (ingest.holdsDocument(docId)) folder.delete(file, docId)
+                // outside): the source is then the document's last copy, and stays. Proved last,
+                // right before the delete.
+                folder.delete(file, docId) { ingest.holdsDocument(docId) }
             }
         }
     }

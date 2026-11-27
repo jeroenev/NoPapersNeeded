@@ -307,6 +307,7 @@ class DefaultAppEnvironmentTest {
         override suspend fun delete(
             file: WatchedFolderFile,
             docId: String,
+            libraryHolds: suspend () -> Boolean,
         ) = false
 
         override fun changes(): Flow<Unit> = changes

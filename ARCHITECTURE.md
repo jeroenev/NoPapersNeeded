@@ -785,7 +785,9 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
 - A watched inbox folder at or inside the library (`liesInLibrary`) is never swept, and Settings
   refuses one when picked. Delete-after-import removes a source only while it still holds the bytes
   imported: while it has the size and mtime it was listed with, or, from a provider that listed no
-  mtime, while it hashes to the document.
+  mtime, while it hashes to the document. And only once the library is proved to hold the
+  document, asked last inside `WatchedFolder.delete`, after the source's own check and right before
+  it goes: a library file that went before then leaves the source as the document's last copy.
 
 ### 6.10 OCR sidecars, versions and engine selection
 

@@ -47,6 +47,7 @@ internal class SafWatchedFolder(
     override suspend fun delete(
         file: WatchedFolderFile,
         docId: String,
+        libraryHolds: suspend () -> Boolean,
     ): Boolean =
         withContext(io) {
             val uri = file.id.toUri()
@@ -58,7 +59,7 @@ internal class SafWatchedFolder(
                     val input = appContext.contentResolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
                     input.use { it.sha256Hex() }
                 }
-            holds && (doc.delete() || throw IOException("Could not delete $uri"))
+            holds && libraryHolds() && (doc.delete() || throw IOException("Could not delete $uri"))
         }
 
     override fun changes(): Flow<Unit> = emptyFlow()

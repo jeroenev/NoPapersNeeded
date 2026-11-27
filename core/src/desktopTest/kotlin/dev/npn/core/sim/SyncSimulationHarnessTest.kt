@@ -399,7 +399,10 @@ class SyncSimulationHarnessTest {
                             val other = SimPdf.bytes("written over it", "w", BAKED_SIZE + 7)
                             fs.bySyncTool { fs.externalWriteAtomic(path, other) }
                         }
-                        folder.delete(source, docId).shouldBeTrue()
+                        // The library's answer is taken as given here: whether a proof stands behind it
+                        // is what [proved] decided above, made before the take as a proof the delete
+                        // asks for runs a moment before the source goes.
+                        folder.delete(source, docId) { true }.shouldBeTrue()
                     }
                 }
             }, sync)

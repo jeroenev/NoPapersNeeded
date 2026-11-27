@@ -262,9 +262,9 @@ class SimXmpIO(
  * file still holds what was imported), and records as a violation a delete of bytes the library
  * has no document of.
  *
- * The importer proves the library holds the document ([IngestFacade.holdsDocument]) and then
- * deletes the source, two calls on two filesystems with time between them: the sync tool or another
- * process may take the library's file in that gap, as they may a moment after the delete. A delete
+ * The importer proves the library holds the document ([IngestFacade.holdsDocument]) last, inside
+ * the delete, right before the source goes; the proof itself reads the library's file, and the sync
+ * tool or another process may take that file while it runs, as they may a moment after the delete. A delete
  * whose bytes the library no longer holds is no violation when the importer's last proof of the
  * document, made through [proving], held when it was made and only the sync tool or the outside
  * world took the document's bytes from the library folder since: the app acted on a fresh proof and
@@ -365,9 +365,13 @@ internal class SimWatchedFolder(
     override suspend fun delete(
         file: WatchedFolderFile,
         docId: String,
+        libraryHolds: suspend () -> Boolean,
     ): Boolean {
         val entry = files[file.name] ?: return false
         if (!file.stillHolds(docId, entry.bytes.size.toLong(), entry.mtime) { sha256Bytes(entry.bytes) }) return false
+        if (!libraryHolds()) return false
+        // The file may have changed while the proof ran.
+        if (files[file.name] !== entry) return false
         val hash = sha256Bytes(entry.bytes)
         if (!accounted(hash) && !takenSinceProof(docId)) {
             violations += "$name deleted '${file.name}' (${hash.take(ID)}), which the library holds nowhere"

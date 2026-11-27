@@ -54,12 +54,17 @@ interface WatchedFolder {
      * Remove [file] from the watched folder (only used when delete-after-import is on), only while
      * it still holds the bytes imported as [docId], or found in the library as it
      * ([WatchedFolderFile.stillHolds]): a file written under its name since was never imported, and
-     * is left for the next sweep. Returns whether it deleted the file; false for one already gone.
-     * Throws when the file cannot be read or deleted, for the importer to log.
+     * is left for the next sweep. And only once [libraryHolds] says the library holds the document,
+     * asked last, after the file's own check (a hash, for one whose stat moved) and right before it
+     * goes: the library's file may go meanwhile (another process, a sync tool carrying a delete),
+     * and a source deleted after that is the document's last copy, so no wait may lie between the
+     * proof and the delete. Returns whether it deleted the file; false for one already gone, or
+     * kept. Throws when the file cannot be read or deleted, for the importer to log.
      */
     suspend fun delete(
         file: WatchedFolderFile,
         docId: String,
+        libraryHolds: suspend () -> Boolean,
     ): Boolean
 
     /**

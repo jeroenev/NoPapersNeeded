@@ -55,6 +55,7 @@ class JvmWatchedFolder(
     override suspend fun delete(
         file: WatchedFolderFile,
         docId: String,
+        libraryHolds: suspend () -> Boolean,
     ): Boolean =
         withContext(io) {
             // Paths.get, not Path.of: the latter is Java 11 and only reached Android at API 34.
@@ -70,7 +71,7 @@ class JvmWatchedFolder(
                 file.stillHolds(docId, attrs.size(), attrs.lastModifiedTime().toMillis()) {
                     Files.newInputStream(path).use { it.sha256Hex() }
                 }
-            holds && Files.deleteIfExists(path)
+            holds && libraryHolds() && Files.deleteIfExists(path)
         }
 
     override fun changes(): Flow<Unit> = watchDirs(dir, recursive = false, kinds = NEW_OR_REWRITTEN).map { }

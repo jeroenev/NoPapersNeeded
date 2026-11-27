@@ -248,11 +248,12 @@ Across replicas, after every step:
   nothing deletes one, so a journal a library finds damaged is a bug.
 - A watched folder's importer deletes only a file whose bytes the library has a document of: bytes
   a file in the replica's folder holds, or bytes a relink superseded whose final target, the relink
-  chain followed to its end, a file in that folder holds. The importer proves the library holds the
-  document and then deletes the source, two calls on two filesystems: when only the sync tool or
-  another process took the document's bytes from the folder after its last proof (which held when
-  it was made), and the app took none, the delete is no finding, as it would be no finding a moment
-  later. A delete with no proof, or after the app itself took the bytes, is one.
+  chain followed to its end, a file in that folder holds. The folder asks for the proof that the
+  library holds the document last, inside the delete, after the source's own check: when only the
+  sync tool or another process took the document's bytes from the folder while that proof ran, or
+  since (which it held when it was made), and the app took none, the delete is no finding, as it
+  would be no finding a moment later. A delete with no proof, or after the app itself took the
+  bytes, is one.
 
 At rest (every `quiesceEvery` steps, and at the end), deliveries under way land, faults are
 cleared, OCR runs through and background operations end on every replica, the sync tool scans
