@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.isLive
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -277,6 +278,56 @@ class BakeInPlaceTest {
             rig.session.docLifecycle.trashDoc(id)
 
             rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
+        }
+
+    /**
+     * A bake's temporary file left at a path (an earlier failed bake there, or another device's that
+     * the sync tool carried here) can hold the only copy of a document the library shows: a bake
+     * undone after its relink landed parks the baked bytes there. The next bake at that path, of any
+     * document, sets it aside under a recovery name, which the rescan indexes as that document's
+     * file, rather than delete it (seeds 4230199 and 4240158, "the app removed the last copy").
+     */
+    @Test
+    fun aLeftoverTempHoldingAShownDocumentsOnlyCopyIsSetAsideNotDeleted() =
+        appSessionTest { rig ->
+            val only = PdfFixtures.embeddedTextPdf("only copy in a leftover temp")
+            rig.writePdf("only.pdf", only)
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val onlyId = rig.docId("only.pdf")
+            val id = rig.docId("a.pdf")
+            rig.writePdf(NpnPaths.Temp.bakePath("a.pdf"), only)
+            rig.fs.delete("only.pdf")
+            rig.session.rescan()
+
+            rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Baked
+
+            rig.fs.exists(NpnPaths.Temp.bakePath("a.pdf")) shouldBe false
+            val aside = rig.fs.libraryPdfs().filter { NpnPaths.Temp.isRecovery(it) }
+            aside.map { rig.fs.sha256(it) } shouldContainExactly listOf(onlyId)
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .getByDocId(onlyId)
+                ?.let { it.isLive && it.relPath == aside.single() } shouldBe true
+        }
+
+    /** A leftover temp holding no document the library shows is a spare, and goes as before. */
+    @Test
+    fun aLeftoverTempOfAFailedBakeIsDeleted() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.writePdf(NpnPaths.Temp.bakePath("a.pdf"), PdfFixtures.embeddedTextPdf("a failed bake's output"))
+
+            rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Baked
+
+            rig.fs.exists(NpnPaths.Temp.bakePath("a.pdf")) shouldBe false
+            rig.fs
+                .libraryPdfs()
+                .filter { NpnPaths.Temp.isRecovery(it) }
+                .shouldBeEmpty()
         }
 
     /** The file at a document's path was replaced and the index has not looked yet: that file is not baked. */

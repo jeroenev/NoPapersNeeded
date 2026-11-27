@@ -8,6 +8,7 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.holds
 import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
@@ -295,7 +296,7 @@ internal class SessionGraph(
                 documentDao = db.documentDao(),
                 renderGate = renderGate,
             ),
-            BakeService(deps.fs, deps.xmpIO, log, deps.ids, indexer.bakeAsides),
+            BakeService(deps.fs, deps.xmpIO, log, deps.ids, indexer.bakeAsides, ::shownWithoutItsFile),
             coordinator,
             relinkBake = bakeRelink::relink,
             renderGate,
@@ -425,6 +426,18 @@ internal class SessionGraph(
                 )
             }
         }
+
+    /**
+     * Whether the library shows the document [docId] while no file at its row's path holds its bytes
+     * (its row is missing, or names a path another file took): a bake's leftover temporary file
+     * holding them may be its only copy ([BakeService]). A hash with no row is no document the
+     * library knows (the journal calls any id it never saw current), such as a failed bake's output
+     * that no relink names.
+     */
+    private suspend fun shownWithoutItsFile(docId: String): Boolean {
+        val row = db.documentDao().getByDocId(docId)?.takeIf { !it.trashed && !it.deleted } ?: return false
+        return coordinator.serialized { it.isCurrent(docId) } && !deps.fs.holds(row.relPath, docId)
+    }
 
     /** What a sync pass asks of the session: the journal's answers, a fold, a rescan. */
     private inner class SessionSyncHooks : SyncHooks {

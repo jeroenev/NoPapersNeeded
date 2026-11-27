@@ -57,6 +57,12 @@ internal class BakeService(
      * leave the file to the bake ([dev.npn.core.index.Indexer.bakeAsides]).
      */
     private val bakeAsides: BakeAsides = BakeAsides(),
+    /**
+     * Whether the library shows the document whose id is this hash while no file at its row's path
+     * holds its bytes: a leftover temporary file holding them may be its only copy
+     * ([setAsideLeftover]). Answered by the caller, as the relink is, so this package reads no journal.
+     */
+    private val shownWithoutItsFile: suspend (String) -> Boolean = { false },
 ) {
     /**
      * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
@@ -136,8 +142,8 @@ internal class BakeService(
             }
 
         val tmpPath = NpnPaths.Temp.bakePath(norm)
-        // Clean any stale temp from a prior interrupted bake so writeBytesOnce does not fail.
-        if (fs.exists(tmpPath)) fs.delete(tmpPath)
+        // Clear any stale temp from a prior interrupted bake so writeBytesOnce does not fail.
+        if (fs.exists(tmpPath)) setAsideLeftover(norm, tmpPath)
         fs.writeBytesOnce(tmpPath, bakedBytes)
 
         // Verify by re-reading the temp file (round-trips through the real filesystem).
@@ -192,6 +198,33 @@ internal class BakeService(
                 newSha
             }
         }
+    }
+
+    /**
+     * Clear the temporary file [tmpPath] an earlier bake at [norm] left: one interrupted or undone
+     * here, or another device's that a sync tool carried here, of this document or of another one
+     * that had this path then. A bake undone after its relink landed parks the baked bytes there,
+     * and they may be the only copy of the document they are, which the library shows: such a file
+     * goes aside under a recovery name beside [norm], an ordinary one the next rescan indexes as that
+     * document's file (seeds 4230199 and 4240158). Any other is a spare (a failed bake's output that
+     * no relink names, or bytes the document's own file holds) and is deleted, so nothing the library
+     * does not show turns up as a document.
+     */
+    private suspend fun setAsideLeftover(
+        norm: String,
+        tmpPath: String,
+    ) {
+        val held = runCatchingCancellable { fs.sha256(tmpPath) }.getOrNull()
+        if (held == null || !shownWithoutItsFile(held)) {
+            fs.delete(tmpPath)
+            return
+        }
+        val aside = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
+        fs.move(tmpPath, aside)
+        log.warn(
+            "${sensitive(tmpPath, DOCUMENT)} held the only copy of $held, which the library shows; " +
+                "it is at ${sensitive(aside, DOCUMENT)} now",
+        )
     }
 
     /**
