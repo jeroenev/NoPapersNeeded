@@ -312,7 +312,8 @@ object FieldKeys {
                 FieldType.TEXT,
                 showByDefault = false,
                 aiEnabled = false,
-                position = 13,
+                // Right after the five: the e-invoice fields that sat between are a setting now.
+                position = 5,
                 perDocument = true,
             ),
         )

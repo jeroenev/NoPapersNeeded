@@ -173,7 +173,7 @@ class FieldKeysTest {
         assertTrue(seed.take(5).all { it.showByDefault })
         assertTrue(seed.drop(5).none { it.showByDefault })
         assertEquals(setOf("notes", "emailMessageId"), seed.filterNot { it.aiEnabled }.map { it.key }.toSet())
-        assertEquals((0 until 5).toList(), seed.take(5).map { it.position })
+        assertEquals((0 until seed.size).toList(), seed.map { it.position })
     }
 
     @Test
@@ -189,7 +189,6 @@ class FieldKeysTest {
                 "paymentReference",
                 "iban",
                 "eInvoice",
-                "emailMessageId",
             ),
             fields.map { it.key },
         )

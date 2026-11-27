@@ -205,7 +205,7 @@ class FieldRegistryTest {
         appSessionTest { rig ->
             val registry = rig.session.fieldRegistry
             registry.fields.first { it.isNotEmpty() }
-            // The seeded fields end at 12; removing two leaves the last still there.
+            // The seeded fields end at 5; removing two leaves the last still there.
             registry.remove(FieldKeys.CORRESPONDENT)
             registry.remove(FieldKeys.DOC_TYPE)
             registry.upsert(def("amount"))

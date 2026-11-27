@@ -199,7 +199,8 @@ class FieldSeedUpgradeTest {
 
             rig.coordinator().apply { refreshState() }.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
 
-            registry() shouldBe earlierThreeSeeds.associateBy { it.key } + seeds.filterKeys { it == FieldKeys.EMAIL_MESSAGE_ID }
+            registry() shouldBe
+                earlierThreeSeeds.associateBy { it.key } + seeds.filterKeys { it == FieldKeys.EMAIL_MESSAGE_ID }
         }
 
     @Test
