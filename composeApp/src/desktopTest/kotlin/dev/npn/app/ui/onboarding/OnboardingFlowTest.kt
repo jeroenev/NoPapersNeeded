@@ -98,8 +98,6 @@ class OnboardingFlowTest {
     private fun Onboarding(cloudState: CloudSetupState?) {
         OnboardingScreen(
             failure = null,
-            useSaf = false,
-            onUseSafChange = {},
             onOpen = {},
             onCreate = { _, _ -> },
             onUseRecommendedFolder = { recommended += it },

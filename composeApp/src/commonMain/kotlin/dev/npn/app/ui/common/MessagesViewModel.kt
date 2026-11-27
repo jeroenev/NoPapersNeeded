@@ -84,7 +84,7 @@ fun newViewModelScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispa
  * Base for view models that surface one-shot user-facing messages ([MessageSink]), shown by
  * [SnackbarMessages].
  *
- * Write operations are journal appends and file moves, so they can genuinely fail (SAF I/O errors,
+ * Write operations are journal appends and file moves, so they can genuinely fail (I/O errors,
  * full disk, permissions). Fire-and-forget writes must go through [launchReporting] so a failure
  * is reported to the user instead of silently swallowed, or crashing the app.
  */

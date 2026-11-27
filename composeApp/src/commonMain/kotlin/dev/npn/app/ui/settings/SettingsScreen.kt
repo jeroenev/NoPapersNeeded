@@ -132,16 +132,14 @@ fun SettingsScreen(
     var draftToResume by rememberSaveable { mutableStateOf<String?>(null) }
     val pickLibrary =
         rememberLibraryFolderPicker(
-            useSaf = paneState.settings.snapshot.useSafStorage,
             onPick = onOpenLibrary,
             onUnusable = vm::folderNotOnDevice,
-            onTemporaryAccess = vm::libraryAccessNotKept,
         )
-    // A folder on device storage needs Android's all-files grant, which a cloud or SAF library never
-    // asked for: ask before the picker rather than let the folder fail to open. Once granted, the
-    // picker the user was after opens by itself.
+    // A folder on device storage needs Android's all-files grant, which a cloud library never asked
+    // for: ask before the picker rather than let the folder fail to open. Once granted, the picker
+    // the user was after opens by itself.
     val storage = rememberStorageAccess()
-    val needsGrant = !paneState.settings.snapshot.useSafStorage && !storage.usable
+    val needsGrant = !storage.usable
     var askGrant by rememberSaveable { mutableStateOf(false) }
     var pickWhenGranted by rememberSaveable { mutableStateOf(false) }
     SideEffect {

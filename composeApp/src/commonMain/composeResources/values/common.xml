@@ -97,21 +97,17 @@
     <string name="common_create_new_library">Create a library</string>
     <string name="common_new_library_folder_name">New folder name</string>
 
-    <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
+    <!-- Library storage: device-storage folders and the Android all-files grant -->
     <string name="common_onboarding_cloud_title">Choose your cloud drive</string>
     <string name="common_onboarding_cloud_connect_failed">Your library is ready on this device, but it could not be connected to your cloud drive: %1$s. Connect it in Settings under Cloud sync.</string>
     <string name="common_storage_access_title">Allow access to device storage</string>
     <string name="common_storage_access_help">No Papers Needed keeps your library as a plain folder on this device. To read and write it, including files added by other apps such as Syncthing, allow access to all files.</string>
     <string name="common_storage_access_grant">Allow access</string>
     <string name="common_ok">OK</string>
-    <string name="common_folder_not_on_device">This folder is not on device storage. Choose a folder on internal storage or an SD card, or turn on the Storage Access Framework option under Advanced to use folders from other apps.</string>
-    <string name="common_folder_access_not_kept_library">Android would not let the app keep its access to that folder, so it was not opened as the library. Choose it again or choose another folder.</string>
+    <string name="common_folder_not_on_device">This folder is not on device storage. Choose a folder on internal storage or an SD card.</string>
     <string name="common_folder_access_not_kept_watched">Android would not let the app keep its access to that folder, so the watched folder was not changed. Choose it again or choose another folder.</string>
     <string name="common_folder_in_library_watched">That folder is inside the library, so its PDFs are already part of it and the watched folder was not changed. Choose a folder outside the library.</string>
     <string name="common_settings_advanced">Advanced</string>
-    <string name="common_settings_use_saf">Use Storage Access Framework</string>
-    <string name="common_settings_use_saf_help">Legacy mode: open folders through Android's document picker instead of directly on device storage. Slower, without change notifications, and files added by sync tools may go unnoticed. Applies the next time you choose a folder.</string>
-    <string name="common_settings_library_saf_note">This library is opened through the Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">Access to device storage is not allowed. Files added by other apps, such as Syncthing, will not be visible.</string>
     <string name="common_already_running">No Papers Needed is already open. Switch to its window to carry on.</string>
 

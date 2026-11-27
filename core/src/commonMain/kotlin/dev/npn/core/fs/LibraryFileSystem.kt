@@ -24,19 +24,13 @@ data class FileMeta(
  * evidence that the bytes there are still the ones known then, without hashing them. A rescan and an
  * import (`ImportService`) take a document row's stat as that evidence for a document that is not
  * hidden (a hidden one gave its path up, so a file there is hashed); the trash and duplicate removal
- * take the stat they saw when they hashed the file.
- *
- * Only a real mtime proves anything: where storage reports none (a SAF provider giving 0), an
- * unchanged size is all that is left, and other bytes of the same size would keep the old identity,
- * so the file is hashed instead. This is the one place every proof by stat goes through.
+ * take the stat they saw when they hashed the file. This is the one place every proof by stat goes
+ * through.
  */
 internal fun FileMeta.hasStoredStat(
     size: Long,
     mtime: Long,
-): Boolean = mtime != NO_MTIME && this.size == size && mtimeMillis == mtime
-
-/** The mtime a provider that reports none gives every file. */
-private const val NO_MTIME = 0L
+): Boolean = this.size == size && mtimeMillis == mtime
 
 /**
  * This filesystem can never publish without replacement: the platform or mount has no primitive
@@ -48,7 +42,7 @@ class VerifiedPublicationUnavailableException(
 ) : IllegalStateException(message, cause)
 
 /**
- * One publication attempt failed on a filesystem that can publish: a provider rename that threw or
+ * One publication attempt failed on a filesystem that can publish: a rename that threw or
  * landed under another name, a staging file that vanished. Only this write fails; the next one
  * tries again the same way.
  */
@@ -88,22 +82,11 @@ expect class ExternalSource
  * - All paths are library-relative, '/'-separated, no leading slash.
  */
 interface LibraryFileSystem {
-    /**
-     * Whether [publishVerifiedObjectOnce] rests on what the storage under the library offers (a hard
-     * link, an exclusive rename), which a remount can take away, so every open tries a publication
-     * ([dev.npn.core.index.DeviceIdentity]). False for a provider that publishes with a rename of its
-     * own, which no open can lose; it is spared the round trips.
-     */
-    val publicationMayBeLost: Boolean get() = true
-
-    /** Supports verified publication to arbitrary PDF names without replacing a concurrent file. */
-    val supportsDocumentRelocation: Boolean get() = false
-
     /** Atomically consume the source name without replacing the destination; no link/unlink fallback. */
     suspend fun claimDocument(
         fromRelPath: String,
         toRelPath: String,
-    ): Unit = throw VerifiedPublicationUnavailableException("Atomic document claiming is unsupported")
+    )
 
     /**
      * Recursive walk of the whole library excluding the `.npn/` metadata subtree (journal, OCR
@@ -196,10 +179,7 @@ interface LibraryFileSystem {
         toRelPath: String,
     )
 
-    /**
-     * Live change events. Desktop uses a [java.nio.file.WatchService]; the android SAF impl
-     * returns an empty flow (indexing there is rescan-driven).
-     */
+    /** Live change events, from a [java.nio.file.WatchService]. */
     fun watch(): Flow<FsEvent>
 }
 

@@ -203,9 +203,6 @@ class RescanDecisionTest {
         RescanDecision.needsHash(file, PathMeta(path, "d", 10, 1_000, hidden = true)) shouldBe true
         RescanDecision.needsHash(file, PathMeta(path, "d", 10, 2_000)) shouldBe true
         RescanDecision.needsHash(file, PathMeta(path, "d", 11, 1_000)) shouldBe true
-        // Storage that reports no mtimes proves nothing by a stat.
-        val noMtime = file.copy(mtimeMillis = 0)
-        RescanDecision.needsHash(noMtime, PathMeta(path, "d", 10, 0)) shouldBe true
     }
 
     /** A journal that names [named] as storage paths of document `d`, and hides and supersedes nothing. */

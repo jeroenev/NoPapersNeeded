@@ -75,10 +75,10 @@ The KMP modules name their JVM target `desktop`. Source sets:
 
 Platform implementations live in the same package as their interface, under `androidMain` or
 `desktopMain`: `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngine`,
-`core.db.NpnDatabase`. Android picks its filesystem from the persisted location string
-(`core.settings.LibraryLocations`): a plain path opens the shared direct filesystem, which is the
-default and what Syncthing interoperability relies on; a `content://` tree URI opens
-`SafLibraryFileSystem`, the advanced option for cloud document providers.
+`core.db.NpnDatabase`. A library is always a plain path, on Android too: it opens the shared direct
+filesystem (`JvmLibraryFileSystem`), which is what Syncthing interoperability relies on; a cloud
+provider's folder is reached through cloud sync instead. Only a watched folder can be a
+`content://` tree URI (`SafWatchedFolder`).
 
 ## 3. Core package map
 
@@ -352,10 +352,9 @@ truth; the user just never picks it.
   concurrent: verifying, publishing, the manifest and the report take one file at a time. Remote
   moves and deletes stay in plan order; a run of consecutive uploads goes at once.
 - A document's remote name follows the library's: where the indexer put the file (its journaled
-  `storagePath`, or the name it gave a document whose intent another holds). A library that cannot
-  move documents itself (`supportsDocumentRelocation` false) takes the remote's name instead. Without
-  an intent, the side that renamed it since the last pass wins (`ManifestEntry.localPath`), and a name
-  made unique on the remote is the library's name too. Paths collide case-insensitively.
+  `storagePath`, or the name it gave a document whose intent another holds). Without an intent,
+  the side that renamed it since the last pass wins (`ManifestEntry.localPath`), and a name made
+  unique on the remote is the library's name too. Paths collide case-insensitively.
 - Trash and delete for good are the journal's decisions, read from the fold (`JournalDocView`),
   not from index rows that may lag it. The pass mirrors them onto the remote, and a replica applies
   the same move to its own file, as a folder syncer would deliver it, only once the remote holds no
@@ -453,9 +452,6 @@ the short list of these that a change must never break; this section is the comp
   mirror of some device's move, and journaling it would set an older place against the newest
   intent, so two devices would move the document back and forth for good. The cost: a file a user
   moves back to a place the journal named before goes to its intended path again.
-- Storage that cannot move a document (SAF, `supportsDocumentRelocation` false) refuses a rename
-  or move with `RelocationOutcome.UNSUPPORTED` and writes nothing; a rule's location is still
-  journaled there, once, for a replica that can carry it out.
 
 ### 6.2 Import and duplicates
 
@@ -548,11 +544,9 @@ Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `Writ
 - A rescan hashes a PDF only once its bytes have settled (`WriteSettle`). Files written in place
   are deferred and picked up by a follow-up rescan, whichever rescan deferred them; a relink or a
   bake hands the report of the rescan it ran to the session, which follows it up as its own.
-- A stat proves a file's bytes only with a real mtime (`FileMeta.hasStoredStat`, the one place every
+- A stat (size and mtime) proves a file's bytes through `FileMeta.hasStoredStat`, the one place every
   proof by stat goes through: the rescan's fast path, an import's duplicate check, `holdsDocument`,
-  the trash and duplicate removal). Where storage reports no mtimes (a SAF provider giving 0), a file
-  of the same size may be other bytes, so it is hashed: such a library hashes every PDF at every
-  rescan.
+  the trash and duplicate removal.
 - `OcrPipeline` re-checks the hash of the bytes it read before publishing a sidecar, so a partial
   file never gets a document identity. A read that finds other bytes asks for a follow-up rescan
   and leaves its run queued, uncharged; a second one in a row counts as a failure.
@@ -633,10 +627,10 @@ crash left behind, on any installation, is the rescan's `TempFileSweep`'s to del
 (a hash check reads the page cache, and a name can reach the disk before the bytes it names), then
 hash-checked and published without replacement, its directory forced after: a hard link, or where the filesystem has none (Android shared
 storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
-`MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), or on SAF a rename checked by name
-and hash afterwards, in a bucket whose directories carry exactly their names. A filesystem with
-neither primitive throws `VerifiedPublicationUnavailableException`, and the library refuses to open
-rather than write anything. `stageAndPublishVerifiedObject`, beside `ContentAddressedJournalWriter`,
+`MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), in a bucket whose directories carry
+exactly their names. A filesystem with neither primitive throws
+`VerifiedPublicationUnavailableException`, and the library refuses to open rather than write
+anything. `stageAndPublishVerifiedObject`, beside `ContentAddressedJournalWriter`,
 is the one helper for it.
 
 **Nothing is deleted; snapshots are read, never written.** The app never deletes a journal object
@@ -687,7 +681,7 @@ library holds one write-once marker per installation that used it,
 fresh id costs nothing, as the old id's sidecars are adopted as another device's. Publishing that
 marker uses the journal's primitive, and once it is there every open publishes and deletes a
 throwaway object under `.npn/tmp` the same way, which is how an unsupported filesystem is found out
-at every open (SAF skips the probe: `LibraryFileSystem.publicationMayBeLost`).
+at every open.
 
 ### 6.7 Fold and projection
 

@@ -122,13 +122,12 @@ internal class DeviceIdentity(
     }
 
     /**
-     * Publish a throwaway object under `.npn/tmp` and delete it, for storage that can lose its
-     * primitive between opens ([LibraryFileSystem.publicationMayBeLost]): remounted without hard
-     * links or an exclusive rename, it refuses the library here rather than at the first edit. Named
-     * as an import's staging files are, so the temporary-file sweep takes what a crash leaves.
+     * Publish a throwaway object under `.npn/tmp` and delete it, as storage can lose its primitive
+     * between opens: remounted without hard links or an exclusive rename, it refuses the library
+     * here rather than at the first edit. Named as an import's staging files are, so the
+     * temporary-file sweep takes what a crash leaves.
      */
     private suspend fun probePublication() {
-        if (!fs.publicationMayBeLost) return
         val published = NpnPaths.Temp.importPath(nonce())
         try {
             publishOnce(NpnPaths.Temp.importPath(nonce()), published, PROBE_BYTES)

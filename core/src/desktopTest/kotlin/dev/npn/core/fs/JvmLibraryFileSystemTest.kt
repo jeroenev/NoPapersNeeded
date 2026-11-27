@@ -31,7 +31,7 @@ class JvmLibraryFileSystemTest {
         root.toFile().deleteRecursively()
     }
 
-    /** What does not exist has no metadata, as in the SAF implementation; nothing throws. */
+    /** What does not exist has no metadata; nothing throws. */
     @Test
     fun statReturnsNullForWhatIsGone() =
         runTest {

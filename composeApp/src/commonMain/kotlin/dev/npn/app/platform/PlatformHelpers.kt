@@ -30,10 +30,10 @@ expect fun platformFileToExternalSource(file: PlatformFile): ExternalSource
 
 /**
  * How a picked folder is handed to the app. [DIRECT] is a plain filesystem path the app reads and
- * writes itself: the only mode on desktop and the default on Android, where it is what lets a sync
- * tool such as Syncthing share the folder. [SAF] is Android's Storage Access Framework tree uri,
- * kept as an advanced option for folders that have no path (cloud document providers) and for
- * libraries opened that way before the direct mode existed.
+ * writes itself: the only mode on desktop, and on Android every library's, which is what lets a sync
+ * tool such as Syncthing share the folder. [SAF] is Android's Storage Access Framework tree uri, for
+ * a watched folder only: one with no path (a cloud document provider's), or any while the app lacks
+ * the all-files grant.
  */
 enum class FolderAccess { DIRECT, SAF }
 
@@ -66,12 +66,6 @@ expect fun persistDirectoryAccess(
     dir: PlatformFile,
     access: FolderAccess,
 ): FolderPick
-
-/**
- * Whether the platform offers [FolderAccess.SAF] at all (Android). Gates the advanced
- * "Use Storage Access Framework" setting and the onboarding escape hatch.
- */
-expect fun supportsSafStorage(): Boolean
 
 /**
  * Whether OCR takes a language setting. Desktop's Tesseract needs to be told which languages to

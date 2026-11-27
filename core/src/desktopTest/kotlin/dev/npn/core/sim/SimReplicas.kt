@@ -22,7 +22,6 @@ import kotlin.random.Random
 data class SyncConfig(
     val replicas: Int,
     val profiles: List<StorageProfile>,
-    val mtimes: List<Boolean>,
     val watched: List<Boolean>,
     val deleteAfterImport: List<Boolean>,
     val options: SyncOptions,
@@ -53,11 +52,7 @@ data class SyncConfig(
                     if (i == 0) {
                         config.profile
                     } else {
-                        when (random.nextInt(100)) {
-                            in 0 until 55 -> StorageProfile.DIRECT_LINKS
-                            in 55 until 80 -> StorageProfile.DIRECT_RENAME
-                            else -> StorageProfile.SAF
-                        }
+                        StorageProfile.draw(random)
                     }
                 }
             val options =
@@ -65,11 +60,6 @@ data class SyncConfig(
                     tool = random.pick(SyncTool.entries),
                     duplicatePercent = DUPLICATE_PERCENT,
                 )
-            // In the order these were always drawn, so a seed's replicas are what they were.
-            val mtimes =
-                profiles.mapIndexed { i, p ->
-                    if (i == 0) config.mtimes else !(p == StorageProfile.SAF && random.nextBoolean())
-                }
             val watched = List(count) { random.chance(50) }
             val deleteAfterImport = List(count) { random.nextBoolean() }
             val joinsAt =
@@ -106,7 +96,6 @@ data class SyncConfig(
             return SyncConfig(
                 replicas = count,
                 profiles = profiles,
-                mtimes = mtimes,
                 watched = watched,
                 deleteAfterImport = deleteAfterImport,
                 options = options,
@@ -220,7 +209,6 @@ internal class SyncSimulation(
                 options =
                     SimFsOptions(
                         profile = sync.profiles[index],
-                        mtimes = sync.mtimes[index],
                         watchDropRate = config.watchDropRate,
                         watchOverflowRate = config.watchOverflowRate,
                         stamps = world.mtimes,
@@ -234,7 +222,7 @@ internal class SyncSimulation(
             if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted, fs.losses) else null
         val sim =
             Simulation(
-                config.copy(profile = sync.profiles[index], mtimes = sync.mtimes[index]),
+                config.copy(profile = sync.profiles[index]),
                 ReplicaSetup(
                     world,
                     name,
@@ -732,8 +720,8 @@ internal class SyncSimulation(
             tool.finishInFlight()
         }
         // Each replica looks at its folder as the day begins, as the app does on Android at every
-        // resume and a watch does when files land. Storage no watch reports on (SAF) is rescanned by
-        // nothing else, and a trashed document's own bytes found back there first by the rescan after
+        // resume and a watch does when files land. A file a watcher dropped the event of is rescanned
+        // by nothing else, and a trashed document's own bytes found back there first by the rescan after
         // the day started the restore window then: it had not passed by the checks, and the file was
         // neither a live document nor a known duplicate (seed 4101227 at 44dee63c).
         present.forEach { it.sim.rescanAtRest("rescan as the day at rest begins") }

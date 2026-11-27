@@ -31,7 +31,6 @@ import no_papers_needed.composeapp.generated.resources.detail_exported_baked_cop
 import no_papers_needed.composeapp.generated.resources.detail_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.detail_rename_invalid
 import no_papers_needed.composeapp.generated.resources.detail_rename_taken
-import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
@@ -125,21 +124,6 @@ class DocDetailActionsTest : MainDispatcherTest() {
 
             session.docLifecycle.renamedFiles shouldContainExactly listOf("doc-1" to "invoice.pdf")
             messages.shouldBeEmpty()
-        }
-
-    /** A library opened through Android's folder picker cannot rename a file, and the rename says so. */
-    @Test
-    fun aRenameTheLibraryCannotCarryOutSaysWhy() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { docLifecycle.relocation = RelocationOutcome.UNSUPPORTED }
-            val model = docDetailVm(session = session)
-            val messages = collecting(model.messages.map { it.text })
-            advanceUntilIdle()
-
-            model.rename("invoice.pdf")
-            advanceUntilIdle()
-
-            messages shouldContainExactly listOf(uiText(Res.string.detail_rename_unsupported))
         }
 
     /** A name another file has, or one the library could not hold a document under, says which. */

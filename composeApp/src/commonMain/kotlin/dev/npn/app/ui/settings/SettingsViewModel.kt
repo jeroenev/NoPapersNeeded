@@ -74,7 +74,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_in_library_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
@@ -112,7 +111,7 @@ import no_papers_needed.composeapp.generated.resources.security_pin_too_short
  * trash retention) are written through the session; they, and the device settings that need
  * surrounding logic (provider switch clears the stale model list), keep their own methods.
  *
- * Extends [MessagesViewModel] so a failed write (properties-file I/O, SAF errors) surfaces as a
+ * Extends [MessagesViewModel] so a failed write (properties-file I/O, storage errors) surfaces as a
  * "Could not update …" snackbar instead of being silently swallowed — every write is routed
  * through [launchReporting].
  */
@@ -935,11 +934,8 @@ class SettingsViewModel(
             message(uiText(Res.string.common_settings_ai_spend_reset_done))
         }
 
-    /** A library folder was picked that direct mode cannot use: it is not on device storage. */
+    /** A library folder was picked that has no path on the device (a cloud provider's). */
     fun folderNotOnDevice() = message(uiText(Res.string.common_folder_not_on_device))
-
-    /** A library folder was picked whose access Android would not keep, so the library stays as it was. */
-    fun libraryAccessNotKept() = message(uiText(Res.string.common_folder_access_not_kept_library))
 
     override fun watchedFolderPicked(pick: FolderPick) {
         when (pick) {

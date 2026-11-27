@@ -47,31 +47,22 @@ data class SimConfig(
     val seed: Long,
     val steps: Int,
     val profile: StorageProfile,
-    /** False: the provider reports no mtimes (listings and stats carry 0), as SAF can. */
-    val mtimes: Boolean,
     val watchDropRate: Double,
     val watchOverflowRate: Double,
     /** Run the expensive invariants (rebuild oracle, files hold their hashes) every this many steps, and at the end. */
     val quiesceEvery: Int = 40,
 ) {
     companion object {
-        /** The storage, watcher and mtime knobs a seed picks, so a seed alone replays a run. */
+        /** The storage and watcher knobs a seed picks, so a seed alone replays a run. */
         fun forSeed(
             seed: Long,
             steps: Int,
         ): SimConfig {
             val random = Random(seed xor CONFIG_SALT)
-            val profile =
-                when (random.nextInt(100)) {
-                    in 0 until 55 -> StorageProfile.DIRECT_LINKS
-                    in 55 until 80 -> StorageProfile.DIRECT_RENAME
-                    else -> StorageProfile.SAF
-                }
             return SimConfig(
                 seed = seed,
                 steps = steps,
-                profile = profile,
-                mtimes = !(profile == StorageProfile.SAF && random.nextBoolean()),
+                profile = StorageProfile.draw(random),
                 watchDropRate = if (random.chance(30)) 0.2 else 0.0,
                 watchOverflowRate = if (random.chance(20)) 0.05 else 0.0,
             )

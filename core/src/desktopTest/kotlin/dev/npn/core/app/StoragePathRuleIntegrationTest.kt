@@ -15,6 +15,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.Test
 
@@ -139,9 +140,9 @@ class StoragePathRuleIntegrationTest {
         }
 
     /**
-     * On storage that cannot move a document (a library opened through Android's folder picker), the
-     * rule's location is journaled once, for a replica that can carry it out: the document stays where
-     * it is, and a later write to it does not journal the same location again.
+     * Where the document's file cannot be moved, the rule's location is journaled once, for a later
+     * rescan or a replica to carry out: the document stays where it is, and a later write to it does
+     * not journal the same location again.
      */
     @Test
     fun aLocationTheStorageCannotCarryOutIsJournaledOnce() =
@@ -164,31 +165,13 @@ class StoragePathRuleIntegrationTest {
                 .relPath shouldBe "scan.pdf"
         }
 
-    /** There, a rename the user asks for is refused rather than journaled as if it had happened. */
-    @Test
-    fun aRenameTheStorageCannotCarryOutIsRefused() =
-        appSessionTest(files = ::notRelocating) { rig ->
-            rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
-            rig.session.rescan()
-            val id = rig.docId("scan.pdf")
-            val objects = rig.journalObjectCount()
-
-            rig.session.docLifecycle.renameFile(id, "invoice.pdf") shouldBe RelocationOutcome.UNSUPPORTED
-            rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.UNSUPPORTED
-
-            rig.journalObjectCount() shouldBe objects
-            rig.db
-                .documentDao()
-                .getByDocId(id)
-                .shouldNotBeNull()
-                .relPath shouldBe "scan.pdf"
-            rig.exists("scan.pdf") shouldBe true
-        }
-
-    /** [fs] as storage that cannot move a document, as a library opened through Android's folder picker. */
+    /** [fs] as storage where every move of a document fails: the file never reaches its journaled path. */
     private fun notRelocating(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {
-            override val supportsDocumentRelocation: Boolean get() = false
+            override suspend fun claimDocument(
+                fromRelPath: String,
+                toRelPath: String,
+            ): Unit = throw IOException("Moves fail here")
         }
 
     /** Every `storagePath` event in the journal, as its document and the location it names. */

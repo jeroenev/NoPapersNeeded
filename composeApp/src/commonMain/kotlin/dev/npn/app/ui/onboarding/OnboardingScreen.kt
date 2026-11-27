@@ -97,8 +97,8 @@ import org.jetbrains.compose.resources.stringResource
  *
  * A folder on this device is a plain path. Android first needs the all-files grant, which the
  * "on this device" choice asks for in place, and proposes `Documents/NoPapersNeeded` (desktop the
- * documents folder's `NoPapersNeeded`). The advanced Storage Access Framework switch is Android's
- * escape hatch for folders that have no path (cloud document providers).
+ * documents folder's `NoPapersNeeded`). A cloud provider's folder has no path: the cloud drive
+ * choice syncs with it instead.
  *
  * The cloud drive choice runs the setup wizard settings uses ([cloudState] is its step, null while
  * it is closed; [cloudSetup] null where the platform has none), offering only the providers set up
@@ -107,8 +107,6 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun OnboardingScreen(
     failure: OpenFailure?,
-    useSaf: Boolean,
-    onUseSafChange: (Boolean) -> Unit,
     onOpen: (location: String) -> Unit,
     onCreate: (parent: String, name: String) -> Unit,
     onUseRecommendedFolder: (location: String) -> Unit,
@@ -143,8 +141,6 @@ fun OnboardingScreen(
 
             OnboardingStep.LOCATION -> {
                 LocationStep(
-                    useSaf = useSaf,
-                    onUseSafChange = onUseSafChange,
                     onPickLibrary = { location ->
                         onBegin(FirstRunPath.NEW)
                         onOpen(location)
@@ -167,8 +163,6 @@ fun OnboardingScreen(
 
             OnboardingStep.CONNECT -> {
                 ConnectStep(
-                    useSaf = useSaf,
-                    onUseSafChange = onUseSafChange,
                     onPickLibrary = { location ->
                         onBegin(FirstRunPath.CONNECT)
                         onOpen(location)
@@ -249,20 +243,15 @@ private fun ValueLine(
  */
 @Composable
 private fun ColumnScope.LocationStep(
-    useSaf: Boolean,
-    onUseSafChange: (Boolean) -> Unit,
     onPickLibrary: (location: String) -> Unit,
     onPickParent: (location: String) -> Unit,
     onUseRecommendedFolder: (location: String) -> Unit,
     onUseCloud: (() -> Unit)?,
     onBack: () -> Unit,
 ) {
-    // A SAF folder has no path to propose, and cannot have a folder made in it.
-    val recommended = if (useSaf) null else defaultLibraryLocation()
+    val recommended = defaultLibraryLocation()
     StepTitle(stringResource(Res.string.onboarding_location_title))
     LibraryLocationChooser(
-        useSaf = useSaf,
-        onUseSafChange = onUseSafChange,
         onPick = onPickLibrary,
         onPickParent = onPickParent,
         grantInChoices = true,
@@ -322,8 +311,6 @@ private fun ColumnScope.LocationStep(
  */
 @Composable
 private fun ColumnScope.ConnectStep(
-    useSaf: Boolean,
-    onUseSafChange: (Boolean) -> Unit,
     onPickLibrary: (location: String) -> Unit,
     onUseCloud: (() -> Unit)?,
     onBack: () -> Unit,
@@ -339,7 +326,7 @@ private fun ColumnScope.ConnectStep(
             OutlinedButton(onClick = onUseCloud) { Text(stringResource(Res.string.onboarding_choose_cloud)) }
         }
     }
-    LibraryLocationChooser(useSaf = useSaf, onUseSafChange = onUseSafChange, onPick = onPickLibrary) { pickers ->
+    LibraryLocationChooser(onPick = onPickLibrary) { pickers ->
         ChoiceCard(
             icon = Icons.Outlined.Sync,
             title = stringResource(Res.string.onboarding_connect_synced_title),

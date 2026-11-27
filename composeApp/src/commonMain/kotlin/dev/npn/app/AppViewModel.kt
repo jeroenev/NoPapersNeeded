@@ -58,7 +58,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_connect_failed
-import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.email_imported_documents
 import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
 import no_papers_needed.composeapp.generated.resources.library_import_failed
@@ -169,13 +168,6 @@ class AppViewModel(
                 else -> AppState.NoLibrary((phase as? Phase.Ready)?.failure)
             }
         }.stateIn(viewModelScope, WhileSubscribedTimeout, AppState.Restoring)
-
-    /** Whether the next folder choice goes through the Storage Access Framework (Android). */
-    val useSafStorage: StateFlow<Boolean> =
-        env.settings.settings
-            .map { it.useSafStorage }
-            .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, env.settings.settings.value.useSafStorage)
 
     /**
      * The app's language override (null follows the platform's), which the whole UI is composed in.
@@ -427,11 +419,6 @@ class AppViewModel(
         }
         super.onCleared()
     }
-
-    fun setUseSafStorage(enabled: Boolean) =
-        launchReporting(Res.string.common_save_setting_failed) {
-            env.settings.edit { it.copy(useSafStorage = enabled) }
-        }
 
     /** The user has read why a switch to another library failed. */
     fun dismissFailure() = phase.update { if (it is Phase.Ready) Phase.Ready() else it }

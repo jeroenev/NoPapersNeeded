@@ -88,7 +88,6 @@ import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_rename_failed
 import no_papers_needed.composeapp.generated.resources.detail_rename_invalid
 import no_papers_needed.composeapp.generated.resources.detail_rename_taken
-import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
@@ -533,7 +532,6 @@ class DocDetailViewModel private constructor(
             val refusal =
                 when (docLifecycle.renameFile(docId, newFileName)) {
                     RelocationOutcome.MOVED, RelocationOutcome.UNCHANGED -> null
-                    RelocationOutcome.UNSUPPORTED -> Res.string.detail_rename_unsupported
                     RelocationOutcome.TAKEN -> Res.string.detail_rename_taken
                     RelocationOutcome.INVALID_NAME -> Res.string.detail_rename_invalid
                 }

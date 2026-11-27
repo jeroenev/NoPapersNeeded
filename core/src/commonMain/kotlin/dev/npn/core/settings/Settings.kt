@@ -48,12 +48,6 @@ data class SettingsSnapshot(
     val reducedMotion: Boolean = false,
     val watchedFolder: String? = null,
     val watchedFolderDeleteAfterImport: Boolean = false,
-    /**
-     * Android only: pick library and watched folders through the Storage Access Framework instead
-     * of as plain device-storage paths. Affects only what the *next* folder choice persists; an
-     * already opened library keeps the mode its location string encodes ([LibraryLocations]).
-     */
-    val useSafStorage: Boolean = false,
     val aiEnabled: Boolean = false,
     val aiProvider: AiProvider = AiProvider.OPENAI,
     val aiBaseUrl: String = "",
@@ -292,7 +286,6 @@ object SettingsCodec {
                 watchedFolderDeleteAfterImport =
                     reader.boolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT)
                         ?: DEFAULTS.watchedFolderDeleteAfterImport,
-                useSafStorage = reader.boolean(SettingsKeys.USE_SAF_STORAGE) ?: DEFAULTS.useSafStorage,
                 aiEnabled = reader.boolean(SettingsKeys.AI_ENABLED) ?: DEFAULTS.aiEnabled,
                 aiProvider =
                     enumOrNull<AiProvider>(reader.string(SettingsKeys.AI_PROVIDER))
@@ -366,7 +359,6 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.REDUCED_MOTION, s.reducedMotion)
         writer.putOptional(SettingsKeys.WATCHED_FOLDER, s.watchedFolder)
         writer.putBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, s.watchedFolderDeleteAfterImport)
-        writer.putBoolean(SettingsKeys.USE_SAF_STORAGE, s.useSafStorage)
         writer.putBoolean(SettingsKeys.AI_ENABLED, s.aiEnabled)
         writer.putString(SettingsKeys.AI_PROVIDER, s.aiProvider.name)
         writer.putString(SettingsKeys.AI_BASE_URL, s.aiBaseUrl)
@@ -471,7 +463,6 @@ internal object SettingsKeys {
     const val INSTALLATION_ID = "installationId"
     const val WATCHED_FOLDER = "watchedFolder"
     const val WATCHED_FOLDER_DELETE_AFTER_IMPORT = "watchedFolderDeleteAfterImport"
-    const val USE_SAF_STORAGE = "useSafStorage"
 
     // Library behaviour, now in each library's journal; only read to adopt them (legacyLibrarySettings).
     const val STORAGE_PATH_TEMPLATE = "storagePathTemplate"

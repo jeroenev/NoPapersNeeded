@@ -102,7 +102,6 @@ object NpnPaths {
          */
         const val WRITE_PREFIX = ".npn-tmp-"
         const val PART = ".part"
-        private const val MOVE_PREFIX = ".npn-move-"
         private const val RELOCATION_INFIX = ".npn-"
         private const val RELOCATION_SUFFIX = ".tmp"
         private const val BAKE_SUFFIX = ".npnbake.tmp"
@@ -113,10 +112,7 @@ object NpnPaths {
         const val RECOVERY_PREFIX = "npn-recovery-"
 
         /** The kinds [kindOf] tells apart. */
-        enum class Kind { WRITE, MOVE, RELOCATION, BAKE, IMPORT, MARKER_STAGING, JOURNAL_STAGING }
-
-        /** A SAF move's verified copy in its target folder: `.npn-move-<nonce>.part`. */
-        fun moveName(nonce: String): String = "$MOVE_PREFIX$nonce$PART"
+        enum class Kind { WRITE, RELOCATION, BAKE, IMPORT, MARKER_STAGING, JOURNAL_STAGING }
 
         /** A relocation's verified copy across volumes, beside its [target]: `<target>.npn-<uuid>.tmp`. */
         fun relocationPath(
@@ -178,10 +174,6 @@ object NpnPaths {
             return when {
                 name.startsWith(WRITE_PREFIX) && name.endsWith(PART) -> {
                     Kind.WRITE
-                }
-
-                name.startsWith(MOVE_PREFIX) && name.endsWith(PART) -> {
-                    Kind.MOVE
                 }
 
                 name.endsWith(BAKE_SUFFIX) -> {

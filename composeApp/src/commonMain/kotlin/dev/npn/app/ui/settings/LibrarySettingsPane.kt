@@ -17,7 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.isAppPrivateLocation
-import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
@@ -34,12 +33,10 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
-import dev.npn.core.settings.LibraryLocations
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
-import no_papers_needed.composeapp.generated.resources.common_settings_library_saf_note
 import no_papers_needed.composeapp.generated.resources.common_settings_no_library
 import no_papers_needed.composeapp.generated.resources.common_settings_storage
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_access_missing
@@ -55,8 +52,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_storage_s
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_variables
 import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_help
-import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
-import no_papers_needed.composeapp.generated.resources.common_settings_use_saf_help
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_cancel
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_checking_documents
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_checking_journal
@@ -95,8 +90,7 @@ private const val STORAGE_PATH_VARIABLES =
 
 /**
  * Where documents live: which folder is the library and how PDFs are laid out inside it. Behind
- * Advanced: the derived thumbnail cache that can be thrown away at any time, and on Android the
- * Storage Access Framework switch.
+ * Advanced: the derived thumbnail cache that can be thrown away at any time.
  */
 @Composable
 internal fun LibrarySettingsPane(
@@ -104,10 +98,9 @@ internal fun LibrarySettingsPane(
     actions: SettingsPaneActions,
 ) {
     val location = state.settings.snapshot.libraryLocation
-    val safLibrary = location != null && LibraryLocations.isContentUri(location)
-    // A direct library on shared storage, which Android's all-files grant governs; a cloud
-    // library's working copy is in the app's own storage, which no grant governs.
-    val needsGrant = location != null && !safLibrary && !isAppPrivateLocation(location)
+    // A library on shared storage, which Android's all-files grant governs; a cloud library's
+    // working copy is in the app's own storage, which no grant governs.
+    val needsGrant = location != null && !isAppPrivateLocation(location)
     val storage = rememberStorageAccess()
     SettingsSection(title = null) {
         Text(
@@ -115,10 +108,7 @@ internal fun LibrarySettingsPane(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (safLibrary) {
-            HelpText(stringResource(Res.string.common_settings_library_saf_note))
-        }
-        // A direct library whose grant was revoked still opens what the app itself wrote, but not
+        // A library whose grant was revoked still opens what the app itself wrote, but not
         // what Syncthing wrote next to it: say so where the user looks for the library.
         if (needsGrant && !storage.usable) {
             HelpText(stringResource(Res.string.common_settings_storage_access_missing))
@@ -157,18 +147,6 @@ internal fun LibrarySettingsPane(
                 onClick = actions::clearThumbnailCache,
                 help = stringResource(Res.string.common_settings_thumbnail_cache_help),
             )
-            // Android only: the Storage Access Framework stays available for folders that have no
-            // path (cloud document providers). It changes what the next folder choice persists,
-            // nothing else, so a library already opened through it keeps working however it is set;
-            // the folder picker's "not on device storage" message points here.
-            if (supportsSafStorage()) {
-                SwitchRow(
-                    label = stringResource(Res.string.common_settings_use_saf),
-                    help = stringResource(Res.string.common_settings_use_saf_help),
-                    checked = state.settings.snapshot.useSafStorage,
-                    onCheckedChange = { on -> actions.edit { it.copy(useSafStorage = on) } },
-                )
-            }
         }
     }
 }

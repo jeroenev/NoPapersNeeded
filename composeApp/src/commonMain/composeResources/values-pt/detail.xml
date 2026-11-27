@@ -163,7 +163,6 @@
     <string name="detail_add_field_failed">Não foi possível adicionar o campo: %1$s</string>
     <string name="detail_trash_failed">Não foi possível mover o documento para a lixeira: %1$s</string>
     <string name="detail_rename_failed">Não foi possível renomear o arquivo: %1$s</string>
-    <string name="detail_rename_unsupported">Não foi possível renomear o arquivo: esta biblioteca é aberta pelo seletor de pastas do Android, que não consegue renomear arquivos.</string>
     <string name="detail_rename_taken">Não foi possível renomear o arquivo: outro arquivo na pasta já tem esse nome.</string>
     <string name="detail_rename_invalid">Não foi possível renomear o arquivo: a biblioteca não pode manter um documento com esse nome.</string>
     <string name="detail_ai_ocr_failed">Não foi possível ler o texto com o assistente: %1$s</string>

@@ -15,7 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.yield
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -29,27 +28,36 @@ import kotlin.random.Random
  *
  * - [DIRECT_LINKS]: a desktop filesystem (ext4): hard links, `renameat2(RENAME_NOREPLACE)`, inotify.
  * - [DIRECT_RENAME]: Android's shared storage, exFAT: no hard links, an exclusive rename only.
- * - [SAF]: a document provider: a rename it checks afterwards, no document relocation, no watcher,
- *   and listings that may report no mtime ([SimFsOptions.mtimes]).
  * - [NONE]: neither primitive; the library must refuse to open.
  */
 enum class StorageProfile(
     val hardLinks: Boolean,
     val exclusiveRename: Boolean,
-    val saf: Boolean,
 ) {
-    DIRECT_LINKS(hardLinks = true, exclusiveRename = true, saf = false),
-    DIRECT_RENAME(hardLinks = false, exclusiveRename = true, saf = false),
-    SAF(hardLinks = false, exclusiveRename = false, saf = true),
-    NONE(hardLinks = false, exclusiveRename = false, saf = false),
+    DIRECT_LINKS(hardLinks = true, exclusiveRename = true),
+    DIRECT_RENAME(hardLinks = false, exclusiveRename = true),
+    NONE(hardLinks = false, exclusiveRename = false),
+    ;
+
+    companion object {
+        /** A device's storage as a seed draws it: mostly a desktop filesystem, else Android's shared storage. */
+        fun draw(random: Random): StorageProfile =
+            if (random.nextInt(100) <
+                LINKS_PERCENT
+            ) {
+                DIRECT_LINKS
+            } else {
+                DIRECT_RENAME
+            }
+
+        private const val LINKS_PERCENT = 69
+    }
 }
 
 /** The knobs of an [InMemoryLibraryFileSystem], fixed for its life. */
 class SimFsOptions(
     val profile: StorageProfile = StorageProfile.DIRECT_LINKS,
-    /** False for a provider that reports no mtime (SAF can give 0): listings and stats carry 0. */
-    val mtimes: Boolean = true,
-    /** Whether [InMemoryLibraryFileSystem.watch] reports changes (never on [StorageProfile.SAF]). */
+    /** Whether [InMemoryLibraryFileSystem.watch] reports changes. */
     val watch: Boolean = true,
     /** The share of change events the watcher silently drops, as a real watch service may. */
     val watchDropRate: Double = 0.0,
@@ -63,12 +71,11 @@ class SimFsOptions(
  * The mtimes the files of one world's folders are given: the virtual clock's, but never one a file
  * of the same size was given before. Two files with other bytes, one size and one mtime have one
  * stat, which the app's proof by stat takes for the same file: an mtime-preserving overwrite of the
- * same size, out of scope (docs/SIMULATION.md). Several steps run in one virtual millisecond, and
- * where storage reports no mtimes the generators give their PDFs one of a few sizes, so without
- * this two such files written in that millisecond, then carried by the sync tool, mtime and all, to
- * storage that reports one, and the one renamed over the other there, left the index holding the
- * first document at a path whose file holds the second (seeds 4100509 and 4100575 at 9f76eae2). One
- * for every folder of a world, as the sync tool carries files between them.
+ * same size, out of scope (docs/SIMULATION.md). Several steps run in one virtual millisecond, so
+ * without this two files of one size written in that millisecond, then carried by the sync tool,
+ * mtime and all, and the one renamed over the other, left the index holding the first document at a
+ * path whose file holds the second (seeds 4100509 and 4100575 at 9f76eae2). One for every folder of
+ * a world, as the sync tool carries files between them.
  */
 class SimMtimes {
     private val last = HashMap<Int, Long>()
@@ -106,8 +113,8 @@ class SimLatency(
 }
 
 /**
- * A [LibraryFileSystem] held in memory, with the semantics of [dev.npn.core.fs.JvmLibraryFileSystem]
- * (and, by [StorageProfile.SAF], of `SafLibraryFileSystem`), plus the hooks a simulation needs:
+ * A [LibraryFileSystem] held in memory, with the semantics of [dev.npn.core.fs.JvmLibraryFileSystem],
+ * plus the hooks a simulation needs:
  * injected [faults], seeded [latency], a watcher it drives, and an "external world" (the `external*`
  * members) through which the test does what other processes do to a library folder.
  *
@@ -144,10 +151,6 @@ class InMemoryLibraryFileSystem(
     private val writeOnce = HashMap<String, String>()
 
     val writeOnceViolations = ArrayList<String>()
-
-    override val publicationMayBeLost: Boolean get() = !options.profile.saf
-
-    override val supportsDocumentRelocation: Boolean get() = !options.profile.saf
 
     // ---- the app's view -------------------------------------------------------------------------
 
@@ -231,7 +234,7 @@ class InMemoryLibraryFileSystem(
         val canonical = NpnPaths.normalize(canonicalPath)
         io(FsMethod.PUBLISH, canonical) {
             val profile = options.profile
-            if (!profile.hardLinks && !profile.exclusiveRename && !profile.saf) {
+            if (!profile.hardLinks && !profile.exclusiveRename) {
                 throw VerifiedPublicationUnavailableException("No hard links and no exclusive rename")
             }
             require(NpnPaths.parentDir(staging) == NpnPaths.parentDir(canonical)) {
@@ -273,9 +276,6 @@ class InMemoryLibraryFileSystem(
         fromRelPath: String,
         toRelPath: String,
     ) {
-        if (!supportsDocumentRelocation) {
-            throw VerifiedPublicationUnavailableException("Atomic document claiming is unsupported")
-        }
         val from = NpnPaths.normalize(fromRelPath)
         val to = NpnPaths.normalize(toRelPath)
         io(FsMethod.CLAIM, to) {
@@ -313,7 +313,6 @@ class InMemoryLibraryFileSystem(
         return io(FsMethod.SAME_FILE, a) {
             when {
                 a == b -> true
-                options.profile.saf -> false
                 else -> fileAt(a) === fileAt(b)
             }
         }
@@ -349,7 +348,7 @@ class InMemoryLibraryFileSystem(
 
     private val delivered = HashSet<String>()
 
-    override fun watch(): Flow<FsEvent> = if (options.profile.saf) emptyFlow() else events.asSharedFlow()
+    override fun watch(): Flow<FsEvent> = events.asSharedFlow()
 
     // ---- the external world ---------------------------------------------------------------------
 
@@ -543,7 +542,7 @@ class InMemoryLibraryFileSystem(
         val copy =
             InMemoryLibraryFileSystem(
                 now = clock,
-                options = SimFsOptions(profile = options.profile, mtimes = options.mtimes, watch = false),
+                options = SimFsOptions(profile = options.profile, watch = false),
             )
         dirs.forEach { (path, mtime) -> copy.dirs[path] = mtime }
         // Hard links stay links in the copy, so sameFile answers alike.
@@ -582,12 +581,11 @@ class InMemoryLibraryFileSystem(
 
     private fun metaOf(norm: String): FileMeta {
         val node = files[norm]
-        val mtime = node?.mtime ?: dirs[norm] ?: 0L
         return FileMeta(
             relPath = norm,
             name = NpnPaths.fileName(norm),
             size = node?.bytes?.size?.toLong() ?: 0L,
-            mtimeMillis = if (options.mtimes) mtime else 0L,
+            mtimeMillis = node?.mtime ?: dirs[norm] ?: 0L,
             isDirectory = node == null,
         )
     }
@@ -691,7 +689,7 @@ class InMemoryLibraryFileSystem(
             files[norm]?.let { sha256Bytes(it.bytes).take(HISTORY_ID) } ?: if (dirs.containsKey(norm)) "dir" else "gone"
         entries.addLast("t=${now()} ${actor?.name?.lowercase() ?: "external"} -> $content")
         if (entries.size > HISTORY_LENGTH) entries.removeFirst()
-        if (!options.watch || options.profile.saf) return
+        if (!options.watch) return
         val roll = watchRandom.nextDouble()
         val event =
             when {

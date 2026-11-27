@@ -73,7 +73,6 @@ internal fun ImportSettingsPane(
     SettingsSection(title = stringResource(Res.string.common_settings_watched_folder)) {
         WatchedFolderSettings(
             watchedFolder = state.settings.snapshot.watchedFolder,
-            useSaf = state.settings.snapshot.useSafStorage,
             deleteAfterImport = state.settings.snapshot.watchedFolderDeleteAfterImport,
             onPick = actions::watchedFolderPicked,
             onStopWatching = { actions.edit { it.copy(watchedFolder = null) } },
@@ -96,7 +95,6 @@ internal fun ImportSettingsPane(
 @Composable
 private fun ColumnScope.WatchedFolderSettings(
     watchedFolder: String?,
-    useSaf: Boolean,
     deleteAfterImport: Boolean,
     onPick: (FolderPick) -> Unit,
     onStopWatching: () -> Unit,
@@ -106,8 +104,7 @@ private fun ColumnScope.WatchedFolderSettings(
     val picker =
         rememberDirectoryPickerLauncher { dir ->
             if (dir == null) return@rememberDirectoryPickerLauncher
-            val preferSaf = useSaf || !storage.usable
-            onPick(watchedFolderPick(preferSaf, directUsable = storage.usable) { persistDirectoryAccess(dir, it) })
+            onPick(watchedFolderPick(directUsable = storage.usable) { persistDirectoryAccess(dir, it) })
         }
     HelpText(stringResource(Res.string.common_settings_watched_folder_help))
     Text(
@@ -139,19 +136,17 @@ private fun ColumnScope.WatchedFolderSettings(
 /**
  * What a folder picked to watch comes to. The inbox is imported from, never written as a library, so
  * a folder that is not on device storage may still be watched through SAF: [persist] tries
- * [FolderAccess.SAF] first when [preferSaf], else [FolderAccess.DIRECT], then the other, direct
- * access only while the app may read device storage ([directUsable]). A folder that neither gives a
- * location is [FolderPick.AccessNotKept] when that is why, so the user is told.
+ * [FolderAccess.DIRECT] first, while the app may read device storage ([directUsable]), then
+ * [FolderAccess.SAF]. A folder that neither gives a location is [FolderPick.AccessNotKept] when that
+ * is why, so the user is told.
  */
 internal fun watchedFolderPick(
-    preferSaf: Boolean,
     directUsable: Boolean,
     persist: (FolderAccess) -> FolderPick,
 ): FolderPick {
-    val preferred = if (preferSaf) FolderAccess.SAF else FolderAccess.DIRECT
-    val order = listOf(preferred) + FolderAccess.entries.filter { it != preferred }
+    val order = listOfNotNull(FolderAccess.DIRECT.takeIf { directUsable }, FolderAccess.SAF)
     val refusals = mutableListOf<FolderPick>()
-    for (access in order.filter { it == FolderAccess.SAF || directUsable }) {
+    for (access in order) {
         val pick = persist(access)
         if (pick is FolderPick.Location) return pick
         refusals += pick

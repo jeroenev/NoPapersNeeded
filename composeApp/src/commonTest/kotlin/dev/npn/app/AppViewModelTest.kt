@@ -636,21 +636,6 @@ class AppViewModelTest : MainDispatcherTest() {
             env.opened shouldBe emptyList()
         }
 
-    @Test
-    fun theStorageAccessFrameworkChoiceIsSaved() =
-        runTest(dispatcher) {
-            val env = env()
-            val vm = model(env)
-            collecting(vm.useSafStorage)
-
-            vm.setUseSafStorage(true)
-            runCurrent()
-
-            vm.useSafStorage.value shouldBe true
-            env.settings.settingsFlow.value
-                .useSafStorage shouldBe true
-        }
-
     /** A window recreated with a language override composes in it from its first frame. */
     @Test
     fun theAppLanguageIsTheSettingsFromTheStart() =

@@ -9,40 +9,30 @@ import dev.npn.app.platform.persistDirectoryAccess
 import io.github.vinceglb.filekit.PlatformFile
 
 /**
- * The one folder picker for library locations: launches the platform directory dialog, persists
- * access in the mode the user's settings ask for, and hands the location string to [onPick].
- * A folder that cannot be used in that mode (a cloud provider tree while in direct mode) goes to
- * [onUnusable] instead, and one whose access Android would not keep to [onTemporaryAccess], so every
- * call site shows the same explanations and keeps the library it had.
+ * The one folder picker for library locations: launches the platform directory dialog, resolves the
+ * folder to its path on the device, and hands that location string to [onPick]. A folder with no
+ * such path (a cloud provider's tree) goes to [onUnusable] instead, so every call site shows the same
+ * explanation and keeps the library it had.
  *
  * Callbacks are read through [rememberUpdatedState]: the dialog result arrives after an arbitrary
- * delay, and the settings flag may have changed meanwhile.
+ * delay.
  */
 @Composable
 fun rememberLibraryFolderPicker(
-    useSaf: Boolean,
     onPick: (String) -> Unit,
     onUnusable: () -> Unit,
-    onTemporaryAccess: () -> Unit,
 ): () -> Unit {
-    val currentUseSaf by rememberUpdatedState(useSaf)
     val currentOnPick by rememberUpdatedState(onPick)
     val currentOnUnusable by rememberUpdatedState(onUnusable)
-    val currentOnTemporaryAccess by rememberUpdatedState(onTemporaryAccess)
-    return rememberLibraryDirectoryPicker(localOnly = !useSaf) { dir ->
+    return rememberLibraryDirectoryPicker { dir ->
         if (dir == null) return@rememberLibraryDirectoryPicker
-        val access = if (currentUseSaf) FolderAccess.SAF else FolderAccess.DIRECT
-        when (val pick = persistDirectoryAccess(dir, access)) {
+        when (val pick = persistDirectoryAccess(dir, FolderAccess.DIRECT)) {
             is FolderPick.Location -> currentOnPick(pick.value)
-            FolderPick.Unusable -> currentOnUnusable()
-            FolderPick.AccessNotKept -> currentOnTemporaryAccess()
+            FolderPick.Unusable, FolderPick.AccessNotKept -> currentOnUnusable()
         }
     }
 }
 
-/** Android filters remote providers in direct mode; desktop uses its native directory picker. */
+/** Android offers local folders only; desktop uses its native directory picker. */
 @Composable
-internal expect fun rememberLibraryDirectoryPicker(
-    localOnly: Boolean,
-    onPick: (PlatformFile?) -> Unit,
-): () -> Unit
+internal expect fun rememberLibraryDirectoryPicker(onPick: (PlatformFile?) -> Unit): () -> Unit

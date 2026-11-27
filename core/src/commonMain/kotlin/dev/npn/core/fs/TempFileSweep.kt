@@ -46,7 +46,7 @@ internal class TempFileSweep(
     ) {
         val cutoff = nowMillis - STALE_AFTER_MS
         val byPath by lazy { listing.associateBy { it.relPath } }
-        for (meta in listing.filter { !it.isDirectory && it.mtimeMillis in 1 until cutoff }) {
+        for (meta in listing.filter { !it.isDirectory && it.mtimeMillis < cutoff }) {
             // A name the library cannot address is none of its temporary files.
             if (!NpnPaths.isSafe(meta.relPath)) continue
             val deletable =
@@ -56,7 +56,6 @@ internal class TempFileSweep(
                     NpnPaths.Temp.Kind.BAKE -> spareBake(meta, byPath)
 
                     NpnPaths.Temp.Kind.WRITE,
-                    NpnPaths.Temp.Kind.MOVE,
                     NpnPaths.Temp.Kind.RELOCATION,
                     NpnPaths.Temp.Kind.IMPORT,
                     NpnPaths.Temp.Kind.MARKER_STAGING,

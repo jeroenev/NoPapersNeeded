@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.ExternalStorageTreePaths
 import dev.npn.core.fs.LocalLibraryFolders
-import dev.npn.core.settings.LibraryLocations
 import io.github.vinceglb.filekit.AndroidFile
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
@@ -56,8 +55,8 @@ actual fun platformFileToExternalSource(file: PlatformFile): ExternalSource = Ex
 /**
  * The system document picker is the only folder picker Android has, so both modes start from its
  * tree uri. [FolderAccess.DIRECT] maps the uri back to the device-storage path it names (none for
- * cloud providers); [FolderAccess.SAF] takes the persistable grant and, once the system keeps it
- * ([keepTreeAccess]), keeps the uri, as every library was opened before the direct mode existed.
+ * cloud providers); [FolderAccess.SAF], for a watched folder, takes the persistable grant and, once
+ * the system keeps it ([keepTreeAccess]), keeps the uri.
  */
 actual fun persistDirectoryAccess(
     dir: PlatformFile,
@@ -103,8 +102,6 @@ internal fun keepTreeAccess(
         FolderPick.AccessNotKept
     }
 
-actual fun supportsSafStorage(): Boolean = true
-
 /**
  * Android's animator duration scale: "Remove animations" (Accessibility settings, and battery saver
  * on some builds) zeroes it, which this asks about rather than guessing from a setting.
@@ -134,7 +131,6 @@ actual fun defaultLibraryLocation(): String? {
 actual fun cloudLibrariesDir(): String = File(FileKit.context.noBackupFilesDir, CLOUD_LIBRARIES_DIR).absolutePath
 
 actual fun isAppPrivateLocation(location: String): Boolean {
-    if (LibraryLocations.isContentUri(location)) return false
     val own =
         FileKit.context.noBackupFilesDir
             .toPath()
@@ -170,10 +166,7 @@ private val installedFromPlay: Boolean by lazy {
 actual suspend fun createLibraryFolder(
     parentLocation: String,
     name: String,
-): String? {
-    if (LibraryLocations.isContentUri(parentLocation)) return null
-    return LocalLibraryFolders.create(parentLocation, name)
-}
+): String? = LocalLibraryFolders.create(parentLocation, name)
 
 actual suspend fun copyToClipboard(text: String) {
     val context = FileKit.context.applicationContext

@@ -124,7 +124,7 @@ internal object RescanDecision {
     /**
      * Whether a listed file must be hashed: no row holds its path, the row there is hidden (its
      * stored stat is no evidence of the file there now), or the file's stat is not the one the row
-     * stored ([hasStoredStat], which a missing mtime never proves).
+     * stored ([hasStoredStat]).
      */
     fun needsHash(
         meta: FileMeta,

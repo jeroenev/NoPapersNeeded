@@ -29,7 +29,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_in_library_watched
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
@@ -211,18 +210,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             settings.settingsFlow.value.watchedFolder shouldBe "/home/scans"
             messages.size shouldBe 2
-        }
-
-    @Test
-    fun aLibraryFolderWhoseAccessIsNotKeptIsSaid() =
-        runTest(dispatcher) {
-            val model = settingsVm()
-            val messages = collecting(model.messages.map { it.text })
-
-            model.libraryAccessNotKept()
-            advanceUntilIdle()
-
-            messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_library))
         }
 
     @Test

@@ -58,7 +58,7 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   no system JVM is required to run them.
 - Library storage that can create a file without replacing one another writer just created:
   hard links, or an exclusive rename (`renameat2` on Linux and Android, `MoveFileExW` on
-  Windows), or Android's storage access framework. A library on storage with neither is
+  Windows). A library on storage with neither is
   refused at every open, also when it was remounted since the last one.
 - OCR on desktop: the Windows installers and the Flatpak bundle Tesseract with models for
   every UI language. The other Linux packages need `tesseract-ocr` on `PATH`; without it,
@@ -613,10 +613,10 @@ hash-verified staging object without replacing a concurrently synced file. If th
 filesystem lacks that primitive, the operation fails rather than risking replacement.
 Moves across mount points likewise fail without removing the source.
 
-The Storage Access Framework remains available as an advanced option
-(Settings → Library → Advanced → *Use Storage Access Framework*) for folders that have
-no path, such as cloud document providers, and every library chosen through SAF before
-the direct mode existed keeps opening that way. Cloud sync (Settings → Cloud sync) reaches
-Dropbox, Drive, OneDrive, WebDAV/Nextcloud and the rest through the bundled rclone, set up
-in the app rather than through SAF. The provider qualification matrix and the fake-remote
-scenario suite (`mise sync-scenarios`) are in `docs/SYNC_QUALIFICATION.md`.
+A library is always a folder with a path: the Storage Access Framework no longer holds one
+(a `content://` location fails to open as a missing folder, and the user picks the folder
+again). Folders that have no path, such as cloud document providers', are reached by cloud
+sync (Settings → Cloud sync), which syncs Dropbox, Drive, OneDrive, WebDAV/Nextcloud and the
+rest through the bundled rclone. The watched import folder alone may still be a SAF tree
+(`SafWatchedFolder`): one with no path, or any while the all-files grant is missing. The
+provider qualification matrix and the fake-remote scenario suite (`mise sync-scenarios`) are in `docs/SYNC_QUALIFICATION.md`.

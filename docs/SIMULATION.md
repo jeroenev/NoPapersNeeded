@@ -55,7 +55,7 @@ the same steps at the same virtual times, line for line in the trace.
 `SyncSimulationHarnessTest.aSeedReplaysTheSameVirtualTimeline` checks that.
 
 A failing run stops at its first broken invariant. Its report has the seed, the configuration (each
-replica's storage profile and mtimes, the watcher's losses, the sync tool), the faults still armed,
+replica's storage profile, the watcher's losses, the sync tool), the faults still armed,
 the last steps of the trace, the end of the session log (each entry names its replica), the failing
 replica's files with their hashes and its index's document rows, the history of a path whose file is
 not its document's, the journal events behind a document the rebuild shows otherwise, and the sync
@@ -100,7 +100,7 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 ## How it works
 
 - `SyncSimulation` holds the replicas. Each one (`SyncSimulation.Member`) has its own
-  `InMemoryLibraryFileSystem` (its own storage profile and mtimes), its own `SimReplica` (an
+  `InMemoryLibraryFileSystem` (its own storage profile), its own `SimReplica` (an
   installation id, `index.db` and `device.db`, a seeded id source, a log that names it), its own
   `Simulation` (generator, background operations, invariants, rebuild oracle), and sometimes a
   watched inbox folder. A step is one replica's operation, from its `SimGenerator`, or one of the
@@ -152,9 +152,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   a round changes nothing. Two devices recording different bytes under one version vector would be
   a slip of the model, never the tool's, and fail the run rather than being settled quietly.
 - `InMemoryLibraryFileSystem` implements `LibraryFileSystem` with the semantics of
-  `JvmLibraryFileSystem`, or of `SafLibraryFileSystem` under `StorageProfile.SAF`: publication
-  without replacement by hard link or exclusive rename, `sameFile` through hard links, no document
-  relocation and no watcher on SAF, and listings with no mtimes when `SimFsOptions.mtimes` is off.
+  `JvmLibraryFileSystem`: publication without replacement by hard link or exclusive rename
+  (`StorageProfile`), and `sameFile` through hard links.
   Each call suspends at least once and sometimes waits a seeded stretch of virtual time
   (`SimLatency`). It records every journal object, snapshot, OCR sidecar and device marker the app
   creates, every file the app removes, the last changes at each path and who made them, and every
@@ -405,9 +404,6 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
 - **Directory renames and deletions** by the sync tool: it syncs files, and folders follow them.
 - **Devices that leave**, or come back after a long time away: a replica that has joined takes part
   to the end.
-- **Partial listings** from a document provider still loading (`DocumentsContract.EXTRA_LOADING`):
-  SAF storage is on its way out, so the simulation spends nothing on what only it can do. The SAF
-  profile stays for its publication and relocation rules while the app supports it.
 - **AI** (enrichment, edit runs, chat, AI OCR): the AI endpoint is disabled.
 - **Snapshots.** The app no longer compacts the journal: it writes no snapshot and deletes no
   object, and reads the snapshots earlier builds wrote. The simulation makes none, so it does not
@@ -418,12 +414,10 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   0.1.0's tag writes are, as operations of their own: a style left on a name nothing carries
   (`LEGACY_UNUSED_STYLE`) and a rename of a created tag that leaves its marker behind
   (`LEGACY_RENAME_TAG`).
-- **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
-  its own, and an overwrite in place gives the file a new mtime. Where storage reports no mtimes,
-  same-size replacements are modelled: every generated PDF has one of a few sizes, so only a hash
-  tells a replacement apart. No two files of one size are given one mtime, in any replica's folder
-  (`SimMtimes`): the sync tool carries such files, mtime and all, to storage that reports mtimes,
-  where two of them with one stat, one renamed over the other, would be such an overwrite.
+- **mtime-preserving overwrites** of the same size: every generated PDF has a size of its own, and
+  an overwrite in place gives the file a new mtime. No two files of one size are given one mtime, in
+  any replica's folder (`SimMtimes`): two of them with one stat, one renamed over the other, would be
+  such an overwrite.
 - **The app's temporary files under one name on several devices**: a bake writes
   `<document>.npnbake.tmp`, which the sync tool copies to other devices like any file, where it can
   replace the temporary file of a bake of the same document under way there. The simulation counts

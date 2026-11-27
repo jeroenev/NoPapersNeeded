@@ -103,8 +103,8 @@ internal class BakeService(
      * moved aside goes back, the temp is removed and nothing is swapped.
      *
      * Atomicity compromise: [LibraryFileSystem.move] refuses to overwrite an existing target
-     * (fail-if-exists, required for the write-once invariant elsewhere), and SAF offers no atomic
-     * replace. So the swap is move-aside-then-move, leaving a small window where the original path
+     * (fail-if-exists, required for the write-once invariant elsewhere), and that is all it offers:
+     * there is no atomic replace. So the swap is move-aside-then-move, leaving a small window where the original path
      * does not exist; the original is under its recovery name (an ordinary, indexable PDF) and the
      * baked bytes in the temp file (`*.npnbake.tmp`) throughout, and a crash there leaves both. Until
      * the swap ends the recovery name is held in [bakeAsides]: a rescan of the session that lists

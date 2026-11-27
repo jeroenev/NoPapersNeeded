@@ -50,10 +50,10 @@ internal object HardLinkLinker : NoReplaceLinker {
 }
 
 /**
- * java.nio-backed [LibraryFileSystem] over a plain directory: the desktop library, and Android's
- * default (non-SAF) library. All suspend functions run on [io]. Writes stage a temp
- * file in the same directory and then install it under its final name with a primitive that
- * cannot replace an existing entry ([atomicMoveNoReplace]). Never appends or overwrites.
+ * java.nio-backed [LibraryFileSystem] over a plain directory: the library on desktop and on Android.
+ * All suspend functions run on [io]. Writes stage a temp file in the same directory and then
+ * install it under its final name with a primitive that cannot replace an existing entry
+ * ([atomicMoveNoReplace]). Never appends or overwrites.
  *
  * [externalIo] opens the platform's external files for import (see [ExternalIo]).
  */
@@ -167,8 +167,8 @@ internal class JvmLibraryFileSystem(
                 val attrs = Files.readAttributes(p, BasicFileAttributes::class.java)
                 metaOf(p, attrs)
             } catch (ignored: NoSuchFileException) {
-                // Gone before or during the read (a sync tool moving it away): as in the SAF impl,
-                // no metadata rather than a failure for what does not exist.
+                // Gone before or during the read (a sync tool moving it away): no metadata rather
+                // than a failure for what does not exist.
                 null
             }
         }
@@ -287,8 +287,6 @@ internal class JvmLibraryFileSystem(
         if (Files.isRegularFile(canonical)) throw java.nio.file.FileAlreadyExistsException(canonical.toString())
         NoReplaceMove.move(staging, canonical)
     }
-
-    override val supportsDocumentRelocation: Boolean get() = true
 
     override suspend fun claimDocument(
         fromRelPath: String,

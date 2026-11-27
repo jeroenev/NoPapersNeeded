@@ -115,8 +115,8 @@ class SplitPdfTest {
         }
 
     /**
-     * Another app wrote a different PDF over the document's file since the last rescan (SAF has no
-     * watcher). That file is not split as the document: its pages would get the document's metadata.
+     * Another app wrote a different PDF over the document's file since the last rescan (before the
+     * watcher reported it). That file is not split as the document: its pages would get the document's metadata.
      */
     @Test
     fun aDocumentWhoseFileWasReplacedIsNotSplit() =
@@ -332,7 +332,7 @@ private suspend fun AppSessionRig.metadataOf(docId: String): Pair<List<String>, 
     db.tagDao().tagsForDocument(docId) to
         db.documentFieldDao().valuesOf(docId)
 
-/** Make every move into the trash fail, as a refused SAF move would: the trash folder is a file. */
+/** Make every move into the trash fail: the trash folder is a file. */
 private fun AppSessionRig.blockTrash() {
     val trash = libRoot.resolve(NpnPaths.TRASH_DIR)
     trash.toFile().deleteRecursively()

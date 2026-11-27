@@ -48,7 +48,6 @@ class SyncPlannerTest {
         retention: Long? = 30 * day,
         journal: Map<String, JournalDocView> = emptyMap(),
         trashTimes: Map<String, Long?> = emptyMap(),
-        relocates: Boolean = true,
     ) = LocalSnapshot(
         docs.toList(),
         metadataFiles.associateWith { 10L },
@@ -57,7 +56,6 @@ class SyncPlannerTest {
         retention,
         journal,
         trashTimes,
-        relocates,
     )
 
     private fun remote(vararg entries: RemoteEntry) = RemoteIndex(entries.toList())
@@ -172,17 +170,12 @@ class SyncPlannerTest {
     }
 
     @Test
-    fun aLibraryThatCannotMoveDocumentsTakesTheRemotesName() {
-        // Another replica moved the document to its journaled path; this storage-access library
-        // cannot move it itself, so it takes the move as a folder syncer would deliver it.
+    fun aJournaledPathKeepsTheLibrarysNameUntilItsFileMoves() {
+        // Another replica moved the document to its journaled path. The indexer places documents
+        // itself, so this library keeps its own name and moves nothing: it only remembers the two
+        // names as agreed, so neither side undoes the other later.
         val remote = remote(entry("2026/a.pdf"))
         val manifest = listOf(known("2026/a.pdf", docA))
-        val stuck = local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf"), relocates = false)
-        plan(stuck, remote, manifest).local shouldContainExactly
-            listOf(SyncAction.MoveLocal(docA, "inbox/a.pdf", "2026/a.pdf", "2026/a.pdf"))
-
-        // One whose indexer places documents itself keeps its own name and moves nothing: it only
-        // remembers the two names as agreed, so neither side undoes the other later.
         val moving = plan(local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf")), remote, manifest)
         moving.remote.shouldBeEmpty()
         moving.local shouldContainExactly listOf(SyncAction.RecordLocalPath(docA, "2026/a.pdf", "inbox/a.pdf"))

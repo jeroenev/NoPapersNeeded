@@ -27,8 +27,8 @@ class TrashOwnFileTest {
     fun teardown() = rig.close()
 
     /**
-     * Another app wrote over a document's file since the last rescan (SAF has no watcher), so the file
-     * at its path is not the document's. Trashing the document records the trash and leaves that file
+     * Another app wrote over a document's file since the last rescan (before the watcher reported it),
+     * so the file at its path is not the document's. Trashing the document records the trash and leaves that file
      * where it is, for the next rescan to index as what it is.
      */
     @Test

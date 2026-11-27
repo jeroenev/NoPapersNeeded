@@ -22,7 +22,7 @@ import dev.npn.core.util.warn
  * ([dev.npn.core.fs.NpnPaths.trashPath]), so even a restore and a trash again whose events arrive
  * after its entry cannot pass for the old episode's. A batch of [PURGE_BATCH] entries per hold: the
  * check reads every document's trash time, so once per batch rather than per entry, and no hold
- * lasts through a long run of deletes (binder calls under SAF) that every write waits on.
+ * lasts through a long run of deletes that every write waits on.
  */
 internal class TrashPurge(
     private val coordinator: JournalCoordinator,

@@ -16,8 +16,9 @@ import java.io.File
  * - `com.android.providers.downloads.documents`: `downloads` (the Download root) and
  *   `raw:/storage/emulated/0/Download/NPN`.
  *
- * Every other provider (Drive, Dropbox, Nextcloud, ...) has no path and resolves to null: those
- * folders are only reachable through the SAF library implementation.
+ * Every other provider (Drive, Dropbox, Nextcloud, ...) has no path and resolves to null: such a
+ * folder cannot hold a library (a cloud library syncs through rclone instead), though it can still be
+ * watched for imports as a tree.
  */
 object ExternalStorageTreePaths {
     const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"

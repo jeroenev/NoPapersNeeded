@@ -30,7 +30,6 @@ class LocalSnapshotReader(
             trashRetentionMillis = hooks.trashRetentionDays()?.let { it * MILLIS_PER_DAY },
             journal = journal,
             trashTimes = hooks.trashTimes(),
-            relocates = fs.supportsDocumentRelocation,
         )
     }
 

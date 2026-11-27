@@ -84,7 +84,7 @@ class TrashOpsTest {
             fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
             val trashed = moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             fs.writeBytesOnce(
-                "${NpnPaths.TRASH_DIR}/${NpnPaths.Temp.moveName("interrupted")}",
+                "${NpnPaths.TRASH_DIR}/${NpnPaths.Temp.WRITE_PREFIX}interrupted${NpnPaths.Temp.PART}",
                 "partial".encodeToByteArray(),
             )
 

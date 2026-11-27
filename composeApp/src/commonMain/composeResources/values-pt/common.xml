@@ -96,21 +96,17 @@
     <string name="common_create_new_library">Criar uma biblioteca</string>
     <string name="common_new_library_folder_name">Nome da nova pasta</string>
 
-    <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
+    <!-- Library storage: device-storage folders and the Android all-files grant -->
     <string name="common_onboarding_cloud_title">Escolha sua nuvem</string>
     <string name="common_onboarding_cloud_connect_failed">Sua biblioteca está pronta neste dispositivo, mas não foi possível conectá-la à sua nuvem: %1$s. Conecte-a em Configurações, em Sincronização na nuvem.</string>
     <string name="common_storage_access_title">Permitir acesso ao armazenamento do dispositivo</string>
     <string name="common_storage_access_help">O No Papers Needed mantém sua biblioteca como uma pasta comum neste dispositivo. Para ler e gravar nela, inclusive arquivos adicionados por outros apps, como o Syncthing, permita o acesso a todos os arquivos.</string>
     <string name="common_storage_access_grant">Permitir acesso</string>
     <string name="common_ok">OK</string>
-    <string name="common_folder_not_on_device">Esta pasta não está no armazenamento do dispositivo. Escolha uma pasta no armazenamento interno ou em um cartão SD, ou ative a opção Storage Access Framework em Avançado para usar pastas de outros apps.</string>
-    <string name="common_folder_access_not_kept_library">O Android não permitiu que o app mantivesse o acesso a essa pasta, então ela não foi aberta como biblioteca. Escolha-a novamente ou escolha outra pasta.</string>
+    <string name="common_folder_not_on_device">Esta pasta não está no armazenamento do dispositivo. Escolha uma pasta no armazenamento interno ou em um cartão SD.</string>
     <string name="common_folder_access_not_kept_watched">O Android não permitiu que o app mantivesse o acesso a essa pasta, então a pasta monitorada não foi alterada. Escolha-a novamente ou escolha outra pasta.</string>
     <string name="common_folder_in_library_watched">Essa pasta fica dentro da biblioteca, então os PDFs nela já fazem parte da biblioteca e a pasta monitorada não foi alterada. Escolha uma pasta fora da biblioteca.</string>
     <string name="common_settings_advanced">Avançado</string>
-    <string name="common_settings_use_saf">Usar o Storage Access Framework</string>
-    <string name="common_settings_use_saf_help">Modo legado: abre as pastas pelo seletor de documentos do Android em vez de diretamente no armazenamento do dispositivo. É mais lento, não avisa sobre alterações, e arquivos adicionados por ferramentas de sincronização podem passar despercebidos. Vale a partir da próxima vez que você escolher uma pasta.</string>
-    <string name="common_settings_library_saf_note">Esta biblioteca é aberta pelo Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">O acesso ao armazenamento do dispositivo não está permitido. Arquivos adicionados por outros apps, como o Syncthing, não ficarão visíveis.</string>
     <string name="common_already_running">O No Papers Needed já está aberto. Mude para a janela dele para continuar.</string>
 

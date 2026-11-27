@@ -57,7 +57,7 @@ class OcrPipelineSidecarReadTest {
         }
 
     /**
-     * A sidecar cut short mid-write (SAF writes at the final name, so a kill leaves one) is listed
+     * A sidecar cut short (a sync tool still bringing it) is listed
      * like any other, and an engine-qualified one ranks without being read. Selected over a version
      * that reads, it left the document unsearchable and charged it an attempt per pass, until it
      * failed for good.

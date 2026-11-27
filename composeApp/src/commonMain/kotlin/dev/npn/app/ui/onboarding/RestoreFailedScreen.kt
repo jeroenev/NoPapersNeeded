@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import dev.npn.app.OpenFailure
-import dev.npn.app.di.OpenFailureReason
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_open_library_title
 import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
@@ -29,8 +28,6 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun RestoreFailedScreen(
     failure: OpenFailure,
-    useSaf: Boolean,
-    onUseSafChange: (Boolean) -> Unit,
     onRetry: () -> Unit,
     onOpen: (location: String) -> Unit,
     onReportProblem: () -> Unit,
@@ -45,12 +42,7 @@ fun RestoreFailedScreen(
         )
         OpenFailureMessage(failure)
         Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
-        LibraryLocationChooser(
-            useSaf = useSaf,
-            onUseSafChange = onUseSafChange,
-            onPick = onOpen,
-            requireStorageAccess = failure.reason == OpenFailureReason.NO_STORAGE_ACCESS,
-        ) { pickers ->
+        LibraryLocationChooser(onPick = onOpen) { pickers ->
             OutlinedButton(onClick = pickers.pickLibrary) {
                 Text(stringResource(Res.string.common_pick_folder_again))
             }

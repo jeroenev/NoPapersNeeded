@@ -51,7 +51,6 @@ class TempFileSweepTest {
             val stale =
                 listOf(
                     file("inbox/.npn-tmp-123456.part"),
-                    file("inbox/" + NpnPaths.Temp.moveName(NONCE)),
                     file(NpnPaths.Temp.relocationPath("archive/b.pdf", NONCE)),
                     // A bake whose move into place copied the baked bytes and left the source.
                     file(NpnPaths.Temp.bakePath("docs/a.pdf"), content = "bytes of docs/a.pdf"),
@@ -78,7 +77,6 @@ class TempFileSweepTest {
                 listOf(
                     file("inbox/.npn-tmp-123456.part", ageMillis = HOUR),
                     file(NpnPaths.Temp.importPath(NONCE), ageMillis = HOUR),
-                    file("inbox/" + NpnPaths.Temp.moveName(NONCE), ageMillis = HOUR),
                     file(JournalPaths.stagingPath(HASH, "another-installation", NONCE), ageMillis = HOUR),
                 )
             // A move interrupted mid-way: the document's only copy, under its recovery name.
@@ -121,7 +119,6 @@ class TempFileSweepTest {
             file("docs/.npn-tmp-1.pdf.part")
             file(NpnPaths.Temp.relocationPath("docs/b.pdf", NONCE))
             file(NpnPaths.Temp.bakePath("docs/a.pdf"), ageMillis = HOUR)
-            file("docs/" + NpnPaths.Temp.moveName(NONCE), ageMillis = HOUR)
 
             rig.coordinator().rescan()
 

@@ -40,9 +40,7 @@ internal class DocumentPaths(
         source: String,
         target: String,
     ): Settled {
-        if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation) {
-            return Settled(source, null)
-        }
+        if (source == target || !NpnPaths.isDocumentPath(target)) return Settled(source, null)
         if (bakeAsides.holds(source)) return Settled(source, null)
         val placed = if (fs.exists(target)) alreadyPlaced(docId, source, target) else relocate(docId, source, target)
         return if (placed != null) Settled(target, placed) else Settled(source, null)

@@ -77,7 +77,6 @@ import dev.npn.core.app.WorkBlock
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import dev.npn.core.index.IndexProgress
-import dev.npn.core.settings.LibraryLocations
 import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm
@@ -162,8 +161,8 @@ fun QueueScreen(
     val sync by vm.sync.collectAsStateWithLifecycle()
     val mail by vm.mail.collectAsStateWithLifecycle()
     val storage = rememberStorageAccess()
-    // Only a library on plain shared storage needs Android's all-files grant; a SAF or app-private
-    // (cloud working copy) library imports fine without it.
+    // Only a library on shared storage needs Android's all-files grant; an app-private (cloud working
+    // copy) library imports fine without it.
     val settingsState by settings.settings.collectAsStateWithLifecycle()
     val location = settingsState.libraryLocation
     val storageProblem = needsStorageGrant(location, location?.let(::isAppPrivateLocation) == true, storage.usable)
@@ -204,12 +203,12 @@ fun QueueScreen(
     }
 }
 
-/** Whether this library needs direct shared-storage access. */
+/** Whether this library needs shared-storage access it does not have. */
 internal fun needsStorageGrant(
     location: String?,
     appPrivate: Boolean,
     usable: Boolean,
-): Boolean = location != null && !LibraryLocations.isContentUri(location) && !appPrivate && !usable
+): Boolean = location != null && !appPrivate && !usable
 
 /** Everything Activity shows, split the way the page orders it. */
 private class Activity(

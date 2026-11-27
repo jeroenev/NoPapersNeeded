@@ -265,7 +265,7 @@ internal class LibrarySessionImpl(
     }
 
     // The one pending follow-up rescan for files a scan deferred as still being written. A file
-    // can finish without another watch event, and SAF libraries have no watcher at all.
+    // can finish without another watch event.
     private val settleRescanLock = Mutex()
     private var settleRescan: Job? = null
 

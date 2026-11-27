@@ -135,7 +135,7 @@ internal class OcrVersions(
 
     /**
      * [select] among the versions of [docId] in [stored] whose sidecars read, with the chosen one's
-     * sidecar; null when none does. A sidecar cut short mid-write (SAF writes at the final name) is
+     * sidecar; null when none does. A sidecar cut short (a sync tool still bringing it) is
      * listed like any other, and is passed over here rather than stand in for the next best. Reads
      * only until one does.
      */

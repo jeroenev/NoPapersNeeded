@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import dev.npn.app.platform.appLockRecoveryFile
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsEmailImport
-import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.automation.AutomationSettingsPane
 import dev.npn.app.ui.diagnostics.ProblemReportState
 import dev.npn.core.mail.MailState
@@ -107,7 +106,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_support_t
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
 import no_papers_needed.composeapp.generated.resources.common_settings_update_check
-import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_library
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
@@ -288,7 +286,7 @@ internal val SettingsCategories: List<SettingsCategory> =
             title = Res.string.common_settings_library,
             icon = Icons.Outlined.FolderOpen,
             keywords =
-                listOfNotNull(
+                listOf(
                     Res.string.common_settings_change_library,
                     Res.string.onboarding_add_device,
                     Res.string.common_settings_storage,
@@ -297,15 +295,12 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_advanced,
                     Res.string.common_settings_clear_thumbnail_cache,
                     Res.string.common_settings_verify_library,
-                    // Only Android offers the Storage Access Framework.
-                    Res.string.common_settings_use_saf.takeIf { supportsSafStorage() },
                 ),
             content = { state, actions -> LibrarySettingsPane(state, actions) },
             advancedKeywords =
-                listOfNotNull(
+                listOf(
                     Res.string.common_settings_advanced,
                     Res.string.common_settings_clear_thumbnail_cache,
-                    Res.string.common_settings_use_saf.takeIf { supportsSafStorage() },
                 ),
         ),
         SettingsCategory(

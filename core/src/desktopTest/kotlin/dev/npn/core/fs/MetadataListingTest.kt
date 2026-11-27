@@ -14,8 +14,8 @@ import kotlin.test.Test
 
 /**
  * OCR sidecar and trash lookups run once or twice per OCR job and on every trash restore. They must
- * walk only their own directory under `.npn/`, never the whole library: on SAF every directory of a
- * walk is a binder query, and an index rebuild queues every document for OCR.
+ * walk only their own directory under `.npn/`, never the whole library: a library holds thousands of
+ * files, and an index rebuild queues every document for OCR.
  */
 class MetadataListingTest {
     private lateinit var root: Path

@@ -12,8 +12,8 @@ import kotlin.test.Test
 
 /**
  * A drain looks up every document's stored versions several times. Listing `.npn/ocr/` for each
- * lookup made a full drain cost documents × sidecars directory entries (on SAF, a binder query
- * per entry); a drain lists it once, and the next drain lists it again to see what arrived.
+ * lookup made a full drain cost documents × sidecars directory entries; a drain lists it once, and
+ * the next drain lists it again to see what arrived.
  */
 class OcrDrainListingTest {
     private val rig = OcrPipelineRig()

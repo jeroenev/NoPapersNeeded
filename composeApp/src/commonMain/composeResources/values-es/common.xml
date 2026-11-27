@@ -102,14 +102,10 @@
     <string name="common_storage_access_help">No Papers Needed mantiene tu biblioteca como una carpeta normal en este dispositivo. Para leerla y escribir en ella, incluidos los archivos añadidos por otras aplicaciones como Syncthing, permite el acceso a todos los archivos.</string>
     <string name="common_storage_access_grant">Permitir acceso</string>
     <string name="common_ok">Aceptar</string>
-    <string name="common_folder_not_on_device">Esta carpeta no está en el almacenamiento del dispositivo. Elige una carpeta en el almacenamiento interno o en una tarjeta SD, o activa la opción Storage Access Framework en Avanzado para usar carpetas de otras aplicaciones.</string>
-    <string name="common_folder_access_not_kept_library">Android no permitió que la aplicación conservara el acceso a esa carpeta, así que no se abrió como biblioteca. Vuelve a elegirla o elige otra carpeta.</string>
+    <string name="common_folder_not_on_device">Esta carpeta no está en el almacenamiento del dispositivo. Elige una carpeta en el almacenamiento interno o en una tarjeta SD.</string>
     <string name="common_folder_access_not_kept_watched">Android no permitió que la aplicación conservara el acceso a esa carpeta, así que la carpeta vigilada no cambió. Vuelve a elegirla o elige otra carpeta.</string>
     <string name="common_folder_in_library_watched">Esa carpeta está dentro de la biblioteca, así que sus PDF ya forman parte de ella y la carpeta vigilada no cambió. Elige una carpeta fuera de la biblioteca.</string>
     <string name="common_settings_advanced">Avanzado</string>
-    <string name="common_settings_use_saf">Usar Storage Access Framework</string>
-    <string name="common_settings_use_saf_help">Modo heredado: abre las carpetas mediante el selector de documentos de Android en lugar de directamente en el almacenamiento del dispositivo. Es más lento, no avisa de los cambios y los archivos añadidos por herramientas de sincronización pueden pasar desapercibidos. Se aplica la próxima vez que elijas una carpeta.</string>
-    <string name="common_settings_library_saf_note">Esta biblioteca se abre mediante Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">No se permite el acceso al almacenamiento del dispositivo. Los archivos añadidos por otras aplicaciones, como Syncthing, no serán visibles.</string>
     <string name="common_already_running">No Papers Needed ya está abierto. Cambia a su ventana para continuar.</string>
 

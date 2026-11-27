@@ -75,10 +75,9 @@ object SimPdf {
 
 /**
  * Sizes for the PDFs the engines make (split parts, baked copies), one per label, as the
- * generators give theirs where storage reports mtimes: two files written in the same virtual
- * millisecond, one renamed over the other, would otherwise share a stat. The same label (the same
- * baked copy of the same document, made on two replicas) gets the same size, so it makes the same
- * bytes.
+ * generators give theirs: two files written in the same virtual millisecond, one renamed over the
+ * other, would otherwise share a stat. The same label (the same baked copy of the same document,
+ * made on two replicas) gets the same size, so it makes the same bytes.
  */
 class SimSizes(
     private val base: Int = BASE,

@@ -100,17 +100,18 @@ class SyncSimulationHarnessTest {
     /**
      * A cloud seed's full sync ends only on a round of passes that follows the replicas settling: the
      * settle's rescan may find what no pass has carried yet, here a file another process wrote after
-     * the last step on storage with no watcher, and the next round carries it. A full sync that ended
+     * the last step that the watcher missed, and the next round carries it. A full sync that ended
      * on the round before compared the replicas before they converged (seed 2000279 at 68e504f9).
      */
     @Test
     fun aFileOnlyTheSettlingRescanFindsIsSyncedBeforeTheReplicasAreCompared() =
         runTest {
-            val base = config()
+            // A watcher that drops every event, so only a rescan finds the file.
+            val base = config().copy(watchDropRate = 1.0)
             val sync =
                 SyncConfig.forSeed(base).let {
                     it.copy(
-                        profiles = List(it.replicas) { StorageProfile.SAF },
+                        profiles = List(it.replicas) { StorageProfile.DIRECT_RENAME },
                         joinsAt = List(it.replicas) { 0 },
                         cloud =
                             CloudOptions(
@@ -384,11 +385,11 @@ class SyncSimulationHarnessTest {
     }
 
     /**
-     * Two files of one size written in one virtual millisecond, on storage that reports mtimes, have
-     * two stats: the one renamed over the other changes the stat at its path, as any overwrite of
-     * other bytes does but the out-of-scope mtime-preserving one, and the rescan finds the second
-     * document there. Given the clock's millisecond each, they had one stat, and the index kept the
-     * first document at the path its file no longer held (seeds 4100509 and 4100575 at 9f76eae2).
+     * Two files of one size written in one virtual millisecond have two stats: the one renamed over
+     * the other changes the stat at its path, as any overwrite of other bytes does but the
+     * out-of-scope mtime-preserving one, and the rescan finds the second document there. Given the
+     * clock's millisecond each, they had one stat, and the index kept the first document at the path
+     * its file no longer held (seeds 4100509 and 4100575 at 9f76eae2).
      */
     @Test
     fun twoFilesOfOneSizeWrittenInOneMillisecondHaveTwoStats() =
@@ -400,7 +401,6 @@ class SyncSimulationHarnessTest {
             val sync =
                 SyncConfig.forSeed(config).let {
                     it.copy(
-                        mtimes = List(it.replicas) { true },
                         joinsAt = List(it.replicas) { 0 },
                         cloud = null,
                         bisync = null,
@@ -420,7 +420,8 @@ class SyncSimulationHarnessTest {
         }
 
     /**
-     * A trashed document's own bytes found back in a folder no watch reports on (SAF storage) are
+     * A trashed document's own bytes found back in a folder no watch reports on (a watcher that drops
+     * every event) are
      * recorded as its restore by the time the replicas are checked at rest, as docs/SIMULATION.md
      * has it: each replica rescans once the day at rest begins, so the restore window counts from
      * then (`JournalCoordinator.recordRestores`). Seen first by the rescan after the day, the file
@@ -433,12 +434,13 @@ class SyncSimulationHarnessTest {
         runTest {
             val bytes = SimPdf.bytes("back unwatched", "v", BAKED_SIZE + 7)
             val docId = sha256Bytes(bytes)
-            // At rest after the step that trashes it, checked at the next step.
-            val config = config().copy(quiesceEvery = STEPS / 2)
+            // At rest after the step that trashes it, checked at the next step; the watcher drops every
+            // event, so only a rescan finds the file.
+            val config = config().copy(quiesceEvery = STEPS / 2, watchDropRate = 1.0)
             val sync =
                 SyncConfig.forSeed(config).let {
                     it.copy(
-                        profiles = List(it.replicas) { StorageProfile.SAF },
+                        profiles = List(it.replicas) { StorageProfile.DIRECT_RENAME },
                         joinsAt = List(it.replicas) { 0 },
                         cloud = null,
                         bisync = null,

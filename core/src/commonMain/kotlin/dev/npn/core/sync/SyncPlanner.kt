@@ -77,12 +77,6 @@ data class LocalSnapshot(
      * stand for left long enough ago, as a local one does.
      */
     val trashTimes: Map<String, Long?> = emptyMap(),
-    /**
-     * Whether this library moves documents to their journaled paths itself
-     * ([dev.npn.core.fs.LibraryFileSystem.supportsDocumentRelocation]): the remote then follows the
-     * library's names; one that cannot takes the remote's.
-     */
-    val relocates: Boolean = true,
 )
 
 /** One step of a plan: a [Local] one changes the library folder, a [Remote] one the remote. */
@@ -435,9 +429,9 @@ class SyncPlanner(
      * - the library file moved since: renamed here (a user, or this library's indexer following the
      *   journaled path), so the remote follows;
      * - still where it was, or never agreed on: the remote's name is another device's newer choice,
-     *   and the library takes it, unless this library's indexer places the document by its
-     *   journaled path itself ([LocalSnapshot.relocates]): it would move the file back, so only
-     *   the remote's name is remembered as agreed, and each side keeps its own.
+     *   and the library takes it, unless the journal names a path for the document: this library's
+     *   indexer places it there itself and would move the file back, so only the remote's name is
+     *   remembered as agreed, and each side keeps its own.
      * Never agreed on and a device's own indexer naming the file differently is how two replicas end
      * with other names for one document; neither then moves it, so they never undo each other.
      */
@@ -452,7 +446,7 @@ class SyncPlanner(
                 relocateRemote(doc, doc.relPath, remotePaths)
             }
 
-            doc.intent == null || !local.relocates -> {
+            doc.intent == null -> {
                 takeRemoteName(doc, remotePath)
             }
 

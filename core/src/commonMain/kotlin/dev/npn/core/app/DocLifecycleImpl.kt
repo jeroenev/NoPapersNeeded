@@ -280,17 +280,14 @@ internal class DocLifecycleImpl(
         }
 
     /**
-     * Journal [destination] as [docId]'s location, which the fold then moves its file to. Storage that
-     * cannot move a document would leave it where it is with the journal saying otherwise, so there
-     * nothing is written. A target that is the document's own file under another spelling (a case-only
-     * rename where the filesystem ignores case) is left alone: the fold cannot tell that move apart
-     * from one already made.
+     * Journal [destination] as [docId]'s location, which the fold then moves its file to. A target that
+     * is the document's own file under another spelling (a case-only rename where the filesystem
+     * ignores case) is left alone: the fold cannot tell that move apart from one already made.
      */
     private suspend fun relocate(
         docId: String,
         destination: (DocumentEntity) -> String?,
     ): RelocationOutcome {
-        if (!fs.supportsDocumentRelocation) return RelocationOutcome.UNSUPPORTED
         val doc = documentDao.getByDocId(docId)?.takeIf { it.isLive } ?: return RelocationOutcome.UNCHANGED
         val target = destination(doc) ?: return RelocationOutcome.UNCHANGED
         val refusal =

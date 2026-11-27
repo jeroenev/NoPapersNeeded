@@ -5,9 +5,9 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * Android [ExternalIo] over a `ContentResolver`, so a direct-filesystem library can import from
- * share-sheet and document-picker `content://` uris exactly as the SAF library does. `file://` uris
- * are served by the resolver too.
+ * Android [ExternalIo] over a `ContentResolver`, so the library can import from share-sheet,
+ * document-picker and watched-folder `content://` uris. `file://` uris are served by the resolver
+ * too.
  */
 internal class ContentResolverExternalIo(
     context: Context,

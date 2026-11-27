@@ -7,7 +7,6 @@ import dev.npn.app.platform.isAppPrivateLocation
 import dev.npn.core.ai.HttpAiPriceSource
 import dev.npn.core.app.androidRclone
 import dev.npn.core.app.androidSessionDeps
-import dev.npn.core.settings.LibraryLocations
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.sync.RcloneTransport
@@ -52,7 +51,6 @@ fun createAppEnvironment(context: Context): AppEnvironment {
  * cloud library's working copy is in the app's own storage, which needs no grant.
  */
 private fun checkOpenable(location: String) {
-    if (LibraryLocations.isContentUri(location)) return
     if (!Files.isDirectory(Paths.get(location))) {
         throw LibraryUnavailableException.folderMissing(location)
     }

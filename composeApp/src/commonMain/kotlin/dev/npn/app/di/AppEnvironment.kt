@@ -36,8 +36,8 @@ interface AppEnvironment {
 
     /**
      * Open (or switch to) the library at [location] and persist it as the configured library.
-     * Desktop: absolute folder path. Android: a device-storage path, or a SAF tree uri whose
-     * persistable permission the caller has already taken.
+     * An absolute folder path: on Android a device-storage path, or a cloud library's working copy
+     * in the app's own storage.
      *
      * Throws when the library cannot be opened or [location] cannot be persisted, a
      * [LibraryUnavailableException] when the platform knows why. A failed switch goes back to the

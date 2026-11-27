@@ -258,7 +258,6 @@ private fun AppRoot(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val showWhatsNew by whatsNew.show.collectAsStateWithLifecycle()
-    val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     val language by vm.appLanguage.collectAsStateWithLifecycle()
     val lockState by env.lock.state.collectAsStateWithLifecycle()
     val reducedMotion by vm.reducedMotion.collectAsStateWithLifecycle()
@@ -310,8 +309,6 @@ private fun AppRoot(
                             val cloudState by vm.cloudSetupState.collectAsStateWithLifecycle()
                             OnboardingScreen(
                                 failure = current.failure,
-                                useSaf = useSaf,
-                                onUseSafChange = vm::setUseSafStorage,
                                 onOpen = vm::open,
                                 onCreate = vm::createLibrary,
                                 onUseRecommendedFolder = vm::useRecommended,
@@ -324,8 +321,6 @@ private fun AppRoot(
                         is AppState.RestoreFailed -> {
                             RestoreFailedScreen(
                                 failure = current.failure,
-                                useSaf = useSaf,
-                                onUseSafChange = vm::setUseSafStorage,
                                 onRetry = vm::retry,
                                 onOpen = vm::open,
                                 onReportProblem = vm::reportProblem,
