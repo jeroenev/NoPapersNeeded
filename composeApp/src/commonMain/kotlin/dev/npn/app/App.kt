@@ -389,7 +389,11 @@ private fun AppRoot(
                             }
                             // A switch to another library that failed lands back in this one; say why.
                             current.failure?.let {
-                                OpenFailedDialog(it, onDismiss = vm::dismissFailure, onReportProblem = vm::reportProblem)
+                                OpenFailedDialog(
+                                    it,
+                                    onDismiss = vm::dismissFailure,
+                                    onReportProblem = vm::reportProblem,
+                                )
                             }
                         }
                     }
