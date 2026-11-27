@@ -373,9 +373,10 @@ truth; the user just never picks it.
   never one no document accounts for.
 - A missing remote file is unknown, never a deletion; a remote PDF that could not be identified is
   left alone on both sides until it can be. Nothing is deleted or replaced to settle a conflict:
-  occupied targets are reported (`ConflictKind`) and uniquified. Every remote move and delete is
-  guarded by a fresh `stat` against the size and mtime the plan was made from, every local move and
-  delete by the file's hash, and a failed guard is a reported conflict, not an action.
+  occupied targets are reported (`ConflictKind`) and the copy named for its bytes (section 6.1).
+  Every remote move and delete is guarded by a fresh `stat` against the size and mtime the plan
+  was made from, every local move and delete by the file's hash, and a failed guard is a reported
+  conflict, not an action.
 - Known limit: renames are settled one at a time, each waiting while its name is taken, so two
   documents that swapped names (or a chain of renames) can stay apart: replicas then show the same
   documents under other file names. The library simulation compares cloud replicas without paths
@@ -445,6 +446,15 @@ the short list of these that a change must never break; this section is the comp
   its bytes takes that file and leaves the one it was at: the sync tool is usually still bringing
   that copy's deletion from the device that moved it, and a device whose intent is still the other
   path could delete the intended copy at the same time for the same reason, losing both.
+- A name the app invents beside a taken one carries the first four hex digits of the SHA-256 of
+  the bytes it will hold (`withNameToken`, `uniquifyByHash`): an import's `scan (7f3a).pdf`, a
+  split part's `doc (part 1, 7f3a).pdf` (always, as two devices splitting one document make other
+  bytes), a restore's `name (restored, 7f3a).pdf`, a storage-path template's second document, and
+  cloud sync's copies. A counter is unique only in this device's folder, so two devices that have
+  not synced would pick one `(2)` for different files, which the sync tool settles as a conflict
+  copy no rescan indexes; by hash, different bytes get different names and the same bytes agree.
+  A free name, the user's or a template's, stays as it is; when even the token is taken (two
+  documents' hashes starting alike) a counter follows it.
 - A file a user moved outside the app is journaled as the document's new `storagePath`
   (`ExternalDocumentMoves`), once this device saw it settled at its old path under the intent it
   still holds. A file at a path a `storagePath` event already named for the document, winning or
@@ -519,13 +529,13 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   sentinel, named after the path it was trashed from, with no stat (`FoldProjection.trashedRow`);
   a restore records the stat of the trash entry it moves, so the restored file vouches for it.
 - Restore records its final destination: the path the document was trashed from (or the inbox under
-  its file name when that is no document path), or a `(restored)` name beside it when a file is
+  its file name when that is no document path), or a `(restored, 7f3a)` name beside it when a file is
   there now or another live row names it.
 - A restore on a device that had another device's trash event but not yet its file move finds no
   copy in the trash and keeps the file still at the document's path; the move then lands, taking
   that file away and leaving the bytes in the trash. So does an Undo, or an import of the same bytes.
   A rescan that leaves a document the journal shows as missing brings such a copy back
-  (`StrandedTrashCopies`), to its intended path or a `(restored)` name beside it, and scans again:
+  (`StrandedTrashCopies`), to its intended path or a `(restored, 7f3a)` name beside it, and scans again:
   only a copy that hashes to the document and whose name's trash episode
   (`NpnPaths.trashEpisodeMillis`) is no later than the restore that took it out of the trash last.
   A later episode is a trash the journal does not have: one whose event has not arrived yet, or one

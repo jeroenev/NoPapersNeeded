@@ -6,6 +6,8 @@ import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.readDocument
+import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.Sensitive.Kind.DOCUMENT
@@ -50,7 +52,8 @@ internal class SplitService(
      * Split [docId] into one new document per entry of [segments] (0-based page ranges). The
      * segments must be non-empty, contiguous and cover every page exactly once — the UI builds
      * them from "split after page N" cut points, so dropping or duplicating pages is a bug here,
-     * not a feature. Parts are named `<original> (part N).pdf`.
+     * not a feature. Parts are named `<original> (part N, 7f3a).pdf`, the token from
+     * each part's own bytes ([withNameToken]).
      */
     suspend fun split(
         docId: String,
@@ -86,7 +89,10 @@ internal class SplitService(
                 val outcome =
                     runCatchingCancellable {
                         val partBytes = pdfEngine.extractPages(bytes, segment.toList())
-                        importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", folder)
+                        // Named for its bytes as well: two devices splitting one document make other
+                        // bytes (a fresh PDF /ID), which must not meet under one name in the folder.
+                        val name = withNameToken("$baseName.pdf", sha256Bytes(partBytes), label = "part ${i + 1}")
+                        importService.importBytes(partBytes, name, folder)
                     }.getOrElse {
                         log.warn("Making part ${i + 1} of ${sensitive(doc.relPath, DOCUMENT)} failed", it)
                         return Result.Failed(SplitFailure.NOT_COMPLETED)

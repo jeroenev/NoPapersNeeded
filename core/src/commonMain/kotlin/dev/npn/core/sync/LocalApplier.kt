@@ -3,7 +3,7 @@ package dev.npn.core.sync
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.hasStoredStat
-import dev.npn.core.fs.uniquifyPath
+import dev.npn.core.fs.uniquifyByHash
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -113,7 +113,7 @@ class LocalApplier(
                 throw RemoteRaceException("Remote document changed while syncing: ${action.remotePath}")
             }
             if (fs.exists(action.targetRelPath)) removeSupersededAt(action.targetRelPath, action.docId)
-            val target = uniquifyPath(action.targetRelPath, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
+            val target = uniquifyByHash(action.targetRelPath, action.docId, exists = fs::exists)
             if (target != action.targetRelPath) {
                 report.conflicts +=
                     SyncConflict(action.docId, action.remotePath, ConflictKind.INSTALLED_AS_COPY, otherPath = target)
@@ -152,7 +152,7 @@ class LocalApplier(
             if (!journal.isCurrent(action.docId) || !verified(action.trashEntry, action.docId, report)) {
                 return@serialized false
             }
-            fs.move(action.trashEntry, trashOps.restoreTarget(action.targetRelPath, fs::exists))
+            fs.move(action.trashEntry, trashOps.restoreTarget(action.targetRelPath, action.docId, fs::exists))
             true
         }
 
@@ -203,9 +203,10 @@ class LocalApplier(
             fs.move(action.relPath, target)
             val moved = fs.stat(target)
             if (moved != null && moved.hasStoredStat(checked.size, checked.mtimeMillis)) return@serialized true
-            if (fs.sha256(target) == action.docId) return@serialized true
+            val held = fs.sha256(target)
+            if (held == action.docId) return@serialized true
             report.conflicts += SyncConflict(action.docId, action.relPath, ConflictKind.LOCAL_CHANGED)
-            val back = uniquifyPath(action.relPath, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
+            val back = uniquifyByHash(action.relPath, held, exists = fs::exists)
             fs.move(target, back)
             back != action.relPath
         }

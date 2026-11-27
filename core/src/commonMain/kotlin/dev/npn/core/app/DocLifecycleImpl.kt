@@ -114,9 +114,9 @@ internal class DocLifecycleImpl(
             val entryStat = entry?.let { fs.stat(it) }
             val finalPath =
                 if (entry != null) {
-                    trashOps.restoreTarget(target, ::takenForRestore)
+                    trashOps.restoreTarget(target, docId, ::takenForRestore)
                 } else {
-                    target.takeIf { freeFor(it, doc) } ?: trashOps.restoreTarget(target, ::takenForRestore)
+                    target.takeIf { freeFor(it, doc) } ?: trashOps.restoreTarget(target, docId, ::takenForRestore)
                 }
             LifecyclePlan.restore(doc, finalPath, entry, entryStat)
         }

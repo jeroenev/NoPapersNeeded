@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.FtsRows
 import dev.npn.core.db.searchDocIds
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
@@ -374,10 +375,10 @@ class IndexerTest {
             (dup is ImportResult.Duplicate).shouldBeTrue()
             (dup as ImportResult.Duplicate).existingDocId shouldBe imported.docId
 
-            // different bytes, same name -> " (2)" suffix
+            // different bytes, same name -> named for those bytes beside it
             val src3 = rig.externalFile("scan3.pdf", "other-bytes")
-            val third = rig.importService.importPdf(src3, "invoice.pdf")
-            (third as ImportResult.Imported).relPath shouldBe "inbox/invoice (2).pdf"
+            val third = rig.importService.importPdf(src3, "invoice.pdf") as ImportResult.Imported
+            third.relPath shouldBe withNameToken("inbox/invoice.pdf", third.docId)
 
             // .npn/tmp left clean
             rig.exists(".npn/tmp").let { present ->

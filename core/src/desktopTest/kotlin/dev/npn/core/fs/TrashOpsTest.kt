@@ -4,7 +4,6 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
 import org.junit.Assume.assumeTrue
 import java.io.File
@@ -114,8 +113,8 @@ class TrashOpsTest {
             val trashRel = moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             // A new file now occupies the original path.
             fs.writeBytesOnce("inbox/doc.pdf", "new".encodeToByteArray())
-            val restored = restore(trashRel, "inbox/doc.pdf")
-            restored shouldContain "(restored)"
+            val restored = restore(trashRel, "inbox/doc.pdf", docId = "deadbeefcafebabe")
+            restored shouldBe "inbox/doc (restored, dead).pdf"
             fs.readBytes(restored).decodeToString() shouldBe "orig"
             fs.readBytes("inbox/doc.pdf").decodeToString() shouldBe "new"
         }
@@ -257,11 +256,12 @@ class TrashOpsTest {
         episodeMillis: Long,
     ): String = trash.trashTarget(relPath, sha256, episodeMillis).also { fs.move(relPath, it) }
 
-    /** Move [trashRelPath] back to [toRelPath], or beside it when a file is there, returning where. */
+    /** Move [trashRelPath], of [docId], back to [toRelPath], or beside it when a file is there, returning where. */
     private suspend fun restore(
         trashRelPath: String,
         toRelPath: String,
-    ): String = trash.restoreTarget(toRelPath, fs::exists).also { fs.move(trashRelPath, it) }
+        docId: String = "0".repeat(64),
+    ): String = trash.restoreTarget(toRelPath, docId, fs::exists).also { fs.move(trashRelPath, it) }
 
     /** A trashed file's entry, and the id whose hash prefix its name carries. */
     private class Trashed(

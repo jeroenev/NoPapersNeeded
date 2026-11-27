@@ -18,13 +18,19 @@ class ResolveUniqueTargetTest {
             dao.upsert(documentEntity("live", relPath = "a/live.pdf"))
             rig.writePdf("a/file.pdf", "a file no row names yet")
 
-            suspend fun target(path: String) = resolveUniqueTarget(rig.fs, dao, currentDocId = "doc", target = path)
+            val hash = "7f3a" + "0".repeat(60)
+
+            suspend fun target(path: String) =
+                resolveUniqueTarget(rig.fs, dao, currentDocId = "doc", target = path, hash = hash)
 
             target("a/trashed") shouldBe "a/trashed.pdf"
             target("a/deleted") shouldBe "a/deleted.pdf"
             target("a/missing") shouldBe "a/missing.pdf"
-            target("a/live") shouldBe "a/live-1.pdf"
-            target("a/file") shouldBe "a/file-1.pdf"
-            resolveUniqueTarget(rig.fs, dao, currentDocId = "live", target = "a/live") shouldBe "a/live.pdf"
+            // Beside a taken name, named for the document's bytes: another device filing other bytes
+            // under the same name before the two sync never picks the same one.
+            target("a/live") shouldBe "a/live (7f3a).pdf"
+            target("a/file") shouldBe "a/file (7f3a).pdf"
+            resolveUniqueTarget(rig.fs, dao, currentDocId = "live", target = "a/live", hash = hash) shouldBe
+                "a/live.pdf"
         }
 }

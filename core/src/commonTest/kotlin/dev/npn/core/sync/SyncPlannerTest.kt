@@ -124,7 +124,7 @@ class SyncPlannerTest {
         result.remote
             .filterIsInstance<SyncAction.UploadDocument>()
             .single()
-            .remotePath shouldBe "2026/a (2).pdf"
+            .remotePath shouldBe "2026/a (aaaa).pdf"
         result.conflicts.single().remotePath shouldBe "2026/a.pdf"
         // The unknown-to-us document at the occupied path is installed locally under its own name.
         result.local shouldContainExactly listOf(SyncAction.PublishDocument(docB, "2026/a.pdf", "2026/a.pdf"))
@@ -191,17 +191,17 @@ class SyncPlannerTest {
 
     @Test
     fun aNameMadeUniqueOnTheRemoteIsTheLibrarysNameToo() {
-        // Two devices imported other documents as a.pdf: the second one's copy goes up as
-        // `a (2).pdf`, and its library file takes that name before the first one's is installed.
+        // Two devices imported other documents as a.pdf: the second one's copy goes up named for its
+        // bytes, `a (bbbb).pdf`, and its library file takes that name before the first one's is installed.
         val remote = remote(entry("a.pdf"))
         val result = plan(local(doc(docB, "a.pdf")), remote, listOf(known("a.pdf", docA)))
         result.local shouldContainExactly
             listOf(
-                SyncAction.MoveLocal(docB, "a.pdf", "a (2).pdf", "a (2).pdf"),
+                SyncAction.MoveLocal(docB, "a.pdf", "a (bbbb).pdf", "a (bbbb).pdf"),
                 SyncAction.PublishDocument(docA, "a.pdf", "a.pdf"),
             )
         result.remote shouldContainExactly
-            listOf(SyncAction.UploadDocument(docB, "a (2).pdf", "a (2).pdf", formerRelPath = "a.pdf"))
+            listOf(SyncAction.UploadDocument(docB, "a (bbbb).pdf", "a (bbbb).pdf", formerRelPath = "a.pdf"))
         result.conflicts.single().kind shouldBe ConflictKind.UPLOADED_AS_COPY
     }
 
@@ -210,7 +210,7 @@ class SyncPlannerTest {
         val remote = remote(entry("Inbox/A.pdf"))
         val result =
             plan(local(doc(docB, "inbox/a.pdf", intent = "inbox/a.pdf")), remote, listOf(known("Inbox/A.pdf", docA)))
-        result.remote shouldContainExactly listOf(SyncAction.UploadDocument(docB, "inbox/a.pdf", "inbox/a (2).pdf"))
+        result.remote shouldContainExactly listOf(SyncAction.UploadDocument(docB, "inbox/a.pdf", "inbox/a (bbbb).pdf"))
 
         // A rename that only changes case is a move of the document onto its own name.
         val agreed = known("Inbox/A.pdf", docA).copy(localPath = "Inbox/A.pdf")
@@ -389,7 +389,8 @@ class SyncPlannerTest {
     @Test
     fun uniquifiesExtensionLessNamesDottedDirectoriesAndRepeatedCollisions() {
         // Two documents heading for the same occupied path in one pass (names that differ only in
-        // case, which the remote folds) get (2) and (3).
+        // case, which the remote folds) are each named for their bytes; two whose hashes start alike
+        // get one name, then (2).
         val docC = "c".repeat(64)
         val occupied = remote(entry("a.pdf"))
         val twice =
@@ -399,8 +400,17 @@ class SyncPlannerTest {
                 listOf(known("a.pdf", docC)),
             )
         twice.remote.filterIsInstance<SyncAction.UploadDocument>().map { it.remotePath } shouldContainExactly
-            listOf("a (2).pdf", "A (3).pdf")
+            listOf("a (aaaa).pdf", "A (bbbb).pdf")
         twice.conflicts shouldHaveSize 2
+        val alike = "a".repeat(8) + "c".repeat(56)
+        val sameToken =
+            plan(
+                local(doc(docA, "a.pdf", intent = "a.pdf"), doc(alike, "A.pdf", intent = "A.pdf")),
+                occupied,
+                listOf(known("a.pdf", docC)),
+            )
+        sameToken.remote.filterIsInstance<SyncAction.UploadDocument>().map { it.remotePath } shouldContainExactly
+            listOf("a (aaaa).pdf", "A (aaaa) (2).pdf")
 
         // An extension-less name whose trash entry is taken: the next episode, at the very end.
         val bare = ".npn/trash/README__aaaaaaaa-$trashedAt"

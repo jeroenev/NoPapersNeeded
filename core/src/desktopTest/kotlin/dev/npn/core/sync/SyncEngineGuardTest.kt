@@ -5,6 +5,7 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.trashEntries
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.journal.JournalPaths
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -260,7 +261,8 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             pair.b.session.syncCompleted()
             val mine = pdf("B's own unsynced document")
             val theirs = pdf("a different document under the same name")
-            (pair.b.session.importPdfBytes(mine, "x.pdf") as ImportOutcome.Imported).docId
+            val mineId = (pair.b.session.importPdfBytes(mine, "x.pdf") as ImportOutcome.Imported).docId
+            val copy = withNameToken("inbox/x.pdf", mineId)
             pair.remote.put("inbox/x.pdf", theirs)
 
             val report = pair.b.session.syncCompleted()
@@ -268,18 +270,18 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             // Neither file replaced the other: B's document went up under a free name and took that
             // name here too, so the remote's file installed at its own name, as on every replica.
             Files.readAllBytes(pair.b.libRoot.resolve("inbox/x.pdf")) shouldBe theirs
-            Files.readAllBytes(pair.b.libRoot.resolve("inbox/x (2).pdf")) shouldBe mine
+            Files.readAllBytes(pair.b.libRoot.resolve(copy)) shouldBe mine
             report.conflicts.filter {
-                it.kind == ConflictKind.UPLOADED_AS_COPY && it.otherPath == "inbox/x (2).pdf"
+                it.kind == ConflictKind.UPLOADED_AS_COPY && it.otherPath == copy
             } shouldHaveSize
                 1
             pair.remote.bytes("inbox/x.pdf") shouldBe theirs
-            pair.remote.bytes("inbox/x (2).pdf") shouldBe mine
+            pair.remote.bytes(copy) shouldBe mine
             pair.b.session.ingest
                 .rescan()
             pair.b.db
                 .documentDao()
-                .getByRelPath("inbox/x (2).pdf")
+                .getByRelPath(copy)
                 .shouldNotBeNull()
             pair.b.session
                 .syncCompleted()

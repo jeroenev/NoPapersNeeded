@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -54,7 +55,7 @@ class RestoreTargetTest {
             rig.session.docLifecycle.restoreDoc(trashed)
 
             rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
-            rig.fs.sha256("inbox/invoice (restored).pdf") shouldBe trashed
+            rig.fs.sha256(withNameToken("inbox/invoice.pdf", trashed, label = "restored")) shouldBe trashed
             rig.session.rescan()
             val restored =
                 rig.db
@@ -62,7 +63,7 @@ class RestoreTargetTest {
                     .getByDocId(trashed)
                     .shouldNotBeNull()
             restored.isLive.shouldBeTrue()
-            restored.relPath shouldBe "inbox/invoice (restored).pdf"
+            restored.relPath shouldBe withNameToken("inbox/invoice.pdf", trashed, label = "restored")
             rig.db
                 .documentDao()
                 .getByDocId(renamed)
@@ -100,7 +101,7 @@ class RestoreTargetTest {
                     .getByDocId(trashed)
                     .shouldNotBeNull()
             restored.trashed.shouldBeFalse()
-            restored.relPath shouldBe "inbox/invoice (restored).pdf"
+            restored.relPath shouldBe withNameToken("inbox/invoice.pdf", trashed, label = "restored")
         }
 
     /**
@@ -119,7 +120,7 @@ class RestoreTargetTest {
                     .getByDocId(trashed)
                     .shouldNotBeNull()
             restored.isLive.shouldBeTrue()
-            restored.relPath shouldBe "inbox/x (restored).pdf"
+            restored.relPath shouldBe withNameToken("inbox/x.pdf", trashed, label = "restored")
             rig.fs.sha256(restored.relPath) shouldBe trashed
             rig.db.documentDao().getByDocId(later.docId) shouldBe later
         }
@@ -141,7 +142,7 @@ class RestoreTargetTest {
                     .getByDocId(trashed)
                     .shouldNotBeNull()
             restored.trashed.shouldBeFalse()
-            restored.relPath shouldBe "inbox/x (restored).pdf"
+            restored.relPath shouldBe withNameToken("inbox/x.pdf", trashed, label = "restored")
             rig.db.documentDao().getByDocId(later.docId) shouldBe later
         }
 

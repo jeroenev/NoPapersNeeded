@@ -15,7 +15,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
-import dev.npn.core.fs.uniquifyPath
+import dev.npn.core.fs.uniquifyByHash
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
@@ -292,7 +292,8 @@ internal class ImportService(
         // deleted, missing, or live with its file gone), or a new document. The bytes stay where
         // the document's row says when they are back there already, else move to a target of
         // the import's own.
-        val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
+        val target =
+            inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir, hash).also { fs.move(tmpPath, it) }
         var placement: Placement? = null
         try {
             placement = record(hash, target, existing, placed = staged.takeIf { inPlace == null })
@@ -445,13 +446,18 @@ internal class ImportService(
         }
     }
 
+    /**
+     * Where an import of the bytes [hash] names, called [cleanName], goes: by the storage path rule,
+     * else into [toDir].
+     */
     private suspend fun chooseImportTarget(
         cleanName: String,
         toDir: String,
+        hash: String,
     ): String {
         val rule = ruleProvider()
         // A blank template expands to no path, as does any template that cannot expand.
-        if (rule?.enabled != true) return uniqueTargetPath(toDir, cleanName)
+        if (rule?.enabled != true) return uniqueTargetPath(toDir, cleanName, hash)
         val context =
             StoragePathContext(
                 fields = emptyMap(),
@@ -462,26 +468,27 @@ internal class ImportService(
             )
         val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull
         return if (expanded == null) {
-            uniqueTargetPath(toDir, cleanName)
+            uniqueTargetPath(toDir, cleanName, hash)
         } else {
-            resolveUniqueTarget(fs, documentDao, currentDocId = null, target = expanded)
+            resolveUniqueTarget(fs, documentDao, currentDocId = null, target = expanded, hash = hash)
         }
     }
 
     /**
-     * Build `dir/name.pdf`, adding " (2)", " (3)", ... before the extension until free: no file is
-     * there and no live row names it. A live row whose file went outside the app names its path until
-     * a rescan finds it missing; a hidden row gives its path up to a live document.
+     * Build `dir/name.pdf` or, when that is taken, `dir/name (7f3a).pdf`, named for the bytes [hash]
+     * ([uniquifyByHash]), so another device importing other bytes under that name before the two sync
+     * never picks the same one. Taken: a file is there or a live row names it. A live row whose file
+     * went outside the app names its path until a rescan finds it missing; a hidden row gives its
+     * path up to a live document.
      */
     private suspend fun uniqueTargetPath(
         dir: String,
         name: String,
+        hash: String,
     ): String {
         val normDir = NpnPaths.normalize(dir)
         val target = if (normDir.isEmpty()) name else "$normDir/$name"
-        return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }) { candidate ->
-            pathTaken(fs, documentDao, currentDocId = null, candidate)
-        }
+        return uniquifyByHash(target, hash) { candidate -> pathTaken(fs, documentDao, currentDocId = null, candidate) }
     }
 }
 

@@ -32,6 +32,17 @@ internal object SimNames {
         return beside(path, temp)
     }
 
+    /**
+     * Whether [path] is a document name the app invents beside a taken one, by the suffix it adds:
+     * a hash token (`name (7f3a).pdf`, `(part 1, 7f3a)`, `(restored, 7f3a)`), or the counters it
+     * added before those (`(2)`, `(part 1)`, `(restored)`, `(restored 1)`). `(1)` is no counter the
+     * app adds, and the simulation imports a `scan (1).pdf`; a storage path template's name is the
+     * template's, not invented.
+     */
+    fun isInvented(path: String): Boolean =
+        !path.startsWith("${NpnPaths.NPN_DIR}/") &&
+            INVENTED.containsMatchIn(NpnPaths.stripPdfExtension(NpnPaths.fileName(path)))
+
     /** Whether [path] is a journal object or snapshot, by the journal's own layout. */
     fun isJournalObject(path: String): Boolean =
         JournalPaths.classify(path).let { it is JournalPath.ObjectV2 || it is JournalPath.SnapshotV2 }
@@ -55,5 +66,18 @@ internal object SimNames {
         return if (dir.isEmpty()) name else "$dir/$name"
     }
 
+    /**
+     * The hash token in an [isInvented] name (`7f3a` of `name (7f3a).pdf`, `(part 1, 7f3a)`,
+     * `(restored, 7f3a)`), or null for a counter: the bytes the app named it for start with it.
+     */
+    fun nameToken(path: String): String? =
+        TOKEN.find(NpnPaths.stripPdfExtension(NpnPaths.fileName(path)))?.groupValues?.get(1)
+
     private const val HEX = 16
+
+    private val TOKEN = Regex(""" \((?:part \d+, |restored(?: \d+)?, )?([0-9a-f]{4})\)""")
+
+    /** The suffixes of [isInvented]. */
+    private val INVENTED =
+        Regex(""" \((?:[2-9]|[1-9]\d+|[0-9a-f]{4}|part \d+(?:, [0-9a-f]{4})?|restored(?: \d+)?(?:, [0-9a-f]{4})?)\)$""")
 }

@@ -115,7 +115,7 @@ internal class StrandedTrashCopies(
             listOfNotNull(state.intendedPath(row.docId), row.relPath).firstOrNull(NpnPaths::isDocumentPath)
                 ?: "${NpnPaths.DEFAULT_INBOX}/${row.fileName}"
         val target =
-            trash.restoreTarget(wanted) { path ->
+            trash.restoreTarget(wanted, row.docId) { path ->
                 fs.exists(path) ||
                     documentDao.getByRelPath(path)?.isLive == true
             }

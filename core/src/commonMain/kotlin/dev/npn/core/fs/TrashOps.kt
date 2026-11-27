@@ -32,20 +32,15 @@ internal class TrashOps(
     }
 
     /**
-     * Where a file restored to [toRelPath] goes: there, or, when that is [taken], beside it as
-     * `name (restored).pdf` (then `(restored 1)`, ...), the first such name not [taken].
+     * Where a file of the document [docId] restored to [toRelPath] goes: there, or, when that is
+     * [taken], beside it as `name (restored, 7f3a).pdf`, named for its bytes ([uniquifyByHash]), so
+     * two devices restoring different documents beside one name never pick the same one.
      */
     suspend fun restoreTarget(
         toRelPath: String,
+        docId: String,
         taken: suspend (String) -> Boolean,
-    ): String =
-        uniquifyPath(
-            toRelPath,
-            startIndex = 1,
-            firstSuffix = " (restored)",
-            suffix = { " (restored $it)" },
-            exists = taken,
-        )
+    ): String = uniquifyByHash(toRelPath, docId, label = "restored", exists = taken)
 
     /**
      * All entries currently in `.npn/trash/` (files only, never a temporary file a move into the trash

@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.trashEntries
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.WatchedFileSystem
 import dev.npn.core.journal.EventDecoderRegistry
@@ -81,7 +82,7 @@ class TrashOwnFileTest {
                 .documentDao()
                 .getByDocId(trashed)
                 .shouldNotBeNull()
-                .relPath shouldBe "inbox/invoice (restored).pdf"
+                .relPath shouldBe withNameToken("inbox/invoice.pdf", trashed, label = "restored")
         }
 
     /**

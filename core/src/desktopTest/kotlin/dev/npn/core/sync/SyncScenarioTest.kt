@@ -3,6 +3,7 @@ package dev.npn.core.sync
 import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -301,7 +302,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             // document itself is never lost or overwritten.
             cluster.remote.paths().filter { it.endsWith(".pdf") } shouldHaveSize 2
             for (rig in listOf(cluster.a, cluster.b)) {
-                rig.fs.sha256("inbox/cut (2).pdf") shouldBe doc
+                rig.fs.sha256(withNameToken("inbox/cut.pdf", doc)) shouldBe doc
                 rig.fs.sha256("inbox/cut.pdf") shouldNotBe doc
                 rig.exists("inbox/cut.pdf").shouldBeTrue()
             }

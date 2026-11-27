@@ -449,7 +449,7 @@ answer or an issue to track.
 - **A truncated upload on a backend that writes in place is adopted as a copy document** (S7). The
   engine sees a file at the remote name whose bytes are no document it knows, identifies it by
   download, and installs it as a new document; the library's real document then goes up as
-  `name (2).pdf`. Nothing is lost, but the stray copy is the user's to delete. `--inplace`-style
+  `name (7f3a).pdf`, named for its bytes. Nothing is lost, but the stray copy is the user's to delete. `--inplace`-style
   backends, or a provider whose interrupted upload leaves a visible partial object, are the only
   way to reach this; staged uploads do not.
 - **A mirrored trash can add its own trash entry** (S5, S9). A replica that parks a file it only

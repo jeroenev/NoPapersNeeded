@@ -1,6 +1,7 @@
 package dev.npn.core.sync
 
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.withNameToken
 
 /** What kind of remote file a [ManifestEntry] describes. */
 enum class ManifestKind {
@@ -506,7 +507,11 @@ class SyncPlanner(
             } else {
                 // The new name is the library's too (below), so it must be free on both sides, or the
                 // move here fails and the same upload is planned again every pass.
-                uniquifyRemote(target, alsoFree = { doc.intent != null || it.lowercase() !in localTaken }).also {
+                uniquifyRemote(
+                    target,
+                    doc.docId,
+                    alsoFree = { doc.intent != null || it.lowercase() !in localTaken },
+                ).also {
                     conflicts += SyncConflict(doc.docId, target, ConflictKind.UPLOADED_AS_COPY, otherPath = it)
                 }
             }
@@ -757,17 +762,26 @@ class SyncPlanner(
         claimedFolded += path.lowercase()
     }
 
+    /**
+     * A free remote name beside the taken [path] for the document [docId]: `name (7f3a).pdf`, named
+     * for its bytes ([withNameToken]), as another device uploading other bytes beside the same name
+     * must not pick it too; else, as two documents' tokens can coincide, that with " (2)", " (3)", ....
+     */
     private fun uniquifyRemote(
         path: String,
+        docId: String,
         alsoFree: (String) -> Boolean = { true },
     ): String {
-        val slash = path.lastIndexOf('/')
-        val dot = path.lastIndexOf('.')
-        val (base, ext) = if (dot > slash + 1) path.substring(0, dot) to path.substring(dot) else path to ""
+        fun free(candidate: String) = !isRemoteTaken(candidate) && alsoFree(candidate)
+        val named = withNameToken(path, docId)
+        if (free(named)) return named
+        val slash = named.lastIndexOf('/')
+        val dot = named.lastIndexOf('.')
+        val (base, ext) = if (dot > slash + 1) named.substring(0, dot) to named.substring(dot) else named to ""
         var index = 2
         while (true) {
             val candidate = "$base ($index)$ext"
-            if (!isRemoteTaken(candidate) && alsoFree(candidate)) return candidate
+            if (free(candidate)) return candidate
             index++
         }
     }

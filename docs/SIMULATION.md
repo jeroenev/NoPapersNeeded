@@ -230,6 +230,12 @@ Across replicas, after every step:
 
 - The sync tool never meets two versions of a name the library writes once (a journal object or
   snapshot, an OCR sidecar, a device marker): two writers published different bytes under one name.
+- Nor two versions of a document name the app invented beside a taken one (`name (7f3a).pdf`,
+  `(part 1, 7f3a)`, `(restored, 7f3a)`, or the counters before them) that the app placed on both
+  devices, each holding bytes the name's token is of: such a name carries its bytes' hash, so two
+  devices never invent one name for different files. Other bytes under a token name later (a bake
+  in place) are that document's, and a name that was free (an import's own, a template's) is not
+  judged.
 - No replica deletes or moves away a journal object, nor another device's sidecar or marker.
 - No two replicas share a device id.
 - No replica blocks writes as `JOURNAL_DAMAGED`: objects are write-once and named by their hash, the

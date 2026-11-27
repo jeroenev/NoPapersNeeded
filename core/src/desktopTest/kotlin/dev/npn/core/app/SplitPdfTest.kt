@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldDef
@@ -50,7 +51,7 @@ class SplitPdfTest {
             }
             rig.session.documents
                 .requireDoc(done.partDocIds[0])
-                .doc.fileName shouldBe "contract (part 1).pdf"
+                .doc.fileName shouldBe withNameToken("contract.pdf", done.partDocIds[0], label = "part 1")
 
             // Original is trashed, not deleted.
             val trashed =
@@ -253,7 +254,7 @@ class SplitPdfTest {
             val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
 
             val part = rig.session.documents.requireDoc(done.partDocIds[0])
-            part.doc.fileName shouldBe "Scan (part 1).pdf"
+            part.doc.fileName shouldBe withNameToken("Scan.pdf", done.partDocIds[0], label = "part 1")
         }
 
     @Test

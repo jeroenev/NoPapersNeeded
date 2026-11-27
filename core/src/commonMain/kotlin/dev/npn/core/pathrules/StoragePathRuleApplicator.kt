@@ -6,7 +6,7 @@ import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.uniquifyPath
+import dev.npn.core.fs.uniquifyByHash
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -52,20 +52,23 @@ internal class StoragePathRuleApplicator(
                 fieldTypes = db.fieldDefDao().fieldTypes(),
             )
         val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull ?: return
-        val target = resolveUniqueTarget(fs, documentDao, docId, expanded)
+        val target = resolveUniqueTarget(fs, documentDao, docId, expanded, hash = docId)
         if (NpnPaths.normalize(target) != NpnPaths.normalize(doc.relPath)) setPath(docId, target)
     }
 }
 
 /**
- * Build a unique library-relative path starting from [target], a `.pdf` added when it has none,
- * suffixing `-1`, `-2`, ... until [pathTaken] says it is free for [currentDocId].
+ * Build a unique library-relative path starting from [target], a `.pdf` added when it has none:
+ * [target] while [pathTaken] says it is free for [currentDocId], else `name (7f3a).pdf`, named for
+ * the bytes [hash] the document holds ([uniquifyByHash]), so two documents a template maps to one
+ * name on two devices that have not synced yet never both take the same other name.
  */
 internal suspend fun resolveUniqueTarget(
     fs: LibraryFileSystem,
     documentDao: DocumentDao,
     currentDocId: String?,
     target: String,
+    hash: String,
 ): String {
     val normalized = NpnPaths.normalize(target)
     val withExtension =
@@ -74,12 +77,7 @@ internal suspend fun resolveUniqueTarget(
         } else {
             "$normalized.pdf"
         }
-    return uniquifyPath(
-        path = withExtension,
-        startIndex = 1,
-        suffix = { "-$it" },
-        exists = { pathTaken(fs, documentDao, currentDocId, it) },
-    )
+    return uniquifyByHash(withExtension, hash) { pathTaken(fs, documentDao, currentDocId, it) }
 }
 
 /**

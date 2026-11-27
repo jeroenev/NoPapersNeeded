@@ -394,6 +394,49 @@ object NpnPaths {
     private val drivePrefix = Regex("^[A-Za-z]:.*")
 }
 
+/** How many hex digits of a file's SHA-256 a name the app invents for it carries ([withNameToken]). */
+const val NAME_TOKEN_LENGTH = 4
+
+/**
+ * [path] with ` (label, 7f3a)` (or ` (7f3a)` without a [label]) before its extension: the first
+ * [NAME_TOKEN_LENGTH] hex digits of [hash], the SHA-256 of the bytes it will hold. A name the app
+ * invents in a shared folder carries it, so two devices that place different bytes before they sync
+ * never pick one name (which a sync tool would resolve into a conflict copy no rescan indexes), and
+ * two that place the same bytes agree on it.
+ */
+fun withNameToken(
+    path: String,
+    hash: String,
+    label: String? = null,
+): String {
+    val (base, ext) = splitExtension(path)
+    val token = hash.take(NAME_TOKEN_LENGTH)
+    return "$base (${label?.let { "$it, " }.orEmpty()}$token)$ext"
+}
+
+/**
+ * [path] when free; else beside it, named for the bytes it will hold ([withNameToken]); else, as two
+ * documents' tokens can coincide, that name with " (2)", " (3)", ...: the first not taken by [exists].
+ */
+suspend fun uniquifyByHash(
+    path: String,
+    hash: String,
+    label: String? = null,
+    exists: suspend (String) -> Boolean,
+): String =
+    if (!exists(path)) {
+        path
+    } else {
+        uniquifyPath(withNameToken(path, hash, label), startIndex = 2, suffix = { " ($it)" }, exists = exists)
+    }
+
+/** [path] as its base and its extension (with the dot; empty for none), keeping dotfiles and directory dots. */
+private fun splitExtension(path: String): Pair<String, String> {
+    val slash = path.lastIndexOf('/')
+    val dot = path.lastIndexOf('.')
+    return if (dot > slash + 1) path.substring(0, dot) to path.substring(dot) else path to ""
+}
+
 /** Return [path] or a suffixed free candidate, preserving dotfiles and directory-name dots. */
 suspend fun uniquifyPath(
     path: String,
@@ -403,14 +446,7 @@ suspend fun uniquifyPath(
     exists: suspend (String) -> Boolean,
 ): String {
     if (!exists(path)) return path
-    val slash = path.lastIndexOf('/')
-    val dot = path.lastIndexOf('.')
-    val (base, ext) =
-        if (dot > slash + 1) {
-            path.substring(0, dot) to path.substring(dot)
-        } else {
-            path to ""
-        }
+    val (base, ext) = splitExtension(path)
     if (firstSuffix != null) {
         val first = "$base$firstSuffix$ext"
         if (!exists(first)) return first

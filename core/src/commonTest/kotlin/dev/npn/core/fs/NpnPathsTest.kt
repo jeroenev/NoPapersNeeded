@@ -4,6 +4,7 @@ import dev.npn.core.ocr.OcrSidecarName
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -201,4 +202,31 @@ class NpnPathsTest {
         NpnPaths.isHidden("a\\.b").shouldBeFalse()
         OcrSidecarName.isOwnWrite("../.npn/ocr/abc123.dev1.json", "dev1").shouldBeFalse()
     }
+
+    /**
+     * A name the app invents beside a taken one carries the first hex digits of its bytes' hash, so
+     * two devices placing different bytes there never pick one name, and the same bytes agree on it.
+     */
+    @Test
+    fun anInventedNameCarriesItsBytesHash() {
+        val hash = "7f3a" + "0".repeat(60)
+        withNameToken("inbox/scan.pdf", hash) shouldBe "inbox/scan (7f3a).pdf"
+        withNameToken("doc.pdf", hash, label = "part 2") shouldBe "doc (part 2, 7f3a).pdf"
+        withNameToken("a.b/README", hash, label = "restored") shouldBe "a.b/README (restored, 7f3a)"
+        withNameToken(".hidden", hash) shouldBe ".hidden (7f3a)"
+    }
+
+    /** Free names stay; a taken one goes beside it by hash, then counts on when even that is taken. */
+    @Test
+    fun uniquifyByHashKeepsAFreeNameAndCountsOnlyPastATakenToken() =
+        runTest {
+            val hash = "7f3a" + "0".repeat(60)
+            val taken = mutableSetOf<String>()
+            uniquifyByHash("a.pdf", hash) { it in taken } shouldBe "a.pdf"
+            taken += "a.pdf"
+            uniquifyByHash("a.pdf", hash) { it in taken } shouldBe "a (7f3a).pdf"
+            taken += "a (7f3a).pdf"
+            uniquifyByHash("a.pdf", hash) { it in taken } shouldBe "a (7f3a) (2).pdf"
+            uniquifyByHash("a.pdf", hash, label = "restored") { it in taken } shouldBe "a (restored, 7f3a).pdf"
+        }
 }

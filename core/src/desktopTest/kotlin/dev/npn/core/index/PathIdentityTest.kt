@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -197,7 +198,7 @@ class PathIdentityTest {
             val imported =
                 rig.importService.importBytes("bravo".encodeToByteArray(), "scan.pdf") as ImportResult.Imported
 
-            imported.relPath shouldBe "inbox/scan (2).pdf"
+            imported.relPath shouldBe withNameToken("inbox/scan.pdf", imported.docId)
             rig.db
                 .documentDao()
                 .rowAtPath(imported.relPath)

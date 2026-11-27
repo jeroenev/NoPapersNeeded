@@ -353,23 +353,49 @@ internal class SimSync(
                 "(${sha256Bytes(current).take(ID)} on ${peers[to].name}, " +
                 "${sha256Bytes(version.bytes!!).take(ID)} from ${peers[remote].name})"
         }
+        // A name the app made for one file's bytes carries their hash; other bytes under it later (a
+        // bake in place) are that document's, not a second invention of the name.
+        val token = SimNames.nameToken(path)
+        val bothInvented =
+            listOf(fs to current, peers[remote].fs to version.bytes!!).all { (at, bytes) ->
+                appPlaced(at, path, bytes) && (token == null || sha256Bytes(bytes).startsWith(token))
+            }
+        if (SimNames.isInvented(path) && bothInvented) {
+            violations += "step ${world.step}: two devices gave different files the name '$path' the app invented " +
+                "(${sha256Bytes(current).take(ID)} on ${peers[to].name}, " +
+                "${sha256Bytes(version.bytes).take(ID)} from ${peers[remote].name}): " +
+                "${fs.historyOf(path).joinToString("; ")} | ${peers[remote].fs.historyOf(path).joinToString("; ")}"
+        }
         if (remoteWins) {
             fs.bySyncTool { fs.externalMove(path, copy) }
             put(fs, path, version, temp)
-            known[to][path] = SyncVersion(version.bytes!!.copyOf(), version.mtime, bump(joined, to), to)
+            known[to][path] = SyncVersion(version.bytes.copyOf(), version.mtime, bump(joined, to), to)
         } else {
             if (temp !=
                 null
             ) {
                 fs.bySyncTool { fs.externalMove(temp, copy) }
             } else {
-                fs.bySyncTool { fs.externalWriteAtomic(copy, version.bytes!!, version.mtime) }
+                fs.bySyncTool { fs.externalWriteAtomic(copy, version.bytes, version.mtime) }
             }
             known[to][path] = SyncVersion(current.copyOf(), localMtime, bump(joined, to), to)
         }
         conflicts += "step ${world.step}: '$path' on ${peers[to].name}, ${loser.name}'s copy kept as '$copy'"
         trace += "   sync: conflict on '$path' at ${peers[to].name}; ${loser.name}'s version kept as '$copy'"
         send(to, path, known[to].getValue(path), immediate)
+    }
+
+    /**
+     * Whether the app itself, not the sync tool or another process, put [bytes] at [path] in [fs]: a
+     * change its history ([InMemoryLibraryFileSystem.historyOf]) records an app call making.
+     */
+    private fun appPlaced(
+        fs: InMemoryLibraryFileSystem,
+        path: String,
+        bytes: ByteArray,
+    ): Boolean {
+        val made = " -> ${sha256Bytes(bytes).take(ID)}"
+        return fs.historyOf(path).any { it.endsWith(made) && !it.endsWith(" external$made") }
     }
 
     /** Put [version]'s bytes (or its deletion) at [path], from [temp] when they were transferred there. */

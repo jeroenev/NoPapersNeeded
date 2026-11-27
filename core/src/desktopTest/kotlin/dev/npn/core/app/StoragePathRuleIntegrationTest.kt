@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.journalObjectEvents
@@ -31,7 +32,7 @@ class StoragePathRuleIntegrationTest {
                     as ImportOutcome.Imported
 
             first.relPath shouldBe "organized/same.pdf"
-            second.relPath shouldBe "organized/same-1.pdf"
+            second.relPath shouldBe withNameToken("organized/same.pdf", second.docId)
             rig.exists(first.relPath) shouldBe true
             rig.exists(second.relPath) shouldBe true
         }
@@ -47,7 +48,7 @@ class StoragePathRuleIntegrationTest {
                 rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
                     as ImportOutcome.Imported
 
-            imported.relPath shouldBe "organized/same-1.pdf"
+            imported.relPath shouldBe withNameToken("organized/same.pdf", imported.docId)
             rig.fs.readBytes("organized/same.pdf") shouldBe there
         }
 
@@ -102,7 +103,7 @@ class StoragePathRuleIntegrationTest {
                 .documentDao()
                 .requireByDocId(imported.docId)
                 .relPath shouldBe moved.relPath
-            rig.exists("by-title/Annual report-1.pdf") shouldBe false
+            rig.exists(withNameToken("by-title/Annual report.pdf", imported.docId)) shouldBe false
         }
 
     /**

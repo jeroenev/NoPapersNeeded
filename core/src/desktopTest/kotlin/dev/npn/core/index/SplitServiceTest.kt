@@ -5,6 +5,7 @@ import dev.npn.core.db.documentEntity
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.libraryPdfs
+import dev.npn.core.fs.withNameToken
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
@@ -98,13 +99,27 @@ class SplitServiceTest {
     fun aPartLandingOnThePathOfADeletedDocumentIsIndexed() =
         runTest {
             val original = stageOriginal()
-            rig.db.documentDao().upsert(documentEntity("d".repeat(64), "contract (part 1).pdf", deleted = true))
-            val split = SplitService(rig.fs, PdfBoxEngine(), rig.importService, rig.db.documentDao())
+            // The deleted document's path is the one the first part is placed at, which its bytes name.
+            val split =
+                splitService(
+                    object : LibraryFileSystem by rig.fs {
+                        override suspend fun move(
+                            fromRelPath: String,
+                            toRelPath: String,
+                        ) {
+                            if ("(part 1, " in toRelPath) {
+                                rig.db.documentDao().upsert(documentEntity("d".repeat(64), toRelPath, deleted = true))
+                            }
+                            rig.fs.move(fromRelPath, toRelPath)
+                        }
+                    },
+                )
 
             val result = split.split(original.docId, listOf(0..0, 1..1))
 
             val parts = result.shouldBeInstanceOf<SplitService.Result.Done>().parts.map { it as ImportResult.Imported }
-            parts.map { it.relPath } shouldBe listOf("contract (part 1).pdf", "contract (part 2).pdf")
+            parts.map { it.relPath } shouldBe
+                parts.mapIndexed { i, part -> withNameToken("contract.pdf", part.docId, label = "part ${i + 1}") }
             rig.db
                 .documentDao()
                 .getAllLive()
@@ -207,9 +222,14 @@ class SplitServiceTest {
                     toRelPath: String,
                 ) {
                     rig.fs.move(fromRelPath, toRelPath)
-                    if (toRelPath.endsWith(partName)) job().cancel()
+                    if (partName in toRelPath) job().cancel()
                 }
             }
+        return splitService(fs)
+    }
+
+    /** A split over [fs], whose parts an import over it places. */
+    private fun splitService(fs: LibraryFileSystem): SplitService {
         val imports =
             ImportService(
                 fs,
@@ -227,7 +247,7 @@ class SplitServiceTest {
         runTest {
             val original = stageOriginal()
             lateinit var job: Job
-            val split = cancellingOnPlacement("(part 1).pdf") { job }
+            val split = cancellingOnPlacement("(part 1, ") { job }
 
             job = launch { split.split(original.docId, listOf(0..0, 1..1)) }
             job.join()
@@ -250,7 +270,7 @@ class SplitServiceTest {
         runTest {
             val original = stageOriginal()
             lateinit var job: Job
-            val split = cancellingOnPlacement("(part 2).pdf") { job }
+            val split = cancellingOnPlacement("(part 2, ") { job }
             var result: SplitService.Result? = null
 
             job = launch { result = split.split(original.docId, listOf(0..0, 1..1)) }
