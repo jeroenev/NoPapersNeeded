@@ -475,6 +475,55 @@ class SyncSimulationHarnessTest {
             lifecycle.distinct() shouldBe listOf("doc-trash", "doc-restore")
         }
 
+    /**
+     * A device restores a document from its trash and, before it syncs, another process deletes the
+     * restored file; the other devices, which have not seen the restore, then purge their trash
+     * copies by the retention. That last purge takes the library's last copy, but the restored file's
+     * loss is another process's doing: had the restoring device synced first, the sync tool would
+     * have carried that deletion to every device, or taken their trash copies when it carried the
+     * restore's move out of the trash. No finding (seed 4100040 at 01d7151f).
+     */
+    @Test
+    fun aPurgeAfterAnotherProcessDeletedAnUnsyncedRestoresFileIsNoFinding() =
+        runTest {
+            val bytes = SimPdf.bytes("restored, then deleted", "v", BAKED_SIZE + 8)
+            val docId = sha256Bytes(bytes)
+            allFromTheStart { step ->
+                // The last step, so no later one deletes it for good.
+                if (step == STEPS) {
+                    val restoring = members[1]
+                    members[0].fs.externalWriteAtomic("restored.pdf", bytes)
+                    world.advance(SETTLED_MILLIS)
+                    world.read("index it, trash it") {
+                        members[0].replica.session!!.rescan()
+                        members[0]
+                            .replica.session!!
+                            .docLifecycle
+                            .trashDoc(docId)
+                            .shouldNotBeNull()
+                    }
+                    // Every device holds the trash and its copy.
+                    tool.flush()
+                    world.read("restore it") {
+                        restoring.replica.session!!.rescan()
+                        restoring.replica.session!!
+                            .docLifecycle
+                            .restoreDoc(docId)
+                    }
+                    restoring.fs.bytesAt("restored.pdf").shouldNotBeNull()
+                    restoring.fs.externalDelete("restored.pdf")
+                    world.advance(DAY_MILLIS)
+                    members.filter { it != restoring }.forEach { purging ->
+                        world.read("${purging.name} purges by a retention of a day") {
+                            purging.replica.session!!
+                                .trashPurge
+                                .purge(olderThanDays = 1)
+                        }
+                    }
+                }
+            }.run()
+        }
+
     /** When another process writes the bytes elsewhere and deletes them again, if it does. */
     private enum class OutsideLoss { NONE, BEFORE, AFTER }
 
@@ -561,5 +610,6 @@ class SyncSimulationHarnessTest {
         const val SYNC_ROUNDS = 3
         const val WATCHED_SOURCE = "harness-duplicate.pdf"
         const val SETTLED_MILLIS = 10L * 60L * 1000L
+        const val DAY_MILLIS = 24L * 60L * 60L * 1000L
     }
 }

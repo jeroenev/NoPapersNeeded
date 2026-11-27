@@ -753,9 +753,10 @@ internal class SyncSimulation(
      * taking the library's last copy is a finding whatever happened to the bytes before or after, but
      * in its trash (the trash purge, a delete for good) for a document the journals, all replicas'
      * events together, had in the trash when the loss happened (a restore since, of bytes the purge
-     * took, is not the purge's doing), or had restored after a purge already took a copy of it: the
-     * user restored past the retention, and a device that had not seen the restore yet purges its
-     * copy by the retention too. The sync tool only carries out another device's change, whose
+     * took, is not the purge's doing), or had restored after a purge already took a copy of it (the
+     * user restored past the retention), or had restored before another process took the restored
+     * file (the user deleted what they had restored): a device that had not seen the restore yet
+     * purges its copy by the retention too. The sync tool only carries out another device's change, whose
      * cause is on that device, and another process is no finding of the app's. What this finds is the
      * app deleting the last copy of a document it still shows, or would: the live index and a rebuild
      * then both hide it as missing, which neither oracle sees.
@@ -784,37 +785,39 @@ internal class SyncSimulation(
             }
         }
 
+        // The latest of [hash]'s lifecycle events stamped no later than [atMillis].
+        fun latestAt(
+            hash: String,
+            atMillis: Long,
+        ) = lifecycle[hash].orEmpty().filter { it.first.physicalMillis <= atMillis }.maxByOrNull { it.first }
+
         // Whether the latest of [hash]'s lifecycle events stamped no later than [atMillis] is a trash.
         fun trashedAt(
             hash: String,
             atMillis: Long,
-        ) = lifecycle[hash]
-            .orEmpty()
-            .filter { it.first.physicalMillis <= atMillis }
-            .maxByOrNull { it.first }
-            ?.second ==
-            "doc-trash"
+        ) = latestAt(hash, atMillis)?.second == "doc-trash"
 
         // Whether the latest of [hash]'s lifecycle events stamped no later than [atMillis] is a restore
-        // made after a purge had already taken a copy of it from the trash, while it was trashed: a
+        // whose bytes a device that had not seen it yet purges by the retention, the retention's doing:
+        // one made after a purge had already taken a copy of it from the trash, while it was trashed (a
         // purge runs only once the retention is past, so the user restored what the retention had let
-        // go, and another device's purge, which had not seen the restore yet, is the retention's doing.
-        fun restoredAfterPurge(
+        // go), or one whose file another process took since from a document's path (the user deleted
+        // what they had restored, before it synced; synced, the sync tool would have carried that
+        // delete to every device, or taken their trash copies with the restore's move out of the
+        // trash: seed 4100040 at 01d7151f).
+        fun restoredPastTheTrash(
             hash: String,
             atMillis: Long,
         ): Boolean {
-            val latest =
-                lifecycle[hash]
-                    .orEmpty()
-                    .filter {
-                        it.first.physicalMillis <= atMillis
-                    }.maxByOrNull { it.first }
-            if (latest?.second != "doc-restore") return false
+            val latest = latestAt(hash, atMillis)?.takeIf { it.second == "doc-restore" } ?: return false
+            val restored = latest.first.physicalMillis
             return members.any { member ->
-                member.fs.losses.recordsOf(hash).any { purge ->
-                    purge.loss == Loss.APP_TRASH &&
-                        purge.atMillis < latest.first.physicalMillis &&
-                        trashedAt(hash, purge.atMillis)
+                member.fs.losses.recordsOf(hash).any { loss ->
+                    when (loss.loss) {
+                        Loss.APP_TRASH -> loss.atMillis < restored && trashedAt(hash, loss.atMillis)
+                        Loss.OUTSIDE -> loss.atMillis in restored..atMillis && NpnPaths.isDocumentPath(loss.path)
+                        Loss.APP, Loss.SYNC -> false
+                    }
                 }
             }
         }
@@ -834,7 +837,7 @@ internal class SyncSimulation(
                 .filter { loss ->
                     when (loss.loss) {
                         Loss.APP -> true
-                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis) && !restoredAfterPurge(hash, loss.atMillis)
+                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis) && !restoredPastTheTrash(hash, loss.atMillis)
                         Loss.OUTSIDE, Loss.SYNC -> false
                     }
                 }

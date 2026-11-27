@@ -312,8 +312,11 @@ cloud, eight) do not converge, which fails the run. Then:
   landed parks the document's bytes there. Any loss of the library's last copy by the app
   is a finding, whatever happened to the bytes before or after, but in its trash (the purge, a
   delete for good) for a document the replicas' journals, taken together, had in the trash at that
-  time, or had restored after a purge already took a copy of it: the user restored past the
-  retention, and a replica that had not seen the restore yet purges its copy by the retention too.
+  time, or had restored after a purge already took a copy of it (the user restored past the
+  retention), or had restored before another process took the restored file from its path (the user
+  deleted what they had restored; once the restoring replica syncs, the tool carries that delete, or
+  the restore's move out of the trash, to the other replicas' copies): a replica that had not seen
+  the restore yet purges its copy by the retention too.
   A document whose only file the app deleted shows as missing in the live
   index and in a rebuild alike, so the rebuild oracle cannot see it.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
