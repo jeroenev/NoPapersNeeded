@@ -328,6 +328,9 @@ internal class Simulation(
     fun checkCheap() {
         fs.writeOnceViolations.firstOrNull()?.let { fail("write-once broken: $it") }
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
+        fs.trashStats.violations
+            .firstOrNull()
+            ?.let { fail("trash stat not recorded as moved: $it") }
         checkLog()
         if (replica.session == null) return
         val problems =

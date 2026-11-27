@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.index.FileMove
+import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.propTest
 import dev.npn.core.model.SystemProperty
@@ -53,7 +54,10 @@ class LifecyclePlanTest {
             }
         }
 
-    /** A trash moves the file only when its own bytes go to the trash, and records the path it left. */
+    /**
+     * A trash moves the file only when its own bytes go to the trash, and records the path it left;
+     * a file that stays in the trash, by the stat that proved it there.
+     */
     @Test
     fun aTrashRecordsWhereTheDocumentWasAndMovesItsFileOnlyWhenItIsItsOwn() =
         propTest {
@@ -64,6 +68,10 @@ class LifecyclePlanTest {
                     change.row shouldBe row.copy(trashed = true, trashedOrigPath = row.relPath, missing = false)
                     change.move shouldBe trashPath?.let { FileMove(row.relPath, it) }
                     change.readBack shouldBe true
+                    val moved =
+                        FileMeta(".npn/trash/a.pdf", "a.pdf", size = 10, mtimeMillis = 3_000, isDirectory = false)
+                    change.movedOps?.invoke(moved) shouldBe
+                        listOf(PendingOp.docTrash(docId, row.relPath, FileStat(size = 10, mtimeMillis = 3_000)))
                 }
             }
         }

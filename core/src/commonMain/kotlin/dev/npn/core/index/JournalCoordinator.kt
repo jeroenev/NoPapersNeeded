@@ -1,6 +1,7 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
@@ -99,18 +100,20 @@ internal data class FileMove(
  * and is projected, still under the lock, for a caller that needs what the fold made of it before
  * anything else can change it.
  *
- * [movedHolds], when given, says whether the file the move took is still the one it was planned
- * for, read at its new path: another process can replace or rewrite a file between the
- * check that chose it and the move, and the lock does not stop it. One that is not goes back, and
- * the change goes on as one that moves nothing (a trash whose document's file is gone), which
- * [ops] and [row] must then be as well.
+ * [movedStat], when given, says whether the file the move took is still the one it was planned
+ * for, read at its new path, by the stat that proved it (null: it is not): another process can
+ * replace or rewrite a file between the check that chose it and the move, and the lock does not stop
+ * it. One that is not goes back, and the change goes on as one that moves nothing (a trash whose
+ * document's file is gone), which [ops] and [row] must then be as well. One that is publishes
+ * [movedOps] of that stat instead of [ops], when given: what records the file the change took.
  */
 internal class LifecycleChange(
     val ops: List<PendingOp>,
     val row: DocumentEntity,
     val move: FileMove? = null,
     val readBack: Boolean = false,
-    val movedHolds: (suspend (path: String) -> Boolean)? = null,
+    val movedStat: (suspend (path: String) -> FileMeta?)? = null,
+    val movedOps: ((FileMeta) -> List<PendingOp>)? = null,
 ) {
     init {
         require(ops.isNotEmpty()) { "A lifecycle change publishes at least one event" }
@@ -636,6 +639,7 @@ internal class JournalCoordinator(
                 var moved = false
                 var fileMoved = false
                 var published: PublishedTransaction? = null
+                var ops = change.ops
                 try {
                     change.move?.let { move ->
                         runCatchingCancellable { indexer.moveFile(move.from, move.to) }.onFailure { failure ->
@@ -650,14 +654,19 @@ internal class JournalCoordinator(
                             throw failure
                         }
                         fileMoved = true
-                        if (change.movedHolds?.invoke(move.to) == false) {
-                            fileMoved = false
-                            putBackForeign(id, move)
+                        change.movedStat?.let { proof ->
+                            val stat = proof(move.to)
+                            if (stat == null) {
+                                fileMoved = false
+                                putBackForeign(id, move)
+                            } else {
+                                change.movedOps?.let { ops = it(stat) }
+                            }
                         }
                     }
                     moved = true
                     indexer.writeRow(change.row)
-                    published = writeTransaction(change.ops)
+                    published = writeTransaction(ops)
                 } finally {
                     @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                     if (published == null) {

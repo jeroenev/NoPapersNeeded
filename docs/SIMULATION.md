@@ -218,6 +218,10 @@ After every step, on every replica:
 - No operation throws such a bug either.
 - Write-once: no object the app published changes bytes, and every journal object the app wrote is
   named by its hash.
+- A trash records what it moved: each `doc-trash` a replica publishes carries the size and mtime of
+  the file its trash moved into `.npn/trash/` (a stat the app moved that document's bytes there
+  with), and none when it moved none. The app's moves into the trash still waiting for their event
+  are forgotten at a fault, a crash or a close, since a trash cut short publishes nothing.
 - Index structure: every live row is at a document path, and a row waiting at a sentinel waits at
   its own (`missingSentinel`). OCR queue rows stay in their declared states, and neither their
   attempts nor the enrichment queue's go negative.

@@ -4,6 +4,9 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.trashEntries
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.WatchedFileSystem
+import dev.npn.core.journal.EventDecoderRegistry
+import dev.npn.core.journal.FileStat
+import dev.npn.core.journal.JournalOp
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -80,6 +83,42 @@ class TrashOwnFileTest {
                 .shouldNotBeNull()
                 .relPath shouldBe "inbox/invoice (restored).pdf"
         }
+
+    /**
+     * The trash records the stat of the file it moved, which the move keeps: what tells a sync
+     * tool's copy of that file, not yet removed on another device, from a file put back since. A trash
+     * that moved none (the file at the path was another's by then) records none.
+     */
+    @Test
+    fun aTrashRecordsTheStatOfTheFileItMovedAndNoneWhenItMovedNone() =
+        runTest {
+            rig.writePdf("a.pdf", "moved")
+            rig.writePdf("b.pdf", "left")
+            coordinator.rescan()
+            val moved = rig.fs.sha256("a.pdf")
+            val left = rig.fs.sha256("b.pdf")
+            val stat = checkNotNull(rig.fs.stat("a.pdf"))
+            val indexed = checkNotNull(rig.fs.stat("b.pdf"))
+            rig.writePdf("b.pdf", "another file, written over it")
+            Files.setLastModifiedTime(rig.libRoot.resolve("b.pdf"), FileTime.fromMillis(indexed.mtimeMillis + 60_000L))
+
+            lifecycle.trashDoc(moved)
+            lifecycle.trashDoc(left)
+
+            rig.fs
+                .trashEntries()
+                .single()
+                .mtimeMillis shouldBe stat.mtimeMillis
+            trashOf(moved) shouldBe JournalOp.DocTrash("a.pdf", FileStat(stat.size, stat.mtimeMillis))
+            trashOf(left) shouldBe JournalOp.DocTrash("b.pdf")
+        }
+
+    private suspend fun trashOf(docId: String): JournalOp =
+        rig.db
+            .metadataProjectionDao()
+            .eventsForDocument(docId)
+            .single { it.operation == JournalOp.DocTrash.WIRE }
+            .let { EventDecoderRegistry.decodeStored(it.canonicalJson).op }
 
     /** A file with the size and mtime its row stored is the document's: trashing many hashes none. */
     @Test

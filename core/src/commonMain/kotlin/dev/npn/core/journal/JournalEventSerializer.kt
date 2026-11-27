@@ -96,7 +96,18 @@ internal object JournalEventSerializer : KSerializer<JournalEvent> {
             }
 
             is JournalOp.DocTrash -> {
-                obj("origPath" to JsonPrimitive(op.origPath))
+                buildJsonObject {
+                    put("origPath", JsonPrimitive(op.origPath))
+                    op.stat?.let {
+                        put(
+                            "stat",
+                            obj(
+                                "size" to JsonPrimitive(it.size),
+                                "mtime" to JsonPrimitive(it.mtimeMillis),
+                            ),
+                        )
+                    }
+                }
             }
 
             JournalOp.DocRestore -> {
@@ -232,7 +243,7 @@ internal object JournalEventSerializer : KSerializer<JournalEvent> {
             }
 
             JournalOp.DocTrash.WIRE -> {
-                JournalOp.DocTrash(p.string("origPath"))
+                JournalOp.DocTrash(p.string("origPath"), decodeFileStat(p["stat"]))
             }
 
             JournalOp.DocRestore.WIRE -> {
@@ -308,6 +319,21 @@ internal object JournalEventSerializer : KSerializer<JournalEvent> {
         if (defElem == null || defElem is JsonNull) return JournalOp.FieldDefSet(key, null)
         val def = decodeFieldDef(key, defElem) ?: return null
         return JournalOp.FieldDefSet(key, def)
+    }
+
+    /**
+     * A `doc-trash`'s `stat`: null when absent, or when it is not an object of two JSON integers, a
+     * size that is not negative and an mtime. It only adds to what the event says, so one this build
+     * cannot read leaves the trash as one that recorded none, rather than failing the line.
+     */
+    private fun decodeFileStat(elem: JsonElement?): FileStat? {
+        val obj = elem as? JsonObject ?: return null
+
+        fun long(name: String): Long? =
+            (obj[name] as? JsonPrimitive)?.takeUnless { it.isString }?.content?.toLongOrNull()
+        val size = long("size")?.takeIf { it >= 0 } ?: return null
+        val mtime = long("mtime") ?: return null
+        return FileStat(size, mtime)
     }
 
     private fun decodeDots(elem: JsonElement?): List<Dot> {

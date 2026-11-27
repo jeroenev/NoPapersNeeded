@@ -7,7 +7,6 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
@@ -160,7 +159,7 @@ class InMemoryLibraryFileSystem(
         effect: () -> T,
     ): T {
         latency.pause()
-        faults.check(method, path, SimFaults.Point.BEFORE)
+        faultChecked(method, path, SimFaults.Point.BEFORE)
         actor = method
         val result =
             try {
@@ -168,10 +167,17 @@ class InMemoryLibraryFileSystem(
             } finally {
                 actor = null
             }
-        faults.check(method, path, SimFaults.Point.AFTER)
+        faultChecked(method, path, SimFaults.Point.AFTER)
         latency.pause()
         return result
     }
+
+    /** [SimFaults.check]; a fault it injects cuts a trash short ([SimTrashStats.forget]). */
+    private fun faultChecked(
+        method: FsMethod,
+        path: String,
+        point: SimFaults.Point,
+    ) = runCatching { faults.check(method, path, point) }.onFailure { trashStats.forget() }.getOrThrow()
 
     override suspend fun listAllIndexable(): List<FileMeta> =
         io(FsMethod.LIST_INDEXABLE, "") {
@@ -222,7 +228,7 @@ class InMemoryLibraryFileSystem(
         bytes: ByteArray,
     ) {
         val norm = NpnPaths.normalize(relPath)
-        io(FsMethod.WRITE_ONCE, norm) { create(norm, bytes.copyOf()) }
+        io(FsMethod.WRITE_ONCE, norm) { create(norm, bytes.copyOf()).also { trashStats.wrote(norm) } }
     }
 
     override suspend fun publishVerifiedObjectOnce(
@@ -252,6 +258,7 @@ class InMemoryLibraryFileSystem(
                 files[canonical] = node
                 touch(canonical)
                 recordWrite(canonical, node.bytes)
+                trashStats.published(staging, canonical, node.bytes)
             }
             check(sha256Bytes(files.getValue(canonical).bytes) == expectedHash) {
                 "Published object hash mismatch: $canonical"
@@ -637,9 +644,11 @@ class InMemoryLibraryFileSystem(
                 files[to] = node
                 touch(from)
                 touch(to)
+                trashStats.left(from)
                 if (byApp) {
                     appRemovals += from
                     recordWrite(to, node.bytes)
+                    trashStats.moved(from, to, node.bytes, node.mtime)
                 }
             }
 
@@ -666,6 +675,7 @@ class InMemoryLibraryFileSystem(
         norm: String,
         byApp: Boolean = false,
     ) {
+        trashStats.left(norm)
         files.remove(norm)?.let { node ->
             if (byApp) appRemovals += norm
             lost(norm, node, byApp)
@@ -720,6 +730,9 @@ class InMemoryLibraryFileSystem(
         if (expected != null && expected != hash) writeOnceViolations += "$norm holds bytes hashing to $hash"
     }
 
+    /** Whether each `doc-trash` the app publishes records the stat of the file its trash moved. */
+    val trashStats = SimTrashStats { path -> files[path]?.bytes }
+
     /** The app's call taking effect right now, or null for the outside world. */
     private var actor: FsMethod? = null
 
@@ -750,22 +763,7 @@ class InMemoryLibraryFileSystem(
             .keysWithPrefix("${NpnPaths.JOURNAL_DIR}/")
             .filter { JournalPaths.classify(it) is JournalPath.ObjectV2 && it !in writing }
             .flatMapTo(HashSet()) { path ->
-                files
-                    .getValue(path)
-                    .bytes
-                    .decodeToString()
-                    .lineSequence()
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        runCatching {
-                            (
-                                EventDecoderRegistry
-                                    .decode(
-                                        line,
-                                    ).event.op as? JournalOp.Relink
-                            )?.newDoc
-                        }.getOrNull()
-                    }.toList()
+                journalEventsIn(files.getValue(path).bytes).mapNotNull { (it.op as? JournalOp.Relink)?.newDoc }
             }
 
     private var syncCalls = 0

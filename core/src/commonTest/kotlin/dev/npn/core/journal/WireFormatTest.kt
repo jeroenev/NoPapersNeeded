@@ -66,6 +66,7 @@ class WireFormatTest {
                 event(sha, JournalOp.FieldSet("amount", "42.50")),
                 event(sha, JournalOp.FieldSet("amount", null)),
                 event(sha, JournalOp.DocTrash("/lib/x.pdf")),
+                event(sha, JournalOp.DocTrash("/lib/x.pdf", FileStat(size = 1234, mtimeMillis = 1719999999000))),
                 event(sha, JournalOp.DocRestore),
                 event(sha, JournalOp.DocDelete),
                 event(sha, JournalOp.DocUndelete),
@@ -81,6 +82,56 @@ class WireFormatTest {
             val parsed = JournalCodec.decodeLineOrNull(JournalCodec.encode(e))
             assertEquals(e, parsed, "roundtrip failed for ${e.op}")
         }
+    }
+
+    /**
+     * A trash that moved the document's file records its stat as `stat`; one that moved none writes
+     * the payload it always did, so its bytes, and its object's name, are as before.
+     */
+    @Test
+    fun docTrashWritesItsStatOnlyWhenItMovedAFile() {
+        val moved = fields(JournalCodec.encode(event(sha, JournalOp.DocTrash("a.pdf", FileStat(12, 3_000)))))
+        val p = moved["p"]!!.jsonObject
+        assertEquals(setOf("origPath", "stat"), p.keys)
+        val stat = p["stat"]!!.jsonObject
+        assertEquals(setOf("size", "mtime"), stat.keys)
+        assertEquals(12L, stat["size"]!!.jsonPrimitive.content.toLong())
+        assertEquals(3_000L, stat["mtime"]!!.jsonPrimitive.content.toLong())
+        assertEquals(false, stat["size"]!!.jsonPrimitive.isString)
+
+        assertEquals(
+            """{"v":1,"seq":1,"hlc":{"t":1720000000000,"c":0,"d":"dev1"},"dev":"dev1","doc":"$sha",""" +
+                """"op":"doc-trash","p":{"origPath":"a.pdf"}}""",
+            JournalCodec.encode(event(sha, JournalOp.DocTrash("a.pdf"))),
+        )
+    }
+
+    /**
+     * A `stat` this build cannot read (not an object of two integers, a negative size) leaves the
+     * trash as one that recorded none rather than failing the line: it only adds to the event.
+     */
+    @Test
+    fun aDocTrashStatThisBuildCannotReadIsDropped() {
+        fun trashWith(stat: String) =
+            """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"dev1"},"dev":"dev1","doc":"$sha",""" +
+                """"op":"doc-trash","p":{"origPath":"a.pdf","stat":$stat}}"""
+        val unreadable =
+            listOf(
+                "null",
+                "7",
+                "\"x\"",
+                "{}",
+                """{"size":1}""",
+                """{"size":"1","mtime":2}""",
+                """{"size":-1,"mtime":2}""",
+            )
+        for (bad in unreadable) {
+            assertEquals(JournalOp.DocTrash("a.pdf"), JournalCodec.decodeLineOrNull(trashWith(bad))!!.op, bad)
+        }
+        assertEquals(
+            JournalOp.DocTrash("a.pdf", FileStat(1, -2)),
+            JournalCodec.decodeLineOrNull(trashWith("""{"size":1,"mtime":-2,"extra":true}"""))!!.op,
+        )
     }
 
     @Test

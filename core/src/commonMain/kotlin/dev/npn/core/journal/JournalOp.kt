@@ -4,6 +4,12 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.SystemProperty
 import kotlinx.serialization.json.JsonObject
 
+/** A file's size in bytes and its mtime in epoch millis, as a journal event records them. */
+internal data class FileStat(
+    val size: Long,
+    val mtimeMillis: Long,
+)
+
 /** A dot uniquely identifies a single event by its author device and per-device sequence. */
 internal data class Dot(
     val deviceId: String,
@@ -112,9 +118,19 @@ internal sealed interface JournalOp {
         }
     }
 
-    /** {"origPath": String}; doc required. */
+    /**
+     * {"origPath": String, "stat"?: {"size": Long, "mtime": Long}}; doc required.
+     *
+     * [stat] is the size and mtime of the file the trash moved out of [origPath], as the trash proved
+     * it the document's; absent when it moved none (the document's file was gone, or was another
+     * file by then). A sync tool carries a file's mtime, so another device's copy at [origPath] with
+     * that stat is the one this trash took, not yet removed there. Written only when there is one, so
+     * a trash that moved nothing encodes as it always has. Builds from before it ignore the key, and
+     * a copy of the event without it is the same event ([EventCopies]).
+     */
     data class DocTrash(
         val origPath: String,
+        val stat: FileStat? = null,
     ) : JournalOp {
         override val wire get() = WIRE
 

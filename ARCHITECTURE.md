@@ -493,6 +493,11 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   goes back once moved; when a process writing it in place has made a file at the path again by
   then, it goes beside it under a recovery name (`NpnPaths.Temp.recoveryPath`), never staying in
   the trash under the document's name, where no restore or purge takes it.
+- A trash that moved a file records its size and mtime in the `doc-trash` event (`stat`, a payload
+  key older builds ignore), by the stat that proved it the document's at its trash path; one that
+  moved none records none. A sync tool carries mtimes, so another device's file at the trashed path
+  with that stat is the copy the trash took, not yet removed there. Nothing reads it yet: it is
+  recorded first so libraries carry it by the time the restore heuristics are replaced by it.
 - Restore and delete for good take a trash entry as the document's only when it hashes to the
   document: the hash prefix in its name (`NpnPaths.trashPath`) only narrows the search
   (`TrashOps.copiesOf`). A restore lists and hashes the entries before the lock and, under it,

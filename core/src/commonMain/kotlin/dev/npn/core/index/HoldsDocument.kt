@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.isLive
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.holds
@@ -16,7 +17,16 @@ import dev.npn.core.fs.holds
 internal suspend fun LibraryFileSystem.holdsDocument(
     row: DocumentEntity,
     size: Long = row.size,
-): Boolean {
-    val meta = stat(row.relPath)?.takeIf { !it.isDirectory && it.size == size } ?: return false
-    return (row.isLive && meta.hasStoredStat(row.size, row.mtime)) || holds(row.relPath, row.docId)
+): Boolean = heldDocumentStat(row, size) != null
+
+/**
+ * The stat by which [holdsDocument] proves the file at [row]'s path its document's, read before any
+ * hash; null when it does not hold the document's bytes.
+ */
+internal suspend fun LibraryFileSystem.heldDocumentStat(
+    row: DocumentEntity,
+    size: Long = row.size,
+): FileMeta? {
+    val meta = stat(row.relPath)?.takeIf { !it.isDirectory && it.size == size } ?: return null
+    return meta.takeIf { (row.isLive && it.hasStoredStat(row.size, row.mtime)) || holds(row.relPath, row.docId) }
 }

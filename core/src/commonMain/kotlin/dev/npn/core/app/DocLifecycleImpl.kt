@@ -10,6 +10,7 @@ import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.holds
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.index.heldDocumentStat
 import dev.npn.core.index.holdsDocument
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
@@ -66,8 +67,9 @@ internal class DocLifecycleImpl(
                 // entry from an older one's that a lagging journal still describes (TrashOps.purgeOlderThan).
                 val trashPath =
                     if (fs.holdsDocument(doc)) trashOps.trashTarget(doc.relPath, doc.docId, clock.nowMillis()) else null
-                // A move keeps the stat, so the file it took is checked the same way where it went.
-                LifecyclePlan.trash(doc, trashPath) { moved -> fs.holdsDocument(doc.copy(relPath = moved)) }
+                // A move keeps the stat, so the file it took is checked the same way where it went, and
+                // the stat that proves it there is the one the event records.
+                LifecyclePlan.trash(doc, trashPath) { moved -> fs.heldDocumentStat(doc.copy(relPath = moved)) }
             }
         return done?.let { TrashReceipt(it.before.docId, it.after?.trashedAt) }
     }

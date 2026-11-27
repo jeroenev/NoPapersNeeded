@@ -5,6 +5,7 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.FileMove
 import dev.npn.core.index.LifecycleChange
+import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
 
@@ -21,14 +22,16 @@ internal object LifecyclePlan {
     /**
      * Trash [doc], moving its file to [trashPath] when that is where its own bytes go (null: the file
      * at its path is not the document's, or is gone, and stays where it is for the next rescan).
-     * [holds] says whether the file the move took, at its new path, still holds them: one another
-     * process put at the path or was writing meanwhile goes back, and the trash goes on as for a
-     * document whose file is gone, which is the same events and row.
+     * [held] gives the stat by which the file the move took, at its new path, still holds them: one
+     * another process put at the path or was writing meanwhile (null) goes back, and the trash goes
+     * on as for a document whose file is gone, which is the same row and an event without a stat.
+     * A file that stays in the trash is recorded in the event by that stat
+     * ([dev.npn.core.journal.JournalOp.DocTrash.stat]).
      */
     fun trash(
         doc: DocumentEntity,
         trashPath: String?,
-        holds: (suspend (path: String) -> Boolean)? = null,
+        held: (suspend (path: String) -> FileMeta?)? = null,
     ): LifecycleChange {
         val origPath = doc.relPath
         return LifecycleChange(
@@ -38,7 +41,10 @@ internal object LifecyclePlan {
             move = trashPath?.let { FileMove(origPath, it) },
             // The time the fold gives this trash, which a later one replaces: the Undo's check.
             readBack = true,
-            movedHolds = holds,
+            movedStat = held,
+            movedOps = { stat ->
+                listOf(PendingOp.docTrash(doc.docId, origPath, FileStat(stat.size, stat.mtimeMillis)))
+            },
         )
     }
 

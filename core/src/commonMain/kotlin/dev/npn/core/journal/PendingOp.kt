@@ -50,7 +50,8 @@ internal data class PendingOp internal constructor(
         fun docTrash(
             doc: String,
             origPath: String,
-        ) = PendingOp(doc, JournalOp.DocTrash(origPath))
+            stat: FileStat? = null,
+        ) = PendingOp(doc, JournalOp.DocTrash(origPath, stat))
 
         fun docRestore(doc: String) = PendingOp(doc, JournalOp.DocRestore)
 
