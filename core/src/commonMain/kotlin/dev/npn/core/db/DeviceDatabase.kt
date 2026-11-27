@@ -25,7 +25,8 @@ import kotlinx.coroutines.Dispatchers
  * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]);
  * - how far this device has read each mail folder ([MailCursorDao]);
  * - the reminders this device already showed ([ReminderNotificationDao]);
- * - the AI spend ledger, never synced and never carrying a prompt ([AiUsageDao]).
+ * - the AI spend ledger, never synced and never carrying a prompt ([AiUsageDao]);
+ * - the multi-step operations on the library folder a crash may cut short ([PendingOpDao]).
  *
  * Rows are keyed by document hash, which a rebuilt index gives the same documents again.
  */
@@ -35,11 +36,14 @@ import kotlinx.coroutines.Dispatchers
     // reminder_notifications (the reminders this device already showed) and ai_usage (this
     // library's AI spend ledger on this device), plus the requests a queued edit run has spent
     // (ai_edit_jobs.requestsUsed, 0 for a run queued before it: v2 counted none).
-    version = 3,
+    // v4: adds pending_ops (the multi-step operations a crash may cut short, finished or undone at
+    // the next open or rescan).
+    version = 4,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
     ],
     entities = [
         KeyValueEntity::class,
@@ -53,6 +57,7 @@ import kotlinx.coroutines.Dispatchers
         MailCursorEntity::class,
         ReminderNotificationEntity::class,
         AiUsageEntity::class,
+        PendingOpEntity::class,
     ],
 )
 @ConstructedBy(DeviceDatabaseConstructor::class)
@@ -72,6 +77,8 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun reminderNotificationDao(): ReminderNotificationDao
 
     abstract fun aiUsageDao(): AiUsageDao
+
+    abstract fun pendingOpDao(): PendingOpDao
 
     companion object {
         /**

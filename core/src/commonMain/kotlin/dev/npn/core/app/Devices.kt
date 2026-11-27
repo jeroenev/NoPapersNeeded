@@ -16,12 +16,19 @@ data class LibraryDevice(
     val retired: Boolean,
     /** Silent for longer than 90 days: retired by itself until it writes a record again. */
     val silent: Boolean,
+    /**
+     * It runs a build that does not read a format this one would write (the keep store), so this
+     * device waits to write it until it is updated or retired. A device that writes no records at all
+     * (a build from before them) is one too, known by its installation marker alone.
+     */
+    val needsUpdate: Boolean = false,
 )
 
 /**
- * The devices that share this library and write acknowledgment records, and the retirement that
- * lets the trash purge stop waiting for one ([CausalPurge]): a lost or wiped phone, an old
- * installation. A build from before records is listed nowhere and holds nothing back.
+ * The devices that share this library, and the retirement that lets the trash purge and the keep
+ * store stop waiting for one ([CausalPurge], [KeepGate]): a lost or wiped phone, an old installation.
+ * A build from before acknowledgment records is known by its installation marker alone: it holds the
+ * purge back no more than before, but the keep store waits for it.
  */
 interface DevicesFacade {
     /** This device first, then every other that writes records, most recently heard from first. */
@@ -40,23 +47,32 @@ internal class JournalDevices(
     private val lifetime: SessionLifetime,
     private val clock: EpochClock,
     private val deviceId: String,
+    private val keepGate: KeepGate? = null,
 ) : DevicesFacade {
     override suspend fun devices(): List<LibraryDevice> =
         lifetime.owned {
             val now = clock.nowMillis()
+            val recorded = acks.devices()
             val others =
-                acks.devices().map { device ->
+                recorded.map { device ->
                     LibraryDevice(
                         deviceId = device.device,
                         thisDevice = false,
                         lastHeardMillis = device.lastHeardMillis,
-                        retired = coordinator.setting(CausalPurge.retiredKey(device.device)) != null,
+                        retired = retired(device.device),
                         silent = now - device.lastHeardMillis > CausalPurge.SILENT_AFTER_MILLIS,
+                        needsUpdate = AckRecords.KEEP_V1 !in device.caps,
                     )
                 }
+            val markedOnly =
+                (acks.markedDevices() - recorded.mapTo(HashSet()) { it.device }).map { device ->
+                    LibraryDevice(device, false, null, retired(device), silent = false, needsUpdate = true)
+                }
             val self = LibraryDevice(deviceId, true, acks.lastWrittenMillis(), retired = false, silent = false)
-            listOf(self) + others.sortedByDescending { it.lastHeardMillis }
+            listOf(self) + others.sortedByDescending { it.lastHeardMillis } + markedOnly.sortedBy { it.deviceId }
         }
+
+    private fun retired(device: String): Boolean = coordinator.setting(CausalPurge.retiredKey(device)) != null
 
     override suspend fun retire(deviceId: String) = setRetired(deviceId, true)
 
@@ -69,6 +85,7 @@ internal class JournalDevices(
         require(device != deviceId) { "This device cannot retire itself" }
         lifetime.owned {
             coordinator.putSetting(CausalPurge.retiredKey(device), if (retired) clock.nowMillis().toString() else null)
+            keepGate?.refresh()
         }
     }
 }

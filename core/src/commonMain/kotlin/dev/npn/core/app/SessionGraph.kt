@@ -8,6 +8,7 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.fs.DocumentFacts
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
 import dev.npn.core.index.AckRecords
@@ -16,6 +17,7 @@ import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.index.PendingIntents
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitService
 import dev.npn.core.journal.PendingOp
@@ -196,8 +198,26 @@ internal class SessionGraph(
             ids = deps.ids,
         )
 
+    /** The keep store: copies of the documents the app took from their path or put back. */
+    val keepStore = KeepStore(deps.fs, deps.installationId, deps.ids)
+
+    /** Whether every device reads the keep store, so this one may write it; read after each background rescan. */
+    val keepGate = KeepGate(ackRecords, coordinator::setting, deps.clock)
+
+    /** This device's durable intents: what a crash cut short, settled before each background rescan. */
+    val intents =
+        PendingIntents(
+            deps.deviceDb.pendingOpDao(),
+            deps.fs,
+            keepStore,
+            keepOn = { keepGate.open },
+            clock = deps.clock,
+            log = log,
+            ids = deps.ids,
+        )
+
     /** The devices that share the library, and their retirement. */
-    val devices = JournalDevices(coordinator, ackRecords, lifetime, deps.clock, deviceId)
+    val devices = JournalDevices(coordinator, ackRecords, lifetime, deps.clock, deviceId, keepGate)
 
     /** The trash auto-purge by [trashRetention], run after each watch-triggered rescan. */
     val trashPurge =
@@ -209,6 +229,7 @@ internal class SessionGraph(
             deps.clock,
             log,
             CausalPurge(ackRecords, coordinator::setting, deps.clock),
+            keepStore,
         )
 
     val writer =
@@ -231,6 +252,10 @@ internal class SessionGraph(
             bakes,
             clock = deps.clock,
             followUp = writer::followUpRelocation,
+            keep = keepStore,
+            keepOn = { keepGate.open },
+            operations = intents,
+            ids = deps.ids,
         )
 
     /** Automatic AI enrichment: unattended, so it writes through [writer] without review. */
@@ -340,7 +365,19 @@ internal class SessionGraph(
                 documentDao = db.documentDao(),
                 renderGate = renderGate,
             ),
-            BakeService(deps.fs, deps.xmpIO, log, deps.ids, indexer.bakeAsides, ::shownWithoutItsFile, journalFacts),
+            BakeService(
+                deps.fs,
+                deps.xmpIO,
+                log,
+                deps.ids,
+                indexer.bakeAsides,
+                ::shownWithoutItsFile,
+                journalFacts,
+                keep = keepStore,
+                keepOn = { keepGate.open },
+                operations = intents,
+                clock = deps.clock,
+            ),
             coordinator,
             relinkBake = bakeRelink::relink,
             renderGate,
@@ -358,6 +395,8 @@ internal class SessionGraph(
             serialize = { coordinator.serialized(it) },
             log = log,
             ids = deps.ids,
+            keep = keepStore,
+            keepOn = { keepGate.open },
         )
 
     /** Bulk AI edits handed to the background; their writes wait for a human review. */

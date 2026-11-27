@@ -198,6 +198,42 @@ class TrashPurgeTest {
                 }
         }
 
+    /**
+     * The keep store's copies go by the trash's rule: a trashed document's once its trash is past the
+     * retention, a restored one's once its restore is, while its file holds its bytes at its path.
+     */
+    @Test
+    fun theKeepStoresCopiesGoByTheTrashsRetention() =
+        appSessionTest { rig ->
+            val now = 400 * DAY
+            rig.clock.now = now - 60 * DAY
+            rig.writePdf("trashed.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+            rig.writePdf("restored.pdf", PdfFixtures.embeddedTextPdf("restored"))
+            rig.session.rescan()
+            val trashed = rig.docId("trashed.pdf")
+            val restored = rig.docId("restored.pdf")
+            rig.session.keepGate
+                .refresh()
+                .shouldBeTrue()
+            rig.session.docLifecycle.trashDoc(trashed)
+            rig.session.docLifecycle.trashDoc(restored)
+            rig.session.docLifecycle.restoreDoc(restored)
+            rig.session.rescan()
+
+            suspend fun kept() =
+                rig.fs.listAllUnder(NpnPaths.KEEP_DIR).mapNotNull { NpnPaths.Keep.parse(it.relPath)?.first }
+            kept().toSet() shouldBe setOf(trashed, restored)
+
+            rig.clock.now = now - 45 * DAY
+            rig.session.trashPurge.purge(olderThanDays = 30)
+            kept() shouldHaveSize 2
+
+            rig.clock.now = now
+            rig.session.trashPurge.purge(olderThanDays = 30)
+            kept().shouldBeEmpty()
+            rig.exists("restored.pdf").shouldBeTrue()
+        }
+
     private companion object {
         const val DAY = 24L * 60L * 60L * 1000L
     }

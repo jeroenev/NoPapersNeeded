@@ -8,9 +8,10 @@
     <string name="common_devices_not_yet_heard">Pas encore à jour</string>
     <string name="common_devices_retired">Retiré : la corbeille n’attend pas cet appareil.</string>
     <string name="common_devices_silent">Silencieux depuis plus de 90 jours : la corbeille n’attend pas cet appareil.</string>
+    <string name="common_devices_needs_update">Utilise une version plus ancienne de l’app. Mettez-le à jour, ou retirez-le si vous ne l’utilisez plus : d’ici là, cette bibliothèque garde l’ancien format de corbeille.</string>
     <string name="common_devices_retire">Retirer</string>
     <string name="common_devices_unretire">Remettre en service</string>
-    <string name="common_devices_empty">Aucun autre appareil n’est encore à jour avec cette bibliothèque. Les appareils sur une version plus ancienne de l’app ne sont pas listés, et la corbeille ne les attend pas.</string>
+    <string name="common_devices_empty">Aucun autre appareil n’a encore ouvert cette bibliothèque.</string>
     <string name="common_devices_retire_failed">Impossible de retirer l’appareil : %1$s</string>
     <string name="common_devices_unretire_failed">Impossible de remettre l’appareil en service : %1$s</string>
 </resources>

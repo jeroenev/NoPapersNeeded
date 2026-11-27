@@ -1,8 +1,14 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.isLive
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.index.LockedJournal
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runLogged
@@ -33,6 +39,8 @@ internal class TrashPurge(
     private val log: NpnLog,
     /** What every active device has acknowledged: what a trash time counts by ([CausalPurge]). */
     private val causal: CausalPurge? = null,
+    /** The keep store, whose copies go by the same rule once they stop being needed ([purgeKept]). */
+    private val keep: KeepStore? = null,
 ) {
     /** [purge] by the library's retention as it stands now; one this build cannot read purges nothing. */
     suspend fun purgeExpired() {
@@ -58,7 +66,66 @@ internal class TrashPurge(
                 trash.purgeOlderThan(cutoff, times, journal, batch)
             }
         }
+        keep?.let { purgeKept(it, cutoff, retentionMillis, acknowledged) }
     }
+
+    /**
+     * Delete the keep store's copies no longer needed, by the trash's rule: each counts from when its
+     * document was deleted for good, superseded, trashed or last restored ([LockedJournal.keepTimes]),
+     * past the retention and acknowledged by every active device past it, and only an entry of an
+     * episode no later than that. A trashed or deleted document's copy goes as its trash entry would
+     * ([DeleteAuthority.Trash]), a superseded one's as a bake's original
+     * ([DeleteAuthority.Superseded]); one the library shows only while its file
+     * holds its bytes at its path, by the stat its row stored ([DeleteAuthority.ExtraCopy]). A
+     * document never trashed keeps its copy: another device's trash of it may be on its way.
+     */
+    private suspend fun purgeKept(
+        store: KeepStore,
+        cutoff: Long,
+        retentionMillis: Long,
+        acknowledged: CausalPurge.Acknowledged,
+    ) {
+        for (batch in store.entries().chunked(PURGE_BATCH)) {
+            coordinator.serialized { journal ->
+                val docs = batch.mapTo(HashSet()) { it.sha }
+                val times = acknowledged.filter(journal.keepTimes(docs), retentionMillis)
+                for (entry in batch) {
+                    // Only for an event at least as late as the entry: a later episode's is another
+                    // trash's, which this journal may not have yet.
+                    val due = times[entry.sha]?.let { it <= cutoff && entry.episode <= it } == true
+                    if (due) authority(entry.sha, journal)?.let { store.reap(entry, it) }
+                }
+            }
+        }
+    }
+
+    /** Why the keep store's copy of [sha] may go, or null while it must stay. */
+    private suspend fun authority(
+        sha: String,
+        journal: LockedJournal,
+    ): DeleteAuthority? =
+        when {
+            journal.isTrashed(sha) || journal.isDeleted(sha) -> {
+                DeleteAuthority.Trash(journal)
+            }
+
+            journal.successorOf(sha) != sha -> {
+                DeleteAuthority.Superseded(journal)
+            }
+
+            else -> {
+                db
+                    .documentDao()
+                    .getByDocId(sha)
+                    ?.takeIf { it.isLive && !it.missing && NpnPaths.isDocumentPath(it.relPath) }
+                    ?.let { row ->
+                        DeleteAuthority.ExtraCopy(
+                            row.relPath,
+                            FileMeta(row.relPath, row.fileName, row.size, row.mtime, isDirectory = false),
+                        )
+                    }
+            }
+        }
 
     /**
      * When each document the journal or the index knows left the library for the trash or for good,

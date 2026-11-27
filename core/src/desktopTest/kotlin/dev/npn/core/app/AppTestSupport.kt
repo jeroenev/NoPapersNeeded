@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiConfig
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
@@ -236,6 +237,7 @@ internal fun IndexRig.docLifecycle(
     coordinator: JournalCoordinator,
     files: LibraryFileSystem = fs,
     lifetime: SessionLifetime = SessionLifetime(CoroutineScope(Dispatchers.Unconfined)),
+    keepOn: Boolean = false,
 ): DocLifecycleImpl =
     DocLifecycleImpl(
         lifetime,
@@ -246,6 +248,8 @@ internal fun IndexRig.docLifecycle(
         NpnLog.None,
         BakeLock(),
         clock,
+        keep = KeepStore(files, "test-installation"),
+        keepOn = { keepOn },
     )
 
 /** The tags of [docId] among [items]. */

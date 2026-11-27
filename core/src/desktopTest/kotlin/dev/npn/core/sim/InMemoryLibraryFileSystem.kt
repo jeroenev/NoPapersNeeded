@@ -688,8 +688,10 @@ class InMemoryLibraryFileSystem(
     /** Report a change at [norm] to the watcher, as inotify would (possibly dropped or as an overflow). */
     private fun touch(norm: String) {
         val entries = history.getOrPut(norm) { ArrayDeque() }
-        val content =
-            files[norm]?.let { sha256Bytes(it.bytes).take(HISTORY_ID) } ?: if (dirs.containsKey(norm)) "dir" else "gone"
+        val node = files[norm]
+        val hash = node?.let { sha256Bytes(it.bytes) }
+        if (node != null && hash != null) publications.saw(norm, hash, node.bytes.size.toLong(), node.mtime)
+        val content = hash?.take(HISTORY_ID) ?: if (dirs.containsKey(norm)) "dir" else "gone"
         entries.addLast("t=${now()} ${actor?.name?.lowercase() ?: "external"} -> $content")
         if (entries.size > HISTORY_LENGTH) entries.removeFirst()
         if (!options.watch) return
@@ -790,10 +792,21 @@ class InMemoryLibraryFileSystem(
     ) {
         val cause =
             when {
-                byApp && norm.startsWith("${NpnPaths.TRASH_DIR}/") -> Loss.APP_TRASH
-                byApp -> Loss.APP
-                syncCalls > 0 -> Loss.SYNC
-                else -> Loss.OUTSIDE
+                byApp && Losses.isKept(norm) -> {
+                    Loss.APP_TRASH
+                }
+
+                byApp -> {
+                    Loss.APP
+                }
+
+                syncCalls > 0 -> {
+                    Loss.SYNC
+                }
+
+                else -> {
+                    Loss.OUTSIDE
+                }
             }
         if (isNoCopy(norm, node.bytes)) return
         val hash = sha256Bytes(node.bytes)

@@ -28,6 +28,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_devices_device
 import no_papers_needed.composeapp.generated.resources.common_devices_empty
 import no_papers_needed.composeapp.generated.resources.common_devices_last_heard
+import no_papers_needed.composeapp.generated.resources.common_devices_needs_update
 import no_papers_needed.composeapp.generated.resources.common_devices_not_yet_heard
 import no_papers_needed.composeapp.generated.resources.common_devices_retire
 import no_papers_needed.composeapp.generated.resources.common_devices_retired
@@ -117,6 +118,7 @@ private fun DeviceRow(
         when {
             device.retired -> HelpText(stringResource(Res.string.common_devices_retired))
             device.silent -> HelpText(stringResource(Res.string.common_devices_silent))
+            device.needsUpdate -> HelpText(stringResource(Res.string.common_devices_needs_update))
         }
         if (!device.thisDevice) {
             Column(verticalArrangement = Arrangement.spacedBy(ButtonGap)) {

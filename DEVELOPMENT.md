@@ -579,6 +579,7 @@ Library/
     devices/<deviceId>/<installationId>.json # which installations use a device id
     acks/<deviceId>/<n>.json            # each device's acknowledgment records (write-once chain)
     trash/                              # soft-deleted files (synced, not indexed)
+    keep/<xx>/<sha256>-<episode>.pdf    # copies of trashed documents, by hash and episode (write-once)
     tmp/                                # import staging; crash leftovers swept after a day
 ```
 
@@ -600,6 +601,9 @@ no longer read. The `devices/` markers tie each device id to the one installatio
 restored or cloned installation takes a fresh id rather than writing under another's name.
 The `acks/` records are each device's write-once chain of what it published and how far it had
 applied every other device's: the trash purge waits for them (ARCHITECTURE.md, section 6.3).
+The `keep/` store holds a copy of each document the app took from its path or put back, named by
+its hash; the purge empties it by the trash's retention, and it is written only once every device
+that opens the library reads it (ARCHITECTURE.md, section 6.3).
 
 ### Android storage
 

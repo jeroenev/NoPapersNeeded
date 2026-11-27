@@ -27,6 +27,36 @@ object NpnPaths {
     const val ACKS_DIR = ".npn/acks"
 
     /**
+     * `<first two hash chars>/<sha256>-<episode>.pdf`: the keep store ([KeepStore]), a write-once copy
+     * of the bytes of documents the app took from their path (a trash, a bake's original, an import
+     * taken back), named by their hash, so an entry never holds bytes other than its name's, and by
+     * the episode that kept them, so the purge never takes a later episode's for an earlier one's.
+     */
+    const val KEEP_DIR = ".npn/keep"
+
+    /** Where the keep store holds what ([KEEP_DIR]). */
+    object Keep {
+        private val namePattern = Regex("^([0-9a-f]{64})-([0-9]+)\\.pdf$")
+
+        /** The folder of the keep store's entries of [sha]. */
+        fun dir(sha: String): String = "$KEEP_DIR/${sha.take(2)}"
+
+        /** Where the keep store holds the bytes hashing to [sha], kept in the episode [episodeMillis]. */
+        fun path(
+            sha: String,
+            episodeMillis: Long,
+        ): String = "${dir(sha)}/$sha-$episodeMillis.pdf"
+
+        /** The hash and episode of a keep store entry at [relPath], or null for any other path. */
+        fun parse(relPath: String): Pair<String, Long>? {
+            val match = namePattern.matchEntire(fileName(relPath)) ?: return null
+            val sha = match.groupValues[1]
+            val episode = match.groupValues[2].toLongOrNull() ?: return null
+            return (sha to episode).takeIf { relPath == path(sha, episode) }
+        }
+    }
+
+    /**
      * Import staging: a file is copied here, hashed, dedup-checked, then moved into place or
      * deleted. Under `.npn/` so it is never indexed; `.part` so an interrupted import is
      * recognizable as incomplete rather than mistaken for a document.
@@ -119,7 +149,7 @@ object NpnPaths {
         const val RECOVERY_PREFIX = "npn-recovery-"
 
         /** The kinds [kindOf] tells apart. */
-        enum class Kind { WRITE, RELOCATION, BAKE, IMPORT, MARKER_STAGING, JOURNAL_STAGING }
+        enum class Kind { WRITE, RELOCATION, BAKE, IMPORT, MARKER_STAGING, JOURNAL_STAGING, KEEP_STAGING }
 
         /** A relocation's verified copy across volumes, beside its [target]: `<target>.npn-<uuid>.tmp`. */
         fun relocationPath(
@@ -203,6 +233,10 @@ object NpnPaths {
 
                 relPath.startsWith("$JOURNAL_DIR/") && isJournalStagingName(name) -> {
                     Kind.JOURNAL_STAGING
+                }
+
+                relPath.startsWith("$KEEP_DIR/") && isJournalStagingName(name) -> {
+                    Kind.KEEP_STAGING
                 }
 
                 else -> {

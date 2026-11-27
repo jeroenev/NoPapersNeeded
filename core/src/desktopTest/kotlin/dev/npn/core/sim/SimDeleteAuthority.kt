@@ -36,9 +36,11 @@ class SimDeleteAuthority(
         atMillis: Long,
         history: () -> List<String>,
     ) {
-        // Only a document's bytes are judged: the library's own folders and the trash, not the
-        // journal's staging files or the other internals under `.npn/`.
-        val internal = path.startsWith("${NpnPaths.NPN_DIR}/") && !path.startsWith("${NpnPaths.TRASH_DIR}/")
+        // Only a document's bytes are judged: the library's own folders, the trash and the keep
+        // store, not the journal's staging files or the other internals under `.npn/`.
+        val internal =
+            path.startsWith("${NpnPaths.NPN_DIR}/") && !path.startsWith("${NpnPaths.TRASH_DIR}/") &&
+                !path.startsWith("${NpnPaths.KEEP_DIR}/")
         if (!enabled || internal || authority(hash) != null) return
         violations +=
             "t=$atMillis the app deleted '$path', the last copy here of ${hash.take(ID)}, with no tombstone, " +

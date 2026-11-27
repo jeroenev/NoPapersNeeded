@@ -1,9 +1,13 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.CausalPurge
+import dev.npn.core.app.KeepGate
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.NpnJson
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -139,6 +143,41 @@ class AckRecordsTest {
             causal.acknowledgedUntil().filter(times, retention) shouldBe times
         }
 
+    /**
+     * The keep store is written only once every device that may open the library reads it: one known
+     * by its installation marker alone (a build from before records), or whose latest record does not
+     * list it, holds it shut until it is updated, retired, or silent for 90 days.
+     */
+    @Test
+    fun theKeepStoreWaitsForEveryDeviceToReadIt() =
+        indexTest { rig ->
+            val settings = HashMap<String, String>()
+            val gate = KeepGate(acks(rig, AuthoredObjects(rig.deviceDb.keyValueDao())), settings::get, rig.clock)
+            rig.clock.now = 1_000L
+            gate.refresh().shouldBeTrue()
+
+            rig.fs.writeBytesOnce("${NpnPaths.DEVICES_DIR}/$SELF/test-installation.json", "{}".encodeToByteArray())
+            rig.fs.writeBytesOnce("${NpnPaths.DEVICES_DIR}/$OTHER/other.json", "{}".encodeToByteArray())
+            gate.refresh().shouldBeFalse()
+            gate.waiting.value.waiting shouldBe setOf(OTHER)
+
+            val first = record(rig, OTHER, 1, prev = null, at = 1_000L, caps = listOf(AckRecords.ACKS_V1))
+            gate.refresh().shouldBeFalse()
+            record(rig, OTHER, 2, prev = first, at = 2_000L, caps = AckRecords.CAPS)
+            gate.refresh().shouldBeTrue()
+
+            rig.fs.writeBytesOnce("${NpnPaths.DEVICES_DIR}/$THIRD/third.json", "{}".encodeToByteArray())
+            gate.refresh().shouldBeFalse()
+            settings[CausalPurge.retiredKey(THIRD)] = "1"
+            gate.refresh().shouldBeTrue()
+
+            // A device whose records say it reads no keep store holds nothing back once silent.
+            record(rig, FOURTH, 1, prev = null, at = 2_000L, caps = listOf(AckRecords.ACKS_V1))
+            gate.refresh().shouldBeFalse()
+            rig.clock.now = 2_001L + CausalPurge.SILENT_AFTER_MILLIS
+            gate.refresh().shouldBeTrue()
+        }
+
     private fun acks(
         rig: IndexRig,
         authored: AuthoredObjects,
@@ -152,12 +191,13 @@ class AckRecordsTest {
         prev: String?,
         authored: List<String> = emptyList(),
         at: Long,
+        caps: List<String> = emptyList(),
     ): String {
         val bytes =
             NpnJson.Persisted
                 .encodeToString(
                     AckRecord.serializer(),
-                    AckRecord(device = device, n = n, prev = prev, atMillis = at, authored = authored),
+                    AckRecord(device = device, n = n, prev = prev, atMillis = at, authored = authored, caps = caps),
                 ).encodeToByteArray()
         rig.fs.writeBytesOnce(AckRecords.path(device, n), bytes)
         return sha256Bytes(bytes)
@@ -167,6 +207,7 @@ class AckRecordsTest {
         const val SELF = "11111111-1111-4111-8111-111111111111"
         const val OTHER = "22222222-2222-4222-8222-222222222222"
         const val THIRD = "33333333-3333-4333-8333-333333333333"
+        const val FOURTH = "44444444-4444-4444-8444-444444444444"
         val DOC = "a".repeat(64)
     }
 }

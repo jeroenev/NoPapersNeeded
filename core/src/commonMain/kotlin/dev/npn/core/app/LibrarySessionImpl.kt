@@ -106,6 +106,12 @@ internal class LibrarySessionImpl(
     internal val trashPurge: TrashPurge = graph.trashPurge
     private val ackRecords = graph.ackRecords
 
+    /** Whether this device writes the keep store; read after each background rescan. */
+    internal val keepGate = graph.keepGate
+
+    /** This device's durable intents ([dev.npn.core.index.PendingIntents]), settled before each rescan. */
+    internal val intents = graph.intents
+
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
     // [MetadataWriterImpl] backs two write facets, and [AiFacadeImpl] both AI facets.
     override val ingest: IngestFacade get() = this
@@ -249,7 +255,13 @@ internal class LibrarySessionImpl(
     // Every facet write runs here rather than on the caller's coroutine; see SessionLifetime.owned.
     private suspend fun <T> owned(block: suspend () -> T): T = lifetime.owned(block)
 
-    override suspend fun rescan(): ScanReport = owned { coordinator.rescan().also { afterRescan(it) } }
+    override suspend fun rescan(): ScanReport =
+        owned {
+            // What a crash cut short of this device's operations is settled first, by the journal
+            // as it stands, so the rescan reads the folder as those operations meant to leave it.
+            log.runLogged("Settling what a crash cut short") { coordinator.serialized { intents.recover(it) } }
+            coordinator.rescan().also { afterRescan(it) }
+        }
 
     /**
      * What follows every rescan that succeeded, this session's own and the one a relink or a bake
@@ -524,7 +536,8 @@ internal class LibrarySessionImpl(
      * A rescan the session runs itself: at start, for a change in the folder, after a file settled.
      * Then every queue is kicked, as the rescan may have lifted a write block the AI drains wait out
      * or settled a file an OCR run waited for, a cloud sync pass is asked for soon, this device's
-     * acknowledgment record is written when it has something new to say, and the trash is purged.
+     * acknowledgment record is written when it has something new to say, whether every device reads
+     * the keep store is read again ([KeepGate]), and the trash is purged.
      */
     private suspend fun backgroundRescan() {
         rescan()
@@ -533,6 +546,7 @@ internal class LibrarySessionImpl(
         log.runLogged("Writing this device's acknowledgment record") {
             coordinator.serialized { ackRecords.publish() }
         }
+        log.runLogged("Checking whether every device reads the keep store") { keepGate.refresh() }
         trashPurge.purgeExpired()
     }
 

@@ -88,6 +88,27 @@ internal class DeleteGate(
         return true
     }
 
+    /**
+     * Delete the file at [path], a document path other processes and sync tools also write, as a copy
+     * of [docId]'s bytes for [authority]: claimed first, by an exclusive rename to [aside] beside it
+     * (a recovery name, an ordinary PDF a rescan indexes), so nothing that lands at [path] after the
+     * check is what goes; then the claimed file is checked, by its hash, and deleted. A file that is
+     * not the document's, or one the authority no longer covers, goes back to [path], or stays under
+     * [aside] when [path] was taken again meanwhile. Returns whether the document's file went.
+     */
+    suspend fun reapClaimed(
+        path: String,
+        aside: String,
+        docId: String,
+        authority: DeleteAuthority,
+    ): Boolean {
+        if (fs.stat(path)?.isDirectory != false) return false
+        fs.claimDocument(path, aside)
+        if (reap(aside, docId, authority)) return true
+        if (!fs.exists(path)) fs.claimDocument(aside, path)
+        return false
+    }
+
     private suspend fun allows(
         path: String,
         docId: String,

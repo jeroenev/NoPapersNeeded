@@ -172,7 +172,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   destructive migration, and a dropped index rebuilds from the folder on the next open.
 - What only this device knows, which nothing could rebuild (journal device id, OCR and AI
   enrichment queues, queued AI edit runs, enrichment marks, assistant chats, the library's cloud
-  remote and what the cloud sync knows of it), lives in
+  remote and what the cloud sync knows of it, the operations a crash may cut short), lives in
   `device.db` (`DeviceDatabase`) beside the index: never synced, never dropped, real migrations
   only. `DeviceDatabaseSchemaTest` pins each shipped version's identity hash (append only, never
   edit an entry) and opens every shipped schema through the production builder, and CI fails when

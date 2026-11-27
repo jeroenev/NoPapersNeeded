@@ -55,4 +55,11 @@ internal interface LockedJournal : DocumentFacts {
      * ([dev.npn.core.journal.FoldedState.trashTimes]).
      */
     suspend fun trashTimes(): Map<String, Long?>
+
+    /**
+     * For the keep store's purge: each of [docs] mapped to when its copy stops being needed
+     * ([dev.npn.core.journal.FoldedState.keepTime]), or null to keep it. A journal that knows no such
+     * times keeps every copy.
+     */
+    suspend fun keepTimes(docs: Set<String>): Map<String, Long?> = docs.associateWith { null }
 }

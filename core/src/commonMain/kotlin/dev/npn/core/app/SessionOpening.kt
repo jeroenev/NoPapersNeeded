@@ -4,6 +4,7 @@ import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.defs
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.AuthoredObjects
 import dev.npn.core.index.DeviceIdentity
@@ -48,7 +49,16 @@ internal suspend fun openSession(
     try {
         // Before anything reads the device id: an index from before device.db holds it.
         moveDeviceState(deps)
-        val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log, hashing = deps.computation, ids = deps.ids)
+        val indexer =
+            Indexer(
+                deps.fs,
+                deps.db,
+                deps.clock,
+                deps.log,
+                hashing = deps.computation,
+                ids = deps.ids,
+                keep = KeepStore(deps.fs, deps.installationId, deps.ids),
+            )
         val coordinator = createCoordinator(deps, indexer, writeUndelete)
         // Waits out a write a caller started outside the lifetime, then refuses every later one.
         lifetime.releaseOnClose(coordinator::close)

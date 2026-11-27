@@ -8,9 +8,10 @@
     <string name="common_devices_not_yet_heard">Noch nicht auf dem neuesten Stand</string>
     <string name="common_devices_retired">Stillgelegt: Der Papierkorb wartet nicht auf dieses Gerät.</string>
     <string name="common_devices_silent">Seit über 90 Tagen still: Der Papierkorb wartet nicht auf dieses Gerät.</string>
+    <string name="common_devices_needs_update">Läuft mit einer älteren App-Version. Aktualisiere es oder lege es still, wenn du es nicht mehr nutzt: Bis dahin behält diese Bibliothek das ältere Papierkorbformat.</string>
     <string name="common_devices_retire">Stilllegen</string>
     <string name="common_devices_unretire">Wieder aufnehmen</string>
-    <string name="common_devices_empty">Noch kein anderes Gerät ist mit dieser Bibliothek auf dem neuesten Stand. Geräte mit einer älteren App-Version werden nicht aufgeführt, und der Papierkorb wartet nicht auf sie.</string>
+    <string name="common_devices_empty">Noch kein anderes Gerät hat diese Bibliothek geöffnet.</string>
     <string name="common_devices_retire_failed">Das Gerät konnte nicht stillgelegt werden: %1$s</string>
     <string name="common_devices_unretire_failed">Das Gerät konnte nicht wieder aufgenommen werden: %1$s</string>
 </resources>

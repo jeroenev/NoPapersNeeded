@@ -11,6 +11,7 @@ import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
@@ -43,7 +44,7 @@ internal class IndexRig private constructor(
     val db: NpnDatabase = dbs.db
     val deviceDb: DeviceDatabase = dbs.deviceDb
 
-    val indexer = Indexer(fs, db, clock)
+    val indexer = Indexer(fs, db, clock, keep = KeepStore(fs, "test-installation"))
 
     /** Real persisted accumulator: reads the same journal objects the writers publish. */
     val accumulator = MetadataAccumulator(fs, db)

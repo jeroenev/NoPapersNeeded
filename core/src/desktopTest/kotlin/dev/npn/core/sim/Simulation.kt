@@ -8,8 +8,6 @@ import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.index.sameAs
-import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.reason
@@ -436,6 +434,16 @@ internal class Simulation(
         checkTrashEntries()
         world.read("the fold") { lingeringOriginals(fs, replica.indexDb.fold(), live) }?.let { fail(it) }
         checkRowStats()
+        // Every operation ended, and the rescans settled what a crash or a failure cut short.
+        world.read("open intents") { session.intents.all() }.takeIf { it.isNotEmpty() }?.let { open ->
+            fail(
+                "operations still noted as under way at rest: ${open.joinToString {
+                    "${it.kind} of ${it.docId.take(
+                        ID,
+                    )}"
+                }}",
+            )
+        }
         checkVerification(live)
         rebuildOracle(live)
         replica.ocr.closeGate()
@@ -571,13 +579,7 @@ internal class Simulation(
         }
     }
 
-    /**
-     * The files of trashed documents the last rescan reported back with the stat their trash took
-     * them with ([ScanReport.filesBack]): each is the user's to restore, and stays in the trash until
-     * then. A document can have several (a move and a trash on two devices at once leave a copy at
-     * each path). Each reported document must have one: this replica's fold has it in the trash with
-     * a recorded stat a file here holds its bytes with, or the report named it wrongly.
-     */
+    /** [filesBackWithTheirTrashStat] over this replica's fold and last scan report. */
     private fun filesBackWithTheirTrashStat(): Set<String> {
         val (fold, reported) =
             world.read("files back") {
@@ -587,25 +589,15 @@ internal class Simulation(
                         ?.filesBack
                         .orEmpty()
             }
-        val back =
-            fs
-                .allFiles()
-                .filter { (path, bytes) ->
-                    val docId = sha256Bytes(bytes)
-                    val recorded = fold.trashStat(docId)
-                    NpnPaths.isDocumentPath(path) && docId in reported && recorded != null &&
-                        fs.statAt(path)!!.let { FileStat(it.size, it.mtimeMillis) }.sameAs(recorded)
-                }
-        reported.firstOrNull { docId -> back.values.none { sha256Bytes(it) == docId } }?.let { docId ->
-            fail("the last scan reports ${docId.take(ID)} back, but no file holds it with its trash's stat")
-        }
-        return back.keys
+        return filesBackWithTheirTrashStat(fs, fold, reported).getOrElse { fail(it.message.orEmpty()) }
     }
 
     /**
      * Every file in the trash holds the bytes of the document its name names ([NpnPaths.trashPath]
-     * carries the hash's first characters). One that holds other bytes is a file the trash took
-     * under a document's name, such as a file another process put at the document's path between
+     * carries the hash's first characters), and every keep store entry the bytes its name is the
+     * hash of ([NpnPaths.Keep.path]: written once, content-addressed). One that holds other bytes is
+     * a file the trash took under a document's name, such as a file another process put at the
+     * document's path between
      * the trash's check of it and the move: hidden from the library for good, as no rescan indexes
      * the trash and the purge and a restore both pass it by. A name that carries no hash (a sync
      * tool's conflict copy, say) is not judged.
@@ -614,14 +606,15 @@ internal class Simulation(
         val foreign =
             fs.allFiles().filter { (path, bytes) ->
                 val prefix =
-                    NpnPaths
-                        .trashHashPrefix(NpnPaths.fileName(path))
-                        ?.takeIf { path.startsWith("${NpnPaths.TRASH_DIR}/") && NpnPaths.Temp.kindOf(path) == null }
+                    NpnPaths.Keep.parse(path)?.first
+                        ?: NpnPaths
+                            .trashHashPrefix(NpnPaths.fileName(path))
+                            ?.takeIf { path.startsWith("${NpnPaths.TRASH_DIR}/") && NpnPaths.Temp.kindOf(path) == null }
                 prefix != null && !sha256Bytes(bytes).startsWith(prefix)
             }
         if (foreign.isNotEmpty()) {
             fail(
-                "files in the trash hold bytes no document of their name has:\n  " +
+                "files in the trash or the keep store hold bytes no document of their name has:\n  " +
                     foreign.keys.joinToString("\n  ") { path ->
                         "'$path' (${sha256Bytes(foreign.getValue(path)).take(ID)}): " +
                             fs.historyOf(path).joinToString("; ")

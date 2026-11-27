@@ -106,6 +106,11 @@ internal data class FileMove(
  * it. One that is not goes back, and the change goes on as one that moves nothing (a trash whose
  * document's file is gone), which [ops] and [row] must then be as well. One that is publishes
  * [movedOps] of that stat instead of [ops], when given: what records the file the change took.
+ *
+ * [afterPublish] is the file work that follows the event rather than leading it (the keep store's:
+ * a trash's copy into it and the file's removal, a restore's copy out of it), run under the lock
+ * once the change stands. It may fail and leave the folder behind the journal, as a crash there
+ * would: the failure is logged, and what the journal says is the folder's to catch up to.
  */
 internal class LifecycleChange(
     val ops: List<PendingOp>,
@@ -114,6 +119,7 @@ internal class LifecycleChange(
     val readBack: Boolean = false,
     val movedStat: (suspend (path: String) -> FileMeta?)? = null,
     val movedOps: ((FileMeta) -> List<PendingOp>)? = null,
+    val afterPublish: (suspend () -> Unit)? = null,
 ) {
     init {
         require(ops.isNotEmpty()) { "A lifecycle change publishes at least one event" }
@@ -591,6 +597,11 @@ internal class JournalCoordinator(
             }
 
             override suspend fun trashTimes(): Map<String, Long?> = foldedState().trashTimes()
+
+            override suspend fun keepTimes(docs: Set<String>): Map<String, Long?> {
+                val state = foldedState()
+                return docs.associateWith(state::keepTime)
+            }
         }
 
     /**
@@ -678,6 +689,9 @@ internal class JournalCoordinator(
                 }
                 returnedUnrecorded -= id
                 projectStanding(current, published, preserveLifecycleDocs = docs)
+                change.afterPublish?.let { work ->
+                    log.runLogged("Following the lifecycle change of $id on disk") { work() }
+                }
                 // The change stands: a failure to read what it left is no failure of the change.
                 val after =
                     if (change.readBack) {

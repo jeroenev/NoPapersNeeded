@@ -10,6 +10,7 @@ import dev.npn.core.fs.BakeAsides
 import dev.npn.core.fs.DeleteAuthority
 import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TempFileSweep
@@ -70,6 +71,8 @@ internal class Indexer(
     /** Where files are hashed, [HASH_CONCURRENCY] at a time. */
     private val hashing: CoroutineDispatcher = Dispatchers.Default,
     private val ids: IdSource = IdSource.Random,
+    /** The keep store a rescan brings a restored document's missing file back from. */
+    keep: KeepStore? = null,
 ) {
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
 
@@ -81,7 +84,7 @@ internal class Indexer(
     private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids, bakeAsides)
     private val folds = FoldProjection(db, documentPaths)
     private val tempFiles = TempFileSweep(fs, log)
-    private val strandedCopies = StrandedTrashCopies(fs, db, clock, log)
+    private val strandedCopies = StrandedTrashCopies(fs, db, clock, log, keep)
 
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 

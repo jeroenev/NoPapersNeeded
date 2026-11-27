@@ -298,6 +298,10 @@ cloud, eight) do not converge, which fails the run. Then:
   `NpnPaths.trashPath` gives it): one holding other bytes is a file the trash took under a
   document's name, hidden from the library for good, since no rescan indexes the trash and neither
   the purge nor a restore touches it. A name without that prefix (a conflict copy) is not judged.
+  Every keep store entry (`.npn/keep/`) holds the bytes its name is the hash of. The replicas run
+  one build, so each one's records list `keep-v1` and the keep store is written once they have seen
+  each other's (`KeepGate`): a run trashes into `.npn/trash/` first and into the keep store later,
+  both kinds of entry side by side.
 - No bake's original lingers: no file under a recovery name holds bytes a relink superseded while
   the live document they became has its own bytes at its path. The bake deletes its original once
   its relink stands, and the rescan one a crash (the simulation's hard crash stops a bake at any
@@ -333,8 +337,8 @@ cloud, eight) do not converge, which fails the run. Then:
   the bake's relink, which a failed bake discards). A bake's temporary file whose bytes a journal
   object in the folder names as a relink's target is a copy, though: a bake undone after its relink
   landed parks the document's bytes there. Any loss of the library's last copy by the app
-  is a finding, whatever happened to the bytes before or after, but in its trash (the purge, a
-  delete for good) for a document the replicas' journals, taken together, had in the trash at that
+  is a finding, whatever happened to the bytes before or after, but in its trash or keep store
+  (the purge, a delete for good) for a document the replicas' journals, taken together, had in the trash at that
   time, or had restored after a purge already took a copy of it (the user restored past the
   retention), or had restored before another process took the restored file from its path (the user
   deleted what they had restored; once the restoring replica syncs, the tool carries that delete, or

@@ -140,6 +140,23 @@ internal class AckRecords(
     /** When this device wrote its latest record, or null for none yet. */
     suspend fun lastWrittenMillis(): Long? = chains(includeUnlinked = true)[deviceId]?.last()?.first?.atMillis
 
+    /**
+     * Every other device an installation marker names ([NpnPaths.DEVICES_DIR],
+     * `<deviceId>/<installationId>.json`): every device that ever opened the library with a build
+     * that marks it, which is every build that may read or write it, records or not.
+     */
+    suspend fun markedDevices(): Set<String> =
+        fs
+            .listAllUnder(NpnPaths.DEVICES_DIR)
+            .filter { !it.isDirectory && it.name.endsWith(JSON) && NpnPaths.Temp.kindOf(it.relPath) == null }
+            .mapNotNull { meta ->
+                meta.relPath
+                    .removePrefix("${NpnPaths.DEVICES_DIR}/")
+                    .split('/')
+                    .takeIf { it.size == 2 }
+                    ?.first()
+            }.filterTo(HashSet()) { it != deviceId }
+
     /** Every other device that writes records, and how far this device has applied each. */
     suspend fun devices(): List<AckedDevice> {
         val applied = appliedObjects()
@@ -231,8 +248,14 @@ internal class AckRecords(
     }
 
     companion object {
+        /** This build writes acknowledgment records ([AckRecords]). */
+        const val ACKS_V1 = "acks-v1"
+
+        /** This build reads, and once every device does writes, the keep store ([dev.npn.core.fs.KeepStore]). */
+        const val KEEP_V1 = "keep-v1"
+
         /** What this build reads and writes, as its records say. */
-        val CAPS = listOf("acks-v1")
+        val CAPS = listOf(ACKS_V1, KEEP_V1)
 
         private const val JSON = ".json"
 

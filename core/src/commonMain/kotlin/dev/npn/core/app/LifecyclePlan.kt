@@ -48,6 +48,54 @@ internal object LifecyclePlan {
         )
     }
 
+    /**
+     * Trash [doc] while the keep store is written: the event first, recording [held], the stat by
+     * which the file at its path holds its bytes (null: it does not, or is gone, and stays where it is
+     * for the next rescan); then [dematerialize] takes that file into the keep store, once the event
+     * stands ([LifecycleChange.afterPublish]).
+     */
+    fun trashKept(
+        doc: DocumentEntity,
+        held: FileMeta?,
+        dematerialize: suspend (FileMeta) -> Unit,
+    ): LifecycleChange {
+        val origPath = doc.relPath
+        return LifecycleChange(
+            ops = listOf(PendingOp.docTrash(doc.docId, origPath, held?.let { FileStat(it.size, it.mtimeMillis) })),
+            row = doc.copy(trashed = true, trashedOrigPath = origPath, missing = false),
+            readBack = true,
+            afterPublish = held?.let { stat -> { dematerialize(stat) } },
+        )
+    }
+
+    /**
+     * Restore [doc] to [finalPath] from the keep store: the events and the row first, then
+     * [materialize] puts the copy there once they stand. The row keeps the stat it had; the rescan
+     * that finds the copy stores its own.
+     */
+    fun restoreKept(
+        doc: DocumentEntity,
+        finalPath: String,
+        materialize: suspend () -> Unit,
+    ): LifecycleChange =
+        LifecycleChange(
+            ops =
+                listOf(
+                    PendingOp.docRestore(doc.docId),
+                    PendingOp.propSet(doc.docId, SystemProperty.STORAGE_PATH, finalPath),
+                ),
+            row =
+                doc.copy(
+                    trashed = false,
+                    trashedOrigPath = null,
+                    trashedAt = null,
+                    relPath = finalPath,
+                    fileName = NpnPaths.fileName(finalPath),
+                    missing = false,
+                ),
+            afterPublish = materialize,
+        )
+
     /** Whether [doc] is in the trash, to be restored from it. */
     fun restores(doc: DocumentEntity): Boolean = doc.trashed
 

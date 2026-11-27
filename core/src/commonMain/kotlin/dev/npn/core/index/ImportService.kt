@@ -13,6 +13,7 @@ import dev.npn.core.fs.DeleteAuthority
 import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
@@ -118,6 +119,9 @@ internal class ImportService(
     /** Where clearing a returned document's trashed copy, best effort, reports a failure. */
     private val log: NpnLog = NpnLog.None,
     private val ids: IdSource = IdSource.Random,
+    /** The keep store, which holds an import taken back for the trash's retention while [keepOn]. */
+    private val keep: KeepStore? = null,
+    private val keepOn: () -> Boolean = { false },
 ) {
     private val documentDao get() = db.documentDao()
     private val trash = TrashOps(fs)
@@ -244,6 +248,15 @@ internal class ImportService(
             if (row.deleted || row.trashed) return@serialize
             val checked = fs.stat(row.relPath)
             if (checked != null && fs.holds(row.relPath, imported.docId)) {
+                // Kept a while first, when it can be: the purge takes it once its tombstone is past
+                // the retention. One that cannot be kept is taken back all the same, as before the store.
+                keep?.takeIf { keepOn() }?.let { store ->
+                    // Before the tombstone: an episode no later than it.
+                    val episode = clock.nowMillis()
+                    log.runLogged(
+                        "Keeping a copy of the import taken back",
+                    ) { store.put(row.relPath, imported.docId, episode) }
+                }
                 journal.recordTakenBack(imported.docId)
                 gate.reap(row.relPath, imported.docId, DeleteAuthority.Tombstone(journal), checked)
             }

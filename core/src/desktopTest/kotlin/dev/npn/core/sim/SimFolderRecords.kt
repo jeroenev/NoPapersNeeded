@@ -61,6 +61,9 @@ class Losses {
          */
         fun isNoCopy(path: String) = NpnPaths.Temp.kindOf(path) in NO_COPY
 
-        private val NO_COPY = setOf(NpnPaths.Temp.Kind.IMPORT, NpnPaths.Temp.Kind.BAKE)
+        /** Whether [path] is in the trash or the keep store, where the app keeps a document's bytes a while. */
+        fun isKept(path: String) = path.startsWith("${NpnPaths.TRASH_DIR}/") || path.startsWith("${NpnPaths.KEEP_DIR}/")
+
+        private val NO_COPY = setOf(NpnPaths.Temp.Kind.IMPORT, NpnPaths.Temp.Kind.BAKE, NpnPaths.Temp.Kind.KEEP_STAGING)
     }
 }

@@ -11,6 +11,7 @@ import dev.npn.core.journal.PendingOp
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -552,6 +553,62 @@ class SyncSimulationHarnessTest {
                                 .purge(olderThanDays = 1)
                         }
                     }
+                }
+            }.run()
+        }
+
+    /**
+     * Once every device's records say it reads the keep store, a trash keeps its file there, under
+     * its hash, rather than in the trash folder; the sync tool carries that copy to every device, and
+     * a restore on another device copies the document back out of its own.
+     */
+    @Test
+    fun onceEveryDeviceReadsTheKeepStoreATrashKeepsItsFileThere() =
+        runTest {
+            val bytes = SimPdf.bytes("kept", "v", BAKED_SIZE + 9)
+            val docId = sha256Bytes(bytes)
+            allFromTheStart { step ->
+                if (step == STEPS) {
+                    members[0].fs.externalWriteAtomic("kept.pdf", bytes)
+                    world.advance(SETTLED_MILLIS)
+                    tool.flush()
+                    members.forEach { member ->
+                        world.read("${member.name} reads every device's records") {
+                            member.replica.session!!.rescan()
+                            member.replica.session!!
+                                .keepGate
+                                .refresh()
+                                .shouldBeTrue()
+                        }
+                    }
+                    world.read("trash it") {
+                        members[0]
+                            .replica.session!!
+                            .docLifecycle
+                            .trashDoc(docId)
+                            .shouldNotBeNull()
+                    }
+                    members[0]
+                        .fs
+                        .allFiles()
+                        .keys
+                        .any { NpnPaths.Keep.parse(it)?.first == docId }
+                        .shouldBeTrue()
+                    members[0].fs.bytesAt("kept.pdf").shouldBeNull()
+                    tool.flush()
+                    val restoring = members[1]
+                    restoring.fs
+                        .allFiles()
+                        .keys
+                        .any { NpnPaths.Keep.parse(it)?.first == docId }
+                        .shouldBeTrue()
+                    world.read("restore it") {
+                        restoring.replica.session!!.rescan()
+                        restoring.replica.session!!
+                            .docLifecycle
+                            .restoreDoc(docId)
+                    }
+                    restoring.fs.bytesAt("kept.pdf")?.let(::sha256Bytes) shouldBe docId
                 }
             }.run()
         }

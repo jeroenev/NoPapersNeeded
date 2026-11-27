@@ -516,8 +516,8 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
 - A trash that moved a file records its size and mtime in the `doc-trash` event (`stat`, a payload
   key older builds ignore), by the stat that proved it the document's at its trash path; one that
   moved none records none. A sync tool carries mtimes, so another device's file at the trashed path
-  with that stat is the copy the trash took, not yet removed there. Nothing reads it yet: it is
-  recorded first so libraries carry it by the time the restore heuristics are replaced by it.
+  with that stat is the copy the trash took, not yet removed there; a rescan decides a return by it
+  (section 6.4).
 - Restore and delete for good take a trash entry as the document's only when it hashes to the
   document: the hash prefix in its name (`NpnPaths.trashPath`) only narrows the search
   (`TrashOps.copiesOf`). A restore lists and hashes the entries before the lock and, under it,
@@ -572,6 +572,41 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   unknown, and goes by the retention alone. A device writes its first record at once, then at most
   daily when something changed and at least weekly. Cloud sync's remote trash still goes by the
   retention alone. Settings > Library > Devices (`DevicesFacade`) lists them, with Retire.
+- The keep store (`KeepStore`, `.npn/keep/<xx>/<sha256>.pdf`) holds a copy of the bytes the app
+  takes from a document's path, named by their hash: published as a journal object is (a staged
+  copy, verified, published without replacement), so an entry never holds other bytes than its
+  name's, and two devices keeping one document make one file. An entry is a copy, never a state.
+  It is written only once every device that may open the library reads it (`KeepGate`, the
+  `keep-v1` capability in every active device's latest record; a device known by its installation
+  marker alone, a build from before records, holds it shut until it is updated or retired, and the
+  Devices screen says so). Then:
+  - a trash publishes its event first, with the stat of the file it proved the document's, and only
+    then copies that file into the store and deletes it (`LifecycleChange.afterPublish`). Cut short
+    in between, the file stays at its path with the recorded stat: in the trash, its file back;
+  - a restore with no trash entry here copies the document back out of the store once its events
+    stand; a rescan brings back a restored document whose file is gone (`StrandedTrashCopies`, its
+    first source), as the journal shows it and the store holds it; never one not restored, so a
+    file the user deleted outside the app stays deleted;
+  - a delete for good takes the store's copy with the rest; a bake's original and an import taken
+    back (a split's rollback) are kept there too before they are deleted.
+
+  Every build reads it whatever the gate says. The purge takes an entry by the trash's rule
+  (`FoldedState.keepTime`): a trashed or deleted document's once that is past the retention and
+  acknowledged, a superseded one's once its relink is, one the library shows once its last restore
+  is and while its file holds its bytes at its path. Cloud sync does not carry it (each device keeps
+  its own), and `.npn/trash/` entries stay a source for restores and are purged as before.
+  An entry's name carries its episode (`<sha256>-<episode>.pdf`, the time taken before the event
+  that kept it), and the purge takes one only for an event at least as late: one name shared by
+  every episode would let a device's purge take the copy another device has just kept for a trash
+  whose event has not arrived. A trash's file leaves its path by a claim (`DeleteGate.reapClaimed`:
+  an exclusive rename to a recovery name beside it, then the claimed file checked by its hash), so
+  a file a sync tool puts there after the check is never the one deleted.
+- Durable intents (`PendingIntents`, `device.db`'s `pending_ops`): a trash into the keep store and
+  a bake note themselves before their first file change and close the note after their last. Before
+  every rescan, what a crash or a failure left open is settled by what the journal says: a trash
+  whose event stands has its file finished into the keep store, one whose event never stood leaves
+  it; a bake whose relink stands has its original kept and deleted, one without gets its original
+  back at its path when that is free. A note of an operation still under way is left alone.
 
 ### 6.4 Rescan, settling and resurrection
 

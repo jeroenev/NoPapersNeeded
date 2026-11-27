@@ -14,9 +14,12 @@ import dev.npn.core.util.NpnJson
 /**
  * What the app publishes in one folder, checked as it lands:
  * - each `doc-trash` records, when it records one, a stat the app moved the document's bytes into
- *   `.npn/trash/` with (`JournalOp.DocTrash.stat`). That one that moved a file records it is the
- *   unit tests': here, cloud sync's own moves into the trash, carrying another device's trash, are
- *   the app's moves too, and a trash of the same document here then rightly records none;
+ *   `.npn/trash/` with (`JournalOp.DocTrash.stat`), or, for a trash that publishes its event before
+ *   its file leaves (into the keep store), a stat a file at a document path had while it held them
+ *   ([saw]): another process may change the file between the trash's check of it and the event.
+ *   That one that moved a file records it is the unit tests': here, cloud sync's own moves into the
+ *   trash, carrying another device's trash, are the app's moves too, and a trash of the same
+ *   document here then rightly records none;
  * - each acknowledgment record (`AckRecords`) links to its device's previous one, vouches only for
  *   journal objects this folder's app published itself, and claims of another device's chain only
  *   records whose objects are all in this folder.
@@ -28,6 +31,19 @@ import dev.npn.core.util.NpnJson
 class SimPublications(
     private val bytesAt: (path: String) -> ByteArray?,
 ) {
+    /** Every size and mtime a file at a document path had while it held each document's bytes, by their hash. */
+    private val seenStats = HashMap<String, MutableSet<Pair<Long, Long>>>()
+
+    /** The file at [path], holding the bytes hashing to [hash], has [size] and [mtime] now. */
+    fun saw(
+        path: String,
+        hash: String,
+        size: Long,
+        mtime: Long,
+    ) {
+        if (NpnPaths.isDocumentPath(path)) seenStats.getOrPut(hash) { HashSet() } += size to mtime
+    }
+
     /** The journal objects, by hash, this folder's app published from a transaction it made. */
     private val ownObjects = HashSet<String>()
 
@@ -132,7 +148,8 @@ class SimPublications(
         trash: JournalOp.DocTrash,
     ) {
         val stat = trash.stat ?: return
-        if ((stat.size to stat.mtimeMillis) in trashedStats[doc].orEmpty()) return
+        val recorded = stat.size to stat.mtimeMillis
+        if (recorded in trashedStats[doc].orEmpty() || recorded in seenStats[doc].orEmpty()) return
         violations += "the doc-trash of ${doc.take(ID)} in '$path' records size ${stat.size}, mtime " +
             "${stat.mtimeMillis}, which no move of its bytes into the trash had (${trashedStats[doc].orEmpty()})"
     }

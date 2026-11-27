@@ -120,6 +120,7 @@ class DeviceDatabaseSchemaTest {
                 1 to "c682552d5e6662738f8589c47bbd5f32",
                 2 to "2de9d041f774d090fff7fd96af3375f6",
                 3 to "c77405c86e76ba0a623e2093be92eef8",
+                4 to "8a4b44c19c23180552c0473b1e152219",
             )
     }
 }

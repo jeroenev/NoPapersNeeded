@@ -8,9 +8,10 @@
     <string name="common_devices_not_yet_heard">Aún no está al día</string>
     <string name="common_devices_retired">Retirado: la papelera no espera a este dispositivo.</string>
     <string name="common_devices_silent">En silencio desde hace más de 90 días: la papelera no espera a este dispositivo.</string>
+    <string name="common_devices_needs_update">Usa una versión anterior de la app. Actualízalo, o retíralo si ya no lo usas: hasta entonces, esta biblioteca mantiene el formato de papelera anterior.</string>
     <string name="common_devices_retire">Retirar</string>
     <string name="common_devices_unretire">Volver a usar</string>
-    <string name="common_devices_empty">Ningún otro dispositivo está al día con esta biblioteca todavía. Los dispositivos con una versión anterior de la app no aparecen, y la papelera no los espera.</string>
+    <string name="common_devices_empty">Ningún otro dispositivo ha abierto esta biblioteca todavía.</string>
     <string name="common_devices_retire_failed">No se pudo retirar el dispositivo: %1$s</string>
     <string name="common_devices_unretire_failed">No se pudo volver a usar el dispositivo: %1$s</string>
 </resources>

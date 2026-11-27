@@ -6,18 +6,22 @@ import dev.npn.core.db.isLive
 import dev.npn.core.fs.DeleteAuthority
 import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.OperationLog
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.holds
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.index.LifecycleDone
 import dev.npn.core.index.heldDocumentStat
 import dev.npn.core.index.holdsDocument
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.util.EpochClock
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
@@ -51,6 +55,14 @@ internal class DocLifecycleImpl(
      * the move landed whatever it does, so it logs its failures rather than throwing them.
      */
     private val followUp: suspend (docId: String) -> Unit = {},
+    /** The keep store: restores read it whenever it holds a document; a trash writes it while [keepOn]. */
+    private val keep: KeepStore? = null,
+    /** Whether every device reads the keep store ([KeepGate]), so a trash may leave its copy only there. */
+    private val keepOn: () -> Boolean = { false },
+    /** Where a trash into the keep store notes itself, so a crash between its event and its file is finished. */
+    private val operations: OperationLog = OperationLog.None,
+    /** Names the recovery file a trash into the keep store claims its file under. */
+    private val ids: IdSource = IdSource.Random,
 ) : DocLifecycle {
     private val documentDao = db.documentDao()
 
@@ -61,22 +73,70 @@ internal class DocLifecycleImpl(
     override suspend fun trashDoc(docId: String): TrashReceipt? = lifetime.owned { bakeLock.held { trash(docId) } }
 
     private suspend fun trash(docId: String): TrashReceipt? {
+        val store = keep?.takeIf { keepOn() }
+        var intent: String? = null
         val done =
-            coordinator.changeLifecycle(docId, followRelinks = true) { doc ->
-                if (doc == null || !LifecyclePlan.trashes(doc)) return@changeLifecycle null
-                // Only the document's own file goes into the trash, known by a stat while it is
-                // unchanged. Another app may have written over it since the last rescan; that file
-                // stays where it is for the next rescan to index, and the trash is recorded as for a
-                // document whose file is gone.
-                // The entry's name carries when this trash happened, so a purge can tell this episode's
-                // entry from an older one's that a lagging journal still describes (TrashOps.purgeOlderThan).
-                val trashPath =
-                    if (fs.holdsDocument(doc)) trashOps.trashTarget(doc.relPath, doc.docId, clock.nowMillis()) else null
-                // A move keeps the stat, so the file it took is checked the same way where it went, and
-                // the stat that proves it there is the one the event records.
-                LifecyclePlan.trash(doc, trashPath) { moved -> fs.heldDocumentStat(doc.copy(relPath = moved)) }
+            try {
+                trashChange(docId, store) { intent = it }
+            } finally {
+                intent?.let(operations::release)
             }
         return done?.let { TrashReceipt(it.before.docId, it.after?.trashedAt) }
+    }
+
+    /** [trash]'s change, the intent of a trash into [store] handed to [noted] once it is open. */
+    private suspend fun trashChange(
+        docId: String,
+        store: KeepStore?,
+        noted: (String) -> Unit,
+    ): LifecycleDone? =
+        coordinator.changeLifecycle(docId, followRelinks = true) { doc ->
+            if (doc == null || !LifecyclePlan.trashes(doc)) return@changeLifecycle null
+            if (store != null) {
+                // The event first, with the stat of the file it proved the document's; then the
+                // file leaves for the keep store. Cut short in between, the file stays where it
+                // was with that stat: in the trash, its file back, as the journal has it.
+                val held = fs.heldDocumentStat(doc)
+                // Before the event: its entry's episode is no later than the trash's own time.
+                val episode = clock.nowMillis()
+                val aside = NpnPaths.Temp.recoveryPath(beside = doc.relPath, nonce = ids.next())
+                val intent =
+                    held
+                        ?.let { stat ->
+                            operations.trashKept(doc.docId, doc.relPath, stat, episode, aside)
+                        }?.also(noted)
+                return@changeLifecycle LifecyclePlan.trashKept(doc, held) {
+                    dematerialize(store, doc, aside, episode)
+                    intent?.let { id -> operations.done(id) }
+                }
+            }
+            // Only the document's own file goes into the trash, known by a stat while it is
+            // unchanged. Another app may have written over it since the last rescan; that file
+            // stays where it is for the next rescan to index, and the trash is recorded as for a
+            // document whose file is gone.
+            // The entry's name carries when this trash happened, so a purge can tell this episode's
+            // entry from an older one's that a lagging journal still describes (TrashOps.purgeOlderThan).
+            val trashPath =
+                if (fs.holdsDocument(doc)) trashOps.trashTarget(doc.relPath, doc.docId, clock.nowMillis()) else null
+            // A move keeps the stat, so the file it took is checked the same way where it went, and
+            // the stat that proves it there is the one the event records.
+            LifecyclePlan.trash(doc, trashPath) { moved -> fs.heldDocumentStat(doc.copy(relPath = moved)) }
+        }
+
+    /**
+     * Take [doc]'s file at its path into the keep store in [episode], then delete it: a copy
+     * published under its hash and verified, then the file claimed under [aside] and deleted once the
+     * claimed file proves the document's ([DeleteGate.reapClaimed]). A file another process wrote
+     * over meanwhile fails the copy's verification, or the claim's, and stays.
+     */
+    private suspend fun dematerialize(
+        store: KeepStore,
+        doc: DocumentEntity,
+        aside: String,
+        episode: Long,
+    ) {
+        val kept = store.put(doc.relPath, doc.docId, episode) ?: return
+        gate.reapClaimed(doc.relPath, aside, doc.docId, DeleteAuthority.ExtraCopy(kept))
     }
 
     override suspend fun restoreDoc(docId: String) = lifetime.owned { restore(docId, listing = null) }
@@ -122,13 +182,20 @@ internal class DocLifecycleImpl(
             // The stat of the entry just confirmed as the document's, which the move keeps: the row's
             // proof from then on. A row the fold made for a trash it never saw the file of has none.
             val entryStat = entry?.let { fs.stat(it) }
+            // With no trash entry here, the keep store's copy: put back once the restore stands. Cut
+            // short, the document is shown missing until a rescan copies it back ([KeepStore]).
+            val kept = if (entry == null) keep?.entry(docId) else null
             val finalPath =
-                if (entry != null) {
+                if (entry != null || kept != null) {
                     trashOps.restoreTarget(target, docId, ::takenForRestore)
                 } else {
                     target.takeIf { freeFor(it, doc) } ?: trashOps.restoreTarget(target, docId, ::takenForRestore)
                 }
-            LifecyclePlan.restore(doc, finalPath, entry, entryStat)
+            if (kept != null) {
+                LifecyclePlan.restoreKept(doc, finalPath) { keep?.materialize(docId, finalPath) }
+            } else {
+                LifecyclePlan.restore(doc, finalPath, entry, entryStat)
+            }
         }
     }
 
@@ -235,9 +302,10 @@ internal class DocLifecycleImpl(
             if (!journal.isDeleted(docId)) return@serialized
             val inTrash = trashOps.confirmedCopiesOf(docId, hashed)
             val atItsPath = listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
+            val kept = keep?.entriesOf(docId).orEmpty().map { it.path }
             // The stat each was proved by before the lock, so the gate hashes none again that is unchanged.
             val proved = (hashed + file).filterValues { it }.keys.associateBy { it.relPath }
-            for (path in (inTrash + atItsPath).distinct()) {
+            for (path in (inTrash + atItsPath + kept).distinct()) {
                 gate.reap(path, docId, DeleteAuthority.Tombstone(journal), proved[path])
             }
         }

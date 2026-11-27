@@ -307,3 +307,24 @@ data class MailCursorEntity(
     /** A [dev.npn.core.mail.MailFailureReason.name], or null after a clean check. */
     val lastError: String? = null,
 )
+
+/**
+ * A multi-step operation on this device's library folder, written before its first effect and
+ * deleted after its last (`dev.npn.core.app.PendingIntents`): what a crash in between left undone is
+ * finished or undone at the next open or rescan, by what the journal says. [kind] names the
+ * operation; [docId] its document; [path] and [other] the files it works on, by kind; [size] and
+ * [mtime] the stat that proved the document's file, where the kind needs one; [target] a second hash
+ * (a bake's baked bytes).
+ */
+@Entity(tableName = "pending_ops")
+data class PendingOpEntity(
+    @PrimaryKey val id: String,
+    val kind: String,
+    val docId: String,
+    val path: String,
+    val other: String? = null,
+    val target: String? = null,
+    val size: Long? = null,
+    val mtime: Long? = null,
+    val createdAt: Long,
+)

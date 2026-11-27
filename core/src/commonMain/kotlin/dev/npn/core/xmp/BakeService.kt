@@ -5,16 +5,20 @@ import dev.npn.core.fs.DeleteAuthority
 import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.DocumentFacts
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.OperationLog
 import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.readDocument
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.Sensitive.Kind.FOLDER
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.error
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
@@ -72,6 +76,13 @@ internal class BakeService(
      * under its recovery name, which a rescan removes once the relink stands.
      */
     facts: DocumentFacts = DocumentFacts.None,
+    /** The keep store, which holds a bake's original for the trash's retention while [keepOn]. */
+    private val keep: KeepStore? = null,
+    private val keepOn: () -> Boolean = { false },
+    /** Where a bake notes its move aside, so a crash before it ends is settled at the next open. */
+    private val operations: OperationLog = OperationLog.None,
+    /** The time of a bake's original's episode in the keep store. */
+    private val clock: EpochClock = SystemEpochClock,
 ) {
     private val gate = DeleteGate(fs)
     private val superseded = DeleteAuthority.Superseded(facts)
@@ -191,27 +202,44 @@ internal class BakeService(
             bakeAsides.holding(aside) {
                 var standing = false
                 var movedAside = false
+                // Noted before the move aside, closed once the original is back or gone: a crash in
+                // between is settled at the next open by whether the relink stands.
+                val intent = operations.bakeAside(docId, norm, aside, newSha)
+                // Before the relink: the original's episode in the keep store is no later than it.
+                val episode = clock.nowMillis()
                 try {
-                    fs.move(norm, aside)
-                    movedAside = true
-                    if (!holdsWhatWasRead(aside, read, docId)) {
+                    try {
+                        fs.move(norm, aside)
+                        movedAside = true
+                        if (!holdsWhatWasRead(aside, read, docId)) {
+                            standing = true
+                            putBack(norm, aside, tmpPath)
+                            operations.done(intent)
+                            return@holding null
+                        }
+                        fs.move(tmpPath, norm)
+                        if (newSha != docId) emitRelink(docId, newSha)
                         standing = true
-                        putBack(norm, aside, tmpPath)
-                        return@holding null
+                    } finally {
+                        @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
+                        if (!standing) {
+                            restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
+                            operations.done(intent)
+                        }
                     }
-                    fs.move(tmpPath, norm)
-                    if (newSha != docId) emitRelink(docId, newSha)
-                    standing = true
+                    log.runLogged("Removing the original of ${sensitive(norm, DOCUMENT)} after its bake") {
+                        // Superseded by the relink; or, a bake that changed no byte, the same bytes as in place.
+                        val authority = if (newSha != docId) superseded else DeleteAuthority.ExtraCopy(norm)
+                        // Kept a while first: the purge takes it once the relink is past the retention.
+                        if (newSha != docId) keep?.takeIf { keepOn() }?.put(aside, docId, episode)
+                        gate.reap(aside, docId, authority, read)
+                    }
+                    // An original left aside by a failure here is the rescan's, as before intents.
+                    operations.done(intent)
+                    newSha
                 } finally {
-                    @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
-                    if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
+                    operations.release(intent)
                 }
-                log.runLogged("Removing the original of ${sensitive(norm, DOCUMENT)} after its bake") {
-                    // Superseded by the relink; or, a bake that changed no byte, the same bytes as in place.
-                    val authority = if (newSha != docId) superseded else DeleteAuthority.ExtraCopy(norm)
-                    gate.reap(aside, docId, authority, read)
-                }
-                newSha
             }
         }
     }

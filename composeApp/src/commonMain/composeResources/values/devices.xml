@@ -8,9 +8,10 @@
     <string name="common_devices_not_yet_heard">Has not caught up yet</string>
     <string name="common_devices_retired">Retired: the trash does not wait for this device.</string>
     <string name="common_devices_silent">Silent for more than 90 days: the trash does not wait for this device.</string>
+    <string name="common_devices_needs_update">Runs an older version of the app. Update it, or retire it if you no longer use it: until then, this library keeps the older trash format.</string>
     <string name="common_devices_retire">Retire</string>
     <string name="common_devices_unretire">Bring back</string>
-    <string name="common_devices_empty">No other device has caught up with this library yet. Devices on an older version of the app are not listed, and the trash does not wait for them.</string>
+    <string name="common_devices_empty">No other device has opened this library yet.</string>
     <string name="common_devices_retire_failed">Could not retire the device: %1$s</string>
     <string name="common_devices_unretire_failed">Could not bring the device back: %1$s</string>
 </resources>

@@ -60,6 +60,8 @@ internal class TempFileSweep(
                     NpnPaths.Temp.Kind.IMPORT,
                     NpnPaths.Temp.Kind.MARKER_STAGING,
                     NpnPaths.Temp.Kind.JOURNAL_STAGING,
+                    // A copy: the keep store stages what it copies, never the file it was taken from.
+                    NpnPaths.Temp.Kind.KEEP_STAGING,
                     -> true
                 }
             if (deletable) {

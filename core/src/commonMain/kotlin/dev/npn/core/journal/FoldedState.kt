@@ -435,6 +435,20 @@ internal class FoldedState {
     private fun deletedAtMillis(doc: String): Long? = if (isDeleted(doc)) deleted[doc]?.physicalMillis else null
 
     /**
+     * When the keep store's copy of [doc] stops being needed, the time the purge counts its retention
+     * from: when it was deleted for good, superseded by a relink, or trashed; for a document the
+     * library shows, when it was last restored. Null for one never trashed, whose copy another
+     * device's trash may have put there ahead of its event, and for a document no event names.
+     */
+    fun keepTime(doc: String): Long? =
+        when {
+            isDeleted(doc) -> deletedAtMillis(doc)
+            resolveDocId(doc) != doc -> relinks[doc]?.maxByOrNull { it.hlc }?.hlc?.physicalMillis
+            isTrashed(doc) -> trashedAtMillis(doc)
+            else -> restoredAtMillis(doc)
+        }
+
+    /**
      * For the trash purge, every document an event names that is deleted, or else not superseded by a
      * relink, mapped to when it was deleted for good ([deletedAtMillis]), else trashed
      * ([trashedAtMillis]), or to null while it is neither.

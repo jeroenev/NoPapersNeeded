@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
@@ -44,6 +45,13 @@ import dev.npn.core.util.warn
  * It goes to the document's intended path, or beside it when that is taken, as a restore puts it; a
  * rescan then finds the document there, at a new path through a move it records.
  *
+ * The keep store ([KeepStore]) is the first place it looks, for a document restored since it was
+ * last in the trash: its entry is a copy, never a state, so putting one back where the journal shows
+ * the document live undoes nobody's decision, and needs no window. It is how a restore whose file a
+ * lagging trash move took away comes back for good (the journal says live; the folder follows). A
+ * document never restored is not brought back from it: a file the user deleted outside the app stays
+ * deleted, shown missing.
+ *
  * Not safe for concurrent calls: the rescan runs it under [JournalCoordinator]'s writer lock.
  */
 internal class StrandedTrashCopies(
@@ -51,6 +59,7 @@ internal class StrandedTrashCopies(
     db: NpnDatabase,
     private val clock: EpochClock,
     private val log: NpnLog,
+    private val keep: KeepStore? = null,
 ) {
     private val documentDao = db.documentDao()
     private val trash = TrashOps(fs)
@@ -78,6 +87,11 @@ internal class StrandedTrashCopies(
         val seen = HashMap<String, Long>()
         var reclaimed = false
         for (row in stranded) {
+            if (state.restoredAtMillis(row.docId) != null && keep?.entry(row.docId) != null) {
+                runCatchingCancellable { reclaimed = materialize(row, state) || reclaimed }
+                    .onFailure { log.warn("Bringing ${row.docId} back from the keep store failed", it) }
+                continue
+            }
             val restoredAt = state.restoredAtMillis(row.docId) ?: Long.MIN_VALUE
             val prefix = row.docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
             val strays =
@@ -97,6 +111,31 @@ internal class StrandedTrashCopies(
         return reclaimed
     }
 
+    /** Copy [row]'s document out of the keep store to where [state] wants it. */
+    private suspend fun materialize(
+        row: DocumentEntity,
+        state: FoldedState,
+    ): Boolean {
+        val target = target(row, state)
+        val placed = keep?.materialize(row.docId, target) == true
+        if (placed) log.info("Brought ${row.docId} back from the keep store to $target: the journal shows it")
+        return placed
+    }
+
+    /** Where [state] wants [row]'s document: its intended path, else its row's, or beside it when taken. */
+    private suspend fun target(
+        row: DocumentEntity,
+        state: FoldedState,
+    ): String {
+        val wanted =
+            listOfNotNull(state.intendedPath(row.docId), row.relPath).firstOrNull(NpnPaths::isDocumentPath)
+                ?: "${NpnPaths.DEFAULT_INBOX}/${row.fileName}"
+        return trash.restoreTarget(wanted, row.docId) { path ->
+            fs.exists(path) ||
+                documentDao.getByRelPath(path)?.isLive == true
+        }
+    }
+
     /** Move the first of [strays] that holds [row]'s bytes to where [state] wants its document. */
     private suspend fun reclaim(
         row: DocumentEntity,
@@ -111,14 +150,7 @@ internal class StrandedTrashCopies(
                 .firstOrNull { it.value }
                 ?.key
                 ?.relPath ?: return false
-        val wanted =
-            listOfNotNull(state.intendedPath(row.docId), row.relPath).firstOrNull(NpnPaths::isDocumentPath)
-                ?: "${NpnPaths.DEFAULT_INBOX}/${row.fileName}"
-        val target =
-            trash.restoreTarget(wanted, row.docId) { path ->
-                fs.exists(path) ||
-                    documentDao.getByRelPath(path)?.isLive == true
-            }
+        val target = target(row, state)
         fs.move(copy, target)
         unexplainedSince.remove(copy)
         log.info("Brought ${row.docId} back from $copy to $target: no trash in the journal holds it there")

@@ -8,9 +8,10 @@
     <string name="common_devices_not_yet_heard">Ainda não atualizado</string>
     <string name="common_devices_retired">Retirado: o lixo não espera por este dispositivo.</string>
     <string name="common_devices_silent">Em silêncio há mais de 90 dias: o lixo não espera por este dispositivo.</string>
+    <string name="common_devices_needs_update">Usa uma versão anterior do app. Atualize-o, ou retire-o se não o usa mais: até lá, esta biblioteca mantém o formato antigo do lixo.</string>
     <string name="common_devices_retire">Retirar</string>
     <string name="common_devices_unretire">Voltar a usar</string>
-    <string name="common_devices_empty">Nenhum outro dispositivo está ainda atualizado com esta biblioteca. Os dispositivos com uma versão anterior da app não aparecem, e o lixo não espera por eles.</string>
+    <string name="common_devices_empty">Nenhum outro dispositivo abriu esta biblioteca ainda.</string>
     <string name="common_devices_retire_failed">Não foi possível retirar o dispositivo: %1$s</string>
     <string name="common_devices_unretire_failed">Não foi possível voltar a usar o dispositivo: %1$s</string>
 </resources>

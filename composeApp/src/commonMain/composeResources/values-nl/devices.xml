@@ -8,9 +8,10 @@
     <string name="common_devices_not_yet_heard">Nog niet bij</string>
     <string name="common_devices_retired">Buiten gebruik: de prullenbak wacht niet op dit apparaat.</string>
     <string name="common_devices_silent">Meer dan 90 dagen stil: de prullenbak wacht niet op dit apparaat.</string>
+    <string name="common_devices_needs_update">Gebruikt een oudere versie van de app. Werk het bij, of zet het buiten gebruik als je het niet meer gebruikt: tot dan houdt deze bibliotheek het oudere prullenbakformaat.</string>
     <string name="common_devices_retire">Buiten gebruik zetten</string>
     <string name="common_devices_unretire">Weer in gebruik nemen</string>
-    <string name="common_devices_empty">Nog geen ander apparaat is bij met deze bibliotheek. Apparaten met een oudere versie van de app staan hier niet, en de prullenbak wacht niet op hen.</string>
+    <string name="common_devices_empty">Nog geen ander apparaat heeft deze bibliotheek geopend.</string>
     <string name="common_devices_retire_failed">Kan het apparaat niet buiten gebruik zetten: %1$s</string>
     <string name="common_devices_unretire_failed">Kan het apparaat niet weer in gebruik nemen: %1$s</string>
 </resources>
