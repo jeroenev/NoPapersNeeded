@@ -223,6 +223,24 @@ internal class BakeService(
     }
 
     /**
+     * Move the original from [aside] back to [norm] when [asideHolds] it, and fail unless [norm] then
+     * holds [oldSha]: with the move's own failure where the storage refused it, an I/O failure like
+     * the swap's, rather than a failed check. A rename keeps the original's size and mtime, which its
+     * row still stores. One that reports a failure may still have landed: where the bytes are
+     * afterwards is what counts.
+     */
+    private suspend fun moveOriginalBack(
+        norm: String,
+        aside: String,
+        oldSha: String,
+        asideHolds: Boolean,
+    ) {
+        val back = if (asideHolds) runCatchingCancellable { fs.move(aside, norm) } else null
+        if (fs.holds(norm, oldSha)) return
+        throw back?.exceptionOrNull() ?: IllegalStateException("$norm does not read back as its original")
+    }
+
+    /**
      * Put the original back at [norm] after the swap failed, so the document keeps its hash
      * [oldSha]. The original is at [norm] still (the move aside failed) or under [aside], an
      * ordinary recovery name, so one version is on disk at every step: baked bytes that a failed
@@ -268,10 +286,7 @@ internal class BakeService(
                         throw IllegalStateException("$norm still holds the baked bytes", parked.exceptionOrNull())
                     }
                 }
-                // A rename keeps the original's size and mtime, which its row still stores. One that
-                // reports a failure may still have landed: where the bytes are afterwards is what counts.
-                if (asideHolds()) runCatchingCancellable { fs.move(aside, norm) }
-                check(fs.holds(norm, oldSha)) { "$norm does not read back as its original" }
+                moveOriginalBack(norm, aside, oldSha, asideHolds())
             }
         }.onSuccess {
             // The original is back: the baked bytes are a leftover now, which the next bake of the
