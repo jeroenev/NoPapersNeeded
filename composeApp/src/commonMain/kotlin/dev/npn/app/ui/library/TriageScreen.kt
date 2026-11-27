@@ -83,8 +83,8 @@ private val EssentialFields = listOf(FieldKeys.TITLE, FieldKeys.CORRESPONDENT, F
  * bar. Next/previous skip without marking; "Mark reviewed & next" (or Ctrl+Enter) saves the draft
  * and the marker through the same [dev.npn.app.ui.detail.DocumentDrafts] path the detail editor
  * uses, then moves on to the next unreviewed document, and its Undo takes back the marker, the
- * fields and the tags alike. With no unreviewed document left after it, the action finishes and
- * leaves the mode.
+ * fields and the tags alike. Past the last one it wraps around to the documents skipped earlier;
+ * with no unreviewed document left at all, the action finishes and leaves the mode.
  *
  * The mode starts over the result set the library already loaded, so it adds no query and no whole
  * library load; its order and unreviewed count are fixed at entry, while the document on screen

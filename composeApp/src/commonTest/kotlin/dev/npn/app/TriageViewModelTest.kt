@@ -131,16 +131,40 @@ class TriageViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun markingTheLastDocumentReviewedFinishesTheMode() =
+    fun markingTheLastUnreviewedDocumentFinishesTheMode() =
         runTest(dispatcher) {
             val model = vm(items = listOf(listItem("d1"), listItem("d2")))
             advanceUntilIdle()
             model.startTriage()
-            model.triageNext()
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d1")
 
-            model.triage.value?.hasNext shouldBe false
+            model.triage.value?.currentId shouldBe "d2"
+            model.triage.value?.nextUnreviewed shouldBe null
             model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d2")
 
+            model.triage.value shouldBe null
+        }
+
+    /**
+     * Past the last unreviewed document, "Mark reviewed & next" wraps around to the ones skipped
+     * earlier, and finishes only when none is left anywhere.
+     */
+    @Test
+    fun markingReviewedWrapsAroundToDocumentsSkippedEarlier() =
+        runTest(dispatcher) {
+            val model = vm()
+            advanceUntilIdle()
+            model.startTriage()
+            model.triageNext()
+            model.triageNext()
+
+            model.triage.value?.nextUnreviewed shouldBe "d1"
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d3")
+            model.triage.value?.currentId shouldBe "d1"
+
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d1")
+            model.triage.value?.currentId shouldBe "d2"
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d2")
             model.triage.value shouldBe null
         }
 
@@ -169,7 +193,7 @@ class TriageViewModelTest : MainDispatcherTest() {
             model.triage.value?.currentId shouldBe "d3"
         }
 
-    /** With only reviewed documents after it, marking one reviewed finishes the mode. */
+    /** With only reviewed documents left, marking one reviewed finishes the mode. */
     @Test
     fun markingReviewedWithOnlyReviewedDocumentsLeftFinishes() =
         runTest(dispatcher) {
