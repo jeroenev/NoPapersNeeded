@@ -417,7 +417,9 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
 - **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
   its own, and an overwrite in place gives the file a new mtime. Where storage reports no mtimes,
   same-size replacements are modelled: every generated PDF has one of a few sizes, so only a hash
-  tells a replacement apart.
+  tells a replacement apart. No two files of one size are given one mtime, in any replica's folder
+  (`SimMtimes`): the sync tool carries such files, mtime and all, to storage that reports mtimes,
+  where two of them with one stat, one renamed over the other, would be such an overwrite.
 - **The app's temporary files under one name on several devices**: a bake writes
   `<document>.npnbake.tmp`, which the sync tool copies to other devices like any file, where it can
   replace the temporary file of a bake of the same document under way there. The simulation counts

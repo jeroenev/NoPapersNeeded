@@ -382,6 +382,42 @@ class SyncSimulationHarnessTest {
         }
     }
 
+    /**
+     * Two files of one size written in one virtual millisecond, on storage that reports mtimes, have
+     * two stats: the one renamed over the other changes the stat at its path, as any overwrite of
+     * other bytes does but the out-of-scope mtime-preserving one, and the rescan finds the second
+     * document there. Given the clock's millisecond each, they had one stat, and the index kept the
+     * first document at the path its file no longer held (seeds 4100509 and 4100575 at 9f76eae2).
+     */
+    @Test
+    fun twoFilesOfOneSizeWrittenInOneMillisecondHaveTwoStats() =
+        runTest {
+            val first = SimPdf.bytes("one size", "a", BAKED_SIZE + 6)
+            val second = SimPdf.bytes("one size", "b", BAKED_SIZE + 6)
+            first.size shouldBe second.size
+            val config = config()
+            val sync =
+                SyncConfig.forSeed(config).let {
+                    it.copy(
+                        mtimes = List(it.replicas) { true },
+                        joinsAt = List(it.replicas) { 0 },
+                        cloud = null,
+                        bisync = null,
+                    )
+                }
+            SyncSimulation(testScheduler, config, { step ->
+                if (step == 2) {
+                    val fs = members[0].fs
+                    fs.externalWriteAtomic("first.pdf", first)
+                    fs.externalWriteAtomic("second.pdf", second)
+                    // Settled, so the rescan indexes both and stores their stats.
+                    world.advance(SETTLED_MILLIS)
+                    world.read("index both") { members[0].replica.session!!.rescan() }
+                    fs.externalMove("second.pdf", "first.pdf")
+                }
+            }, sync).run()
+        }
+
     /** When another process writes the bytes elsewhere and deletes them again, if it does. */
     private enum class OutsideLoss { NONE, BEFORE, AFTER }
 
@@ -467,5 +503,6 @@ class SyncSimulationHarnessTest {
         const val HASH = 64
         const val SYNC_ROUNDS = 3
         const val WATCHED_SOURCE = "harness-duplicate.pdf"
+        const val SETTLED_MILLIS = 10L * 60L * 1000L
     }
 }

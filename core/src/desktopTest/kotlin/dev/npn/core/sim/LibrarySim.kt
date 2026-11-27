@@ -267,6 +267,9 @@ internal class SimWorld(
     /** The sizes of the PDFs the engines make, one per content, across every replica. */
     val sizes = SimSizes()
 
+    /** The mtimes of the files in every replica's folder, never one stat for two files ([SimMtimes]). */
+    val mtimes = SimMtimes()
+
     /** Failures that reached a scope's handler: nothing a session runs may end that way. */
     val uncaught = ArrayList<String>()
 

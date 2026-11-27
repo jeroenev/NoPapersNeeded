@@ -305,9 +305,10 @@ internal class SimGenerator(
         val label = "doc-$n"
         // Half carry a text layer; the rest are scans only OCR can read. Where storage reports no
         // mtimes, all share a few sizes, so a replacement often has the size of the file it replaces
-        // and only a hash tells it apart. Elsewhere each has a size of its own: two files written in
-        // the same virtual millisecond, one then renamed over the other, would have one stat, and an
-        // mtime-preserving overwrite of the same size is out of scope (docs/SIMULATION.md).
+        // and only a hash tells it apart. Elsewhere each has a size of its own. Either way no two files
+        // of one size get one mtime (SimMtimes): two such files, carried to a replica whose storage
+        // reports mtimes and one renamed over the other there, would have one stat, an
+        // mtime-preserving overwrite of the same size, which is out of scope (docs/SIMULATION.md).
         val size = if (sim.config.mtimes) SIZE_BASE + n else SIZE_BASE + random.nextInt(SHARED_SIZES)
         val text = if (random.chance(50)) "text of $label ${random.pick(WORDS)}" else null
         val bytes = SimPdf.bytes(label, text, size, pages = pages)

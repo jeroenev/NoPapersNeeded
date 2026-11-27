@@ -223,6 +223,7 @@ internal class SyncSimulation(
                         mtimes = sync.mtimes[index],
                         watchDropRate = config.watchDropRate,
                         watchOverflowRate = config.watchOverflowRate,
+                        stamps = world.mtimes,
                     ),
                 latency = SimLatency(Random(salted(1))),
                 watchRandom = Random(salted(2)),

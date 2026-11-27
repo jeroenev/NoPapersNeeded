@@ -55,7 +55,34 @@ class SimFsOptions(
     val watchDropRate: Double = 0.0,
     /** The share of change events that arrive as an overflow (`relPath == null`) instead. */
     val watchOverflowRate: Double = 0.0,
+    /** The mtimes its files are given: one for every folder of a world, which the sync tool joins. */
+    val stamps: SimMtimes = SimMtimes(),
 )
+
+/**
+ * The mtimes the files of one world's folders are given: the virtual clock's, but never one a file
+ * of the same size was given before. Two files with other bytes, one size and one mtime have one
+ * stat, which the app's proof by stat takes for the same file: an mtime-preserving overwrite of the
+ * same size, out of scope (docs/SIMULATION.md). Several steps run in one virtual millisecond, and
+ * where storage reports no mtimes the generators give their PDFs one of a few sizes, so without
+ * this two such files written in that millisecond, then carried by the sync tool, mtime and all, to
+ * storage that reports one, and the one renamed over the other there, left the index holding the
+ * first document at a path whose file holds the second (seeds 4100509 and 4100575 at 9f76eae2). One
+ * for every folder of a world, as the sync tool carries files between them.
+ */
+class SimMtimes {
+    private val last = HashMap<Int, Long>()
+
+    /** The mtime of a file of [size] bytes written [now]: [now], or just past the last one given that size. */
+    fun stamp(
+        size: Int,
+        now: Long,
+    ): Long {
+        val mtime = last[size]?.let { maxOf(now, it + 1) } ?: now
+        last[size] = mtime
+        return mtime
+    }
+}
 
 /**
  * Seeded latency at the storage boundary: every call suspends at least once, and some wait a while
@@ -339,7 +366,7 @@ class InMemoryLibraryFileSystem(
     fun externalWriteAtomic(
         relPath: String,
         bytes: ByteArray,
-        mtime: Long = now(),
+        mtime: Long = options.stamps.stamp(bytes.size, now()),
     ) {
         val norm = NpnPaths.normalize(relPath)
         if (dirs.containsKey(norm)) remove(norm)
@@ -388,10 +415,10 @@ class InMemoryLibraryFileSystem(
             if (node == null) {
                 if (dirs.containsKey(norm)) remove(norm)
                 ensureParents(norm)
-                files[norm] = Node(bytes.copyOf(written), now())
+                files[norm] = Node(bytes.copyOf(written), options.stamps.stamp(written, now()))
             } else {
                 node.bytes = bytes.copyOf(written)
-                node.mtime = now()
+                node.mtime = options.stamps.stamp(written, now())
             }
             touch(norm)
             if (written < bytes.size) delay(intervalMillis)
@@ -407,7 +434,7 @@ class InMemoryLibraryFileSystem(
         val node = files[norm] ?: return externalWriteAtomic(norm, bytes)
         if (sha256Bytes(node.bytes) != sha256Bytes(bytes)) lost(norm, node, byApp = false, inPlace = true)
         node.bytes = bytes.copyOf()
-        node.mtime = now()
+        node.mtime = options.stamps.stamp(bytes.size, now())
         touch(norm)
     }
 
@@ -418,7 +445,7 @@ class InMemoryLibraryFileSystem(
     fun externalTouch(relPath: String) {
         val norm = NpnPaths.normalize(relPath)
         val node = files[norm] ?: return
-        node.mtime = now()
+        node.mtime = options.stamps.stamp(node.bytes.size, now())
         touch(norm)
     }
 
@@ -478,7 +505,7 @@ class InMemoryLibraryFileSystem(
         relPath: String,
         bytes: ByteArray,
         transferMillis: Long,
-        mtime: Long = now(),
+        mtime: Long = options.stamps.stamp(bytes.size, now()),
     ) {
         val norm = NpnPaths.normalize(relPath)
         val temp = SimNames.syncTemp(norm, SyncTool.SYNCTHING)
@@ -594,7 +621,7 @@ class InMemoryLibraryFileSystem(
     ) {
         check(!existsNow(norm)) { "Target already exists: $norm" }
         ensureParents(norm)
-        files[norm] = Node(bytes, now())
+        files[norm] = Node(bytes, options.stamps.stamp(bytes.size, now()))
         touch(norm)
         recordWrite(norm, bytes)
     }
