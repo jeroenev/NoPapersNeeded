@@ -77,6 +77,7 @@
     <string name="common_trash_delete_forever_message">Dieses Dokument endgültig löschen? Die Datei wird entfernt und kann nicht wiederhergestellt werden.</string>
     <string name="common_trash_empty">Papierkorb ist leer</string>
     <string name="common_trash_was_path">war: %1$s</string>
+    <string name="common_trash_file_back">Die Datei ist wieder im Ordner. Stelle das Dokument wieder her, um es zu behalten.</string>
     <string name="common_trash_restore">Wiederherstellen</string>
     <string name="common_trash_no_duplicates">Keine Duplikate</string>
     <string name="common_trash_no_duplicates_subtitle">Jeder Hash hat genau einen Pfad.</string>

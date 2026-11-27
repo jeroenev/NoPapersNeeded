@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.missingSentinel
+import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.propTest
 import io.kotest.matchers.shouldBe
 import io.kotest.property.Exhaustive
@@ -139,4 +140,42 @@ class FoldLifecycleTest {
                 }
             }
         }
+
+    /**
+     * A trash that recorded its file's stat decides a return by it: the bytes back with that stat
+     * (mtimes up to 2 s apart) stay in the trash, reported as back; with another, they are restored at
+     * once. A delete for good, and a trash with no stat, wait as before.
+     */
+    @Test
+    fun aRecordedTrashStatDecidesAReturn() {
+        val row = DocumentEntity(doc, origPath, "a.pdf", size = 10, mtime = 5_000)
+        val recorded = FileStat(10, 5_000)
+
+        fun resolve(
+            found: FileStat,
+            trashStat: FileStat? = recorded,
+            deleted: Boolean = false,
+        ) = FoldLifecycle.resolve(
+            doc,
+            row.copy(trashed = !deleted, deleted = deleted),
+            JournalLifecycle(false, !deleted, deleted, origPath, 500, trashStat),
+            preserved = false,
+            contentAt = mapOf(origPath to doc),
+            statAt = { found.takeIf { _ -> it == origPath } },
+        ) { it == origPath }
+
+        listOf(FileStat(10, 5_000), FileStat(10, 7_000), FileStat(10, 3_000)).forEach { same ->
+            val kept = resolve(same)
+            kept.trashed shouldBe true
+            kept.resurrected shouldBe null
+            kept.fileBack shouldBe origPath
+        }
+        listOf(FileStat(10, 7_001), FileStat(11, 5_000)).forEach { other ->
+            val back = resolve(other)
+            back.fileBack shouldBe null
+            back.resurrected shouldBe Resurrected(doc, origPath, 500, immediate = true)
+        }
+        resolve(FileStat(10, 5_000), trashStat = null).resurrected shouldBe Resurrected(doc, origPath, 500)
+        resolve(FileStat(10, 5_000), deleted = true).resurrected shouldBe Resurrected(doc, origPath, 500)
+    }
 }

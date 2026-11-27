@@ -74,6 +74,8 @@ internal class FoldedState {
         val trashed: Boolean,
         val origPath: String?,
         override val hlc: Hlc,
+        /** The stat of the file the trash moved, when its event records one ([JournalOp.DocTrash.stat]). */
+        val stat: FileStat? = null,
     ) : HlcStamped
 
     // --- relinks: oldDoc -> all claims; winner is highest hlc ---
@@ -180,7 +182,7 @@ internal class FoldedState {
             }
 
             is JournalOp.DocTrash -> {
-                trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = true, op.origPath, hlc) }
+                trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = true, op.origPath, hlc, op.stat) }
             }
 
             JournalOp.DocRestore -> {
@@ -406,6 +408,13 @@ internal class FoldedState {
         val t = trash[doc] ?: return null
         return if (t.trashed) t.origPath else null
     }
+
+    /**
+     * The stat of the file the winning doc-trash moved into the trash, while [doc] is in the trash
+     * ([isTrashed]) and that event records one: null for a trash that moved nothing, and for one an
+     * older build wrote.
+     */
+    fun trashStat(doc: String): FileStat? = trash[doc]?.takeIf { isTrashed(doc) }?.stat
 
     /** Wall time of the winning doc-trash's HLC, if currently trashed. */
     fun trashedAtMillis(doc: String): Long? {

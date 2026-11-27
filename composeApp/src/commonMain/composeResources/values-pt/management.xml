@@ -77,6 +77,7 @@
     <string name="common_trash_delete_forever_message">Excluir este documento permanentemente? O arquivo será removido e não poderá ser recuperado.</string>
     <string name="common_trash_empty">A lixeira está vazia</string>
     <string name="common_trash_was_path">era: %1$s</string>
+    <string name="common_trash_file_back">O arquivo voltou para a pasta. Restaure o documento para mantê-lo.</string>
     <string name="common_trash_restore">Restaurar</string>
     <string name="common_trash_no_duplicates">Nenhum duplicado</string>
     <string name="common_trash_no_duplicates_subtitle">Cada hash tem um único caminho canônico.</string>

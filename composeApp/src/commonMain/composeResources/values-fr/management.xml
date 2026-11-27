@@ -77,6 +77,7 @@
     <string name="common_trash_delete_forever_message">Supprimer définitivement ce document ? Le fichier est effacé et ne pourra pas être récupéré.</string>
     <string name="common_trash_empty">La corbeille est vide</string>
     <string name="common_trash_was_path">ancien chemin : %1$s</string>
+    <string name="common_trash_file_back">Son fichier est de retour dans le dossier. Restaurez le document pour le garder.</string>
     <string name="common_trash_restore">Restaurer</string>
     <string name="common_trash_no_duplicates">Aucun doublon</string>
     <string name="common_trash_no_duplicates_subtitle">Chaque document n’existe qu’à un seul emplacement.</string>

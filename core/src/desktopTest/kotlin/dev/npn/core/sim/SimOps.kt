@@ -104,6 +104,7 @@ enum class OpKind(
     EXT_MOVE(2),
     EXT_BACKUP(1),
     EXT_RESTORE_BACKUP(1),
+    EXT_PUT_BACK_TRASHED(1),
     EXT_SYNC_TEMP(2),
 
     // Storage failures, and the process's own end: a crash cancels its scope, a hard crash kills it.
@@ -275,6 +276,7 @@ internal class SimGenerator(
             OpKind.EXT_MOVE -> s.live.pickOrNull()?.let(::extMove)
             OpKind.EXT_BACKUP -> extBackup()
             OpKind.EXT_RESTORE_BACKUP -> backups.pickOrNull()?.let(::extRestore)
+            OpKind.EXT_PUT_BACK_TRASHED -> s.trashed.pickOrNull()?.let { putBackTrashed(sim.fs, it, random) }
             OpKind.EXT_SYNC_TEMP -> extSyncTemp(s)
             OpKind.FAULT -> fault()
             OpKind.CRASH -> Planned.Control("crash and reopen") { sim.crashAndReopen() }
@@ -930,6 +932,7 @@ private val DURING_KINDS =
         OpKind.EXT_DELETE,
         OpKind.EXT_MOVE,
         OpKind.EXT_RESTORE_BACKUP,
+        OpKind.EXT_PUT_BACK_TRASHED,
         OpKind.EXT_SYNC_TEMP,
         OpKind.FAULT,
         OpKind.OCR_COMPLETE,

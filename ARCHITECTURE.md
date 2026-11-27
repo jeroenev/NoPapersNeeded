@@ -590,7 +590,17 @@ Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `Writ
 - A rescan skips a file it cannot read rather than failing, and treats a failed read as not held.
 - When the bytes of a trashed or deleted document come back, the return must be recorded in the
   journal, or the next fold hides the document again. An import records it at once (section 6.2).
-  A rescan that finds the file back writes it once the event that hid the document is a day old
+  A trash that moved the document's file records that file's size and mtime (`doc-trash`'s `stat`,
+  which the fold keeps as `FoldedState.trashStat`), and a rescan goes by it (`FoldLifecycle.resolve`):
+  - the bytes back with that stat (mtimes within 2 s) are, as far as any device can tell, the copy a
+    sync tool has yet to take away, since sync tools carry mtimes; or a put-back that kept the mtime
+    (a file manager's copy, a backup). The document stays in the trash however long they stay,
+    reported in `ScanReport.filesBack` (the Trash screen says its file is back), and a restore takes
+    that file where it is (`DocLifecycleImpl.restore`);
+  - the bytes back with another mtime are no such copy: a deliberate return, written at once.
+
+  Without a recorded stat (a trash that moved nothing, one an older build wrote, a delete for good),
+  a rescan that finds the file back writes it once the event that hid the document is a day old
   (`RESTORE_SETTLE_MS`) and the session's rescans have found the file back, scan after scan, for a
   day as well, as the scan's last step; sooner, the file may be one a sync tool has not taken away
   yet, and the rescan shows it for that scan only. The second day counts from this device's own

@@ -8,11 +8,14 @@ import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.sameAs
+import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlin.random.Random
 
 /**
@@ -548,13 +551,15 @@ internal class Simulation(
                     .mapNotNull { it[0] }
                     .toSet()
             }
+        val back = filesBackWithTheirTrashStat()
         val unaccounted =
             fs.allFiles().filter { (path, bytes) ->
                 NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), bytes.size.toLong(), 0, false)) &&
                     bytes.isNotEmpty() &&
                     path !in livePaths &&
                     path !in duplicatePaths &&
-                    sha256Bytes(bytes) !in superseded
+                    sha256Bytes(bytes) !in superseded &&
+                    path !in back
             }
         if (unaccounted.isNotEmpty()) {
             fail(
@@ -564,6 +569,37 @@ internal class Simulation(
                     ) { "'$it' (${sha256Bytes(unaccounted.getValue(it)).take(ID)})" },
             )
         }
+    }
+
+    /**
+     * The files of trashed documents the last rescan reported back with the stat their trash took
+     * them with ([ScanReport.filesBack]): each is the user's to restore, and stays in the trash until
+     * then. A document can have several (a move and a trash on two devices at once leave a copy at
+     * each path). Each reported document must have one: this replica's fold has it in the trash with
+     * a recorded stat a file here holds its bytes with, or the report named it wrongly.
+     */
+    private fun filesBackWithTheirTrashStat(): Set<String> {
+        val (fold, reported) =
+            world.read("files back") {
+                replica.indexDb.fold() to
+                    session.ingest.lastScanReport
+                        .first()
+                        ?.filesBack
+                        .orEmpty()
+            }
+        val back =
+            fs
+                .allFiles()
+                .filter { (path, bytes) ->
+                    val docId = sha256Bytes(bytes)
+                    val recorded = fold.trashStat(docId)
+                    NpnPaths.isDocumentPath(path) && docId in reported && recorded != null &&
+                        fs.statAt(path)!!.let { FileStat(it.size, it.mtimeMillis) }.sameAs(recorded)
+                }
+        reported.firstOrNull { docId -> back.values.none { sha256Bytes(it) == docId } }?.let { docId ->
+            fail("the last scan reports ${docId.take(ID)} back, but no file holds it with its trash's stat")
+        }
+        return back.keys
     }
 
     /**

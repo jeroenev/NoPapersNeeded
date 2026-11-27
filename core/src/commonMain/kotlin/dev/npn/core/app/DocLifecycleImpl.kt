@@ -109,6 +109,11 @@ internal class DocLifecycleImpl(
         coordinator.changeLifecycle(docId) { doc ->
             if (doc == null || !LifecyclePlan.restores(doc) || !byTrash(doc)) return@changeLifecycle null
             val target = LifecyclePlan.restorePath(doc)
+            // Its bytes back where it was (a put-back that kept the mtime, or the copy a sync tool has
+            // yet to take away: either stays in the trash until restored) are taken where they are.
+            heldInPlace(listOf(target, doc.relPath), doc)?.let { file ->
+                return@changeLifecycle LifecyclePlan.restore(doc, file.relPath, entry = null, entryStat = file)
+            }
             // The file lives in trash under a hash-suffixed name; the entry that holds its bytes goes
             // back to the target, or beside it when the target is taken. Another document may hold the
             // target since the trash gave it up, so even with no copy left the row goes beside that
@@ -126,6 +131,23 @@ internal class DocLifecycleImpl(
             LifecyclePlan.restore(doc, finalPath, entry, entryStat)
         }
     }
+
+    /**
+     * The first of [paths], a document path no live row of another document names, whose file holds
+     * [doc]'s bytes, with its stat; null when none does. A file of another size than the row's is
+     * not read, unless the row has no stat (one the fold made for a trash it never saw the file of).
+     */
+    private suspend fun heldInPlace(
+        paths: List<String>,
+        doc: DocumentEntity,
+    ): FileMeta? =
+        paths.distinct().filter(NpnPaths::isDocumentPath).firstNotNullOfOrNull { path ->
+            val other = documentDao.getByRelPath(path)?.takeIf { it.docId != doc.docId && it.isLive }
+            fs.stat(path)?.takeIf { meta ->
+                other == null && !meta.isDirectory && (doc.size == 0L || meta.size == doc.size) &&
+                    fs.holds(path, doc.docId)
+            }
+        }
 
     /**
      * Whether a restore must leave [path] alone: a file is there, or a live row names it. A live row

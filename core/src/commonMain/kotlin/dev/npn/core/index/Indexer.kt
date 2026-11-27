@@ -13,6 +13,7 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TempFileSweep
+import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.PendingOp
@@ -238,7 +239,8 @@ internal class Indexer(
 
             // The reconcile writes and the fold land in one transaction, so no reader sees a row
             // before its tags and fields; the files their intents move wait until it commits.
-            var resurrected: List<Resurrected> = emptyList()
+            var returns = FoldReturns(emptyList(), emptyMap())
+            val statAt = present.associate { it.relPath to FileStat(it.size, it.mtimeMillis) }
             // Where each document with a copy was before the path work, which runs once the block is done.
             var unsettled: Map<String, String> = emptyMap()
             val plan =
@@ -247,7 +249,7 @@ internal class Indexer(
                         .withWriteTransaction {
                             reconcile(toHash, hashes, dbProjection, diskPaths, metadataState).also {
                                 _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-                                resurrected = folds.rescan(metadataState, FoldScope.FullRescan(contentAt))
+                                returns = folds.rescan(metadataState, FoldScope.FullRescan(contentAt, statAt))
                             }
                         }.also { reconciled -> unsettled = pathsOf(reconciled.duplicates) }
                 }
@@ -274,7 +276,7 @@ internal class Indexer(
             // Last: recording a return is a journal write, which must not cost the scan its
             // duplicates or its sweep if it fails. Reported even when none came back, as a return
             // the previous scan found and this one does not has left again.
-            onResurrected(resurrected)
+            onResurrected(returns.resurrected)
 
             ScanReport(
                 added = plan.added,
@@ -287,6 +289,7 @@ internal class Indexer(
                 // Every file handed to the pool counts, settled, unreadable or gone.
                 hashedCount = toHash.size,
                 durationMillis = clock.nowMillis() - started,
+                filesBack = returns.filesBack.keys,
                 pathConflicts = documentPaths.conflicts(metadataState),
                 deferred = deferred.paths,
                 retryAfterMillis = deferred.retryAfterMillis,

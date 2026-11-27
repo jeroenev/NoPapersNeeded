@@ -8,6 +8,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagEntity
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
@@ -24,6 +25,8 @@ internal sealed interface FoldScope {
      */
     class FullRescan(
         val contentAt: Map<String, String>,
+        /** The stat of every listed file, by path. */
+        val statAt: Map<String, FileStat> = emptyMap(),
     ) : FoldScope
 
     /**
@@ -128,11 +131,11 @@ internal class FoldProjection(
         fold(state, scope)
     }
 
-    /** Apply the folded effective views of every document into Room; returns the resurrected ones. */
+    /** Apply the folded effective views of every document into Room; returns what came back. */
     suspend fun rescan(
         state: FoldedState,
         scope: FoldScope.FullRescan,
-    ): List<Resurrected> = fold(state, scope)
+    ): FoldReturns = fold(state, scope)
 
     /**
      * Apply the folded effective views into Room in one pass and return resurrected docs.
@@ -162,7 +165,7 @@ internal class FoldProjection(
     private suspend fun fold(
         state: FoldedState,
         scope: FoldScope,
-    ): List<Resurrected> {
+    ): FoldReturns {
         // Every doc the fold must project: those the events touched, or for a full fold, those the
         // journal has data about plus every doc in the DB, so stale trash/delete flags get cleared.
         val journalDocs = LinkedHashSet<String>()
@@ -197,7 +200,7 @@ internal class FoldProjection(
         flushChanges(changes)
         // Drop unreferenced names unless they were explicitly created.
         tagDao.pruneUnreferenced(state.retainedTags())
-        return pass.resurrected
+        return FoldReturns(pass.resurrected, pass.filesBack)
     }
 
     /**
@@ -315,6 +318,7 @@ internal class FoldProjection(
         private val work: DocumentPathReconciler.PathWork,
     ) {
         val resurrected = ArrayList<Resurrected>()
+        val filesBack = HashMap<String, String>()
 
         /** Which document's row holds each path, as the pass found them; a resurrection checks it. */
         private val holders by lazy { preloaded.rows.values.associate { it.relPath to it.docId } }
@@ -415,12 +419,19 @@ internal class FoldProjection(
                     deleted = state.isDeleted(doc),
                     origPath = state.trashOrigPath(doc),
                     hiddenAtMillis = state.hiddenBy(doc)?.physicalMillis ?: 0L,
+                    trashStat = state.trashStat(doc),
                 )
             val preserved = scope is FoldScope.Events && doc in scope.preserveLifecycleDocs
-            val contentAt = (scope as? FoldScope.FullRescan)?.contentAt
-            return FoldLifecycle.resolve(doc, row, journal, preserved, contentAt) { it in holders }.also { lifecycle ->
-                lifecycle.resurrected?.let(resurrected::add)
-            }
+            val rescan = scope as? FoldScope.FullRescan
+            val statAt: (String) -> FileStat? = { rescan?.statAt?.get(it) }
+            val projected =
+                FoldLifecycle.resolve(doc, row, journal, preserved, rescan?.contentAt, statAt) {
+                    it in
+                        holders
+                }
+            projected.resurrected?.let(resurrected::add)
+            projected.fileBack?.let { filesBack[doc] = it }
+            return projected
         }
     }
 }

@@ -18,6 +18,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.Test
 
 /**
@@ -114,19 +115,22 @@ class DocumentRestoreTest {
             assertVisible(id)
         }
 
+    /**
+     * A trashed document's file back with another mtime than its trash took it with is no copy a sync
+     * tool has yet to take away: the rescan that finds it records the return at once.
+     */
     @Test
-    fun aTrashedFileBroughtBackLongAfterTheTrashIsRestoredForGood() =
+    fun aTrashedFileBroughtBackWithANewMtimeIsRestoredForGoodAtOnce() =
         withRig {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
             val id = rig.docId("a.pdf")
+            val stat = rig.fs.stat("a.pdf").shouldNotBeNull()
             rig.session.docLifecycle.trashDoc(id)
 
-            rig.clock.advance(2 * DAY)
             rig.writePdf("a.pdf", bytes)
-            rig.session.rescan()
-            rig.clock.advance(DAY + 1)
+            Files.setLastModifiedTime(rig.libRoot.resolve("a.pdf"), FileTime.fromMillis(stat.mtimeMillis + 60_000L))
             rig.session.rescan()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
 
@@ -154,21 +158,34 @@ class DocumentRestoreTest {
             assertVisible(id)
         }
 
+    /**
+     * One back with the stat its trash took it with may be the copy a sync tool has yet to take away:
+     * it stays in the trash, with nothing recorded, however long rescans find it.
+     */
     @Test
-    fun aTrashedFileBackRightAfterTheTrashIsShownButNotRestoredForGood() =
+    fun aTrashedFileBackWithItsTrashsStatStaysInTheTrash() =
         withRig {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
             val id = rig.docId("a.pdf")
+            val stat = rig.fs.stat("a.pdf").shouldNotBeNull()
             rig.session.docLifecycle.trashDoc(id)
             val objects = rig.journalObjectCount()
 
             rig.writePdf("a.pdf", bytes)
+            Files.setLastModifiedTime(rig.libRoot.resolve("a.pdf"), FileTime.fromMillis(stat.mtimeMillis))
+            rig.session.rescan()
+            rig.clock.advance(2 * DAY)
             rig.session.rescan()
 
             rig.journalObjectCount() shouldBe objects
-            assertVisible(id)
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .trashed
+                .shouldBeTrue()
         }
 
     /**

@@ -4,6 +4,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.trashEntries
 import dev.npn.core.fs.withNameToken
 import dev.npn.core.index.IndexRig
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.WatchedFileSystem
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.FileStat
@@ -15,6 +16,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -151,4 +153,69 @@ class TrashOwnFileTest {
                     .shouldBeTrue()
             }
         }
+
+    /**
+     * A trashed document's file copied back with the mtime its trash took it with (a file manager's
+     * copy, a backup restored) is the copy a sync tool has yet to take away as far as any device can
+     * tell: it stays in the trash for good, however long rescans see it, flagged for the user, and a
+     * restore takes that very file where it is.
+     */
+    @Test
+    fun aFileBackWithItsTrashsStatStaysInTheTrashUntilARestoreTakesItInPlace() =
+        runTest {
+            rig.writePdf("inbox/a.pdf", "put back with its mtime")
+            coordinator.rescan()
+            val doc = rig.fs.sha256("inbox/a.pdf")
+            lifecycle.trashDoc(doc)
+            val entry = rig.fs.trashEntries().single()
+            Files.copy(
+                rig.libRoot.resolve(entry.relPath),
+                rig.libRoot.resolve("inbox/a.pdf"),
+                StandardCopyOption.COPY_ATTRIBUTES,
+            )
+
+            repeat(3) {
+                coordinator.rescan().filesBack shouldBe setOf(doc)
+                rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + 1)
+            }
+            rowOf(doc).trashed.shouldBeTrue()
+
+            lifecycle.restoreDoc(doc)
+
+            rowOf(doc).let {
+                it.trashed.shouldBeFalse()
+                it.relPath shouldBe "inbox/a.pdf"
+            }
+            rig.fs.sha256("inbox/a.pdf") shouldBe doc
+            coordinator.rescan().filesBack.shouldBeEmpty()
+            rig.fs.listAllUnder("inbox").map { it.relPath } shouldBe listOf("inbox/a.pdf")
+        }
+
+    /** One copied back with a new mtime cannot be a sync tool's stale copy: the next rescan restores it. */
+    @Test
+    fun aFileBackWithANewMtimeIsRestoredByTheNextRescan() =
+        runTest {
+            rig.writePdf("a.pdf", "put back with a new mtime")
+            coordinator.rescan()
+            val doc = rig.fs.sha256("a.pdf")
+            lifecycle.trashDoc(doc)
+            val entry = rig.fs.trashEntries().single()
+            Files.copy(rig.libRoot.resolve(entry.relPath), rig.libRoot.resolve("a.pdf"))
+            Files.setLastModifiedTime(rig.libRoot.resolve("a.pdf"), FileTime.fromMillis(entry.mtimeMillis + 60_000L))
+
+            coordinator.rescan().filesBack.shouldBeEmpty()
+
+            rowOf(doc).trashed.shouldBeFalse()
+            coordinator.rescan()
+            rowOf(doc).let {
+                it.trashed.shouldBeFalse()
+                it.relPath shouldBe "a.pdf"
+            }
+        }
+
+    private suspend fun rowOf(docId: String) =
+        rig.db
+            .documentDao()
+            .getByDocId(docId)
+            .shouldNotBeNull()
 }

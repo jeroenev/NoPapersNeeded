@@ -78,6 +78,7 @@
     <string name="common_trash_delete_forever_message">Permanently delete this document? The file is removed and cannot be recovered.</string>
     <string name="common_trash_empty">Trash is empty</string>
     <string name="common_trash_was_path">was: %1$s</string>
+    <string name="common_trash_file_back">Its file is back in the folder. Restore to keep it.</string>
     <string name="common_trash_restore">Restore</string>
     <string name="common_trash_no_duplicates">No duplicates</string>
     <string name="common_trash_no_duplicates_subtitle">Every hash has one canonical path.</string>

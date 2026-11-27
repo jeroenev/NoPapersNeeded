@@ -76,6 +76,7 @@ import no_papers_needed.composeapp.generated.resources.common_trash_delete_forev
 import no_papers_needed.composeapp.generated.resources.common_trash_duplicates_tab
 import no_papers_needed.composeapp.generated.resources.common_trash_empty
 import no_papers_needed.composeapp.generated.resources.common_trash_extra_copy
+import no_papers_needed.composeapp.generated.resources.common_trash_file_back
 import no_papers_needed.composeapp.generated.resources.common_trash_maintenance_title
 import no_papers_needed.composeapp.generated.resources.common_trash_missing_from
 import no_papers_needed.composeapp.generated.resources.common_trash_missing_tab
@@ -304,6 +305,7 @@ private fun TrashTabContent(
                 Box(Modifier.weight(1f)) {
                     TrashList(
                         items = state.trashed,
+                        filesBack = state.filesBack,
                         content = content,
                         onRestore = writes::restore,
                         onDeleteForever = { onConfirm(TrashConfirm.DeleteForever(it)) },
@@ -383,6 +385,7 @@ private fun TrashTabs(
 @Composable
 private fun TrashList(
     items: List<DocListItem>,
+    filesBack: Set<String>,
     content: DocContentFacade,
     onRestore: (String) -> Unit,
     onDeleteForever: (String) -> Unit,
@@ -415,6 +418,7 @@ private fun TrashList(
                                 stringResource(Res.string.common_trash_was_path, it),
                             )
                         }
+                        if (item.doc.docId in filesBack) HelpText(stringResource(Res.string.common_trash_file_back))
                     }
                     Column {
                         TextButton(onClick = { onRestore(item.doc.docId) }) {

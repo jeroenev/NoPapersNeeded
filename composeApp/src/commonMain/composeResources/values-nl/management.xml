@@ -77,6 +77,7 @@
     <string name="common_trash_delete_forever_message">Dit document definitief verwijderen? Het bestand wordt verwijderd en kan niet worden hersteld.</string>
     <string name="common_trash_empty">De prullenbak is leeg</string>
     <string name="common_trash_was_path">was: %1$s</string>
+    <string name="common_trash_file_back">Het bestand staat weer in de map. Herstel het document om het te houden.</string>
     <string name="common_trash_restore">Herstellen</string>
     <string name="common_trash_no_duplicates">Geen duplicaten</string>
     <string name="common_trash_no_duplicates_subtitle">Elke hash heeft één canoniek pad.</string>

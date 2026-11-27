@@ -39,6 +39,8 @@ data class TrashUiState(
     val relinks: Map<String, List<RelinkCandidate>> = emptyMap(),
     /** Days before the trash empties itself; 0 means at the next cleanup. */
     val retentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
+    /** Trashed documents whose file the last scan found back in the folder, by id: a restore keeps it. */
+    val filesBack: Set<String> = emptySet(),
 )
 
 /** What the trash screen writes: restore and purge, alone or all at once, and the repairs. */
@@ -109,6 +111,7 @@ class TrashViewModel(
                         .sortedByDescending { it.score }
                         .groupBy { it.oldDocId },
                 retentionDays = retention,
+                filesBack = report?.filesBack.orEmpty(),
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 

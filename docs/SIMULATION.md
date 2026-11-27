@@ -161,7 +161,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - Its `external*` members are the outside world: an atomic write, a write in place in chunks over
   virtual time (`cp`, a scanner app), an overwrite in place or by rename, a touch (a new mtime over
   the same bytes), a delete, a move, a backup (which skips a file still being written) put back,
-  and sync-tool temporary files.
+  a trashed document's file copied back where it was, keeping its mtime or with a new one
+  (`EXT_PUT_BACK_TRASHED`), and sync-tool temporary files.
 - `SimFaults` fails any filesystem method once or N times, at any path or under a prefix, before
   the call takes effect or after it landed.
 - `SimNames` is the one place the outside world's names come from, derived from `NpnPaths` and
@@ -266,10 +267,13 @@ would leave another device's trash unannounced, and the file still at its path w
 window as one come back), every replica rescans its folder, as the app does on Android at every
 resume (on storage no watch reports on, nothing else would before the day ends), and then a virtual
 day (`RESTORE_SETTLE_MS`) passes, so every trash, and every return those rescans found, is older than
-the restore settle window by the rescans that follow: the app records the return of a trashed document's own bytes as a restore only once
-that window has passed (`JournalCoordinator.recordRestores`), counted both from the trash and from
-when the session's rescans first found the file back, and before it a rescan shows such a file for
-that scan only. The day runs everything time brings (the 15-minute tick, the queues'
+the restore settle window by the rescans that follow: where no trash stat decides (a trash that
+moved nothing, a delete for good), the app records the return of a document's own bytes as a restore
+only once that window has passed (`JournalCoordinator.recordRestores`), counted both from the trash
+and from when the session's rescans first found the file back, and before it a rescan shows such a
+file for that scan only. A trashed document's bytes back with the stat its trash recorded stay in
+the trash, and the last rescan must report each such file (`ScanReport.filesBack`): the at-rest
+check that every settled PDF is a document allows exactly those. The day runs everything time brings (the 15-minute tick, the queues'
 backoffs, and a trash purge after any rescan the watch starts). Then 20 virtual minutes pass and
 every replica rescans. Half the time, and always at the end, that comes after a full sync, round
 after round until a round leaves every folder equal (through the cloud: until a pass round after
