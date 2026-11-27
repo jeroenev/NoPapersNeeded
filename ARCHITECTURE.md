@@ -493,7 +493,10 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   newer than any restore, which nothing brings back.
 - A trash moves the file at the document's path only while it is the document's own (stored size
   and mtime, else its hash). A file written over it since the last rescan stays, and the trash is
-  recorded as for a document whose file is gone.
+  recorded as for a document whose file is gone. One written over between that check and the move
+  goes back once moved; when a process writing it in place has made a file at the path again by
+  then, it goes beside it under a recovery name (`NpnPaths.Temp.recoveryPath`), never staying in
+  the trash under the document's name, where no restore or purge takes it.
 - Restore and delete for good take a trash entry as the document's only when it hashes to the
   document: the hash prefix in its name (`NpnPaths.trashPath`) only narrows the search
   (`TrashOps.copiesOf`). A restore lists and hashes the entries before the lock and, under it,

@@ -15,6 +15,7 @@ import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -681,15 +682,18 @@ internal class JournalCoordinator(
 
     /**
      * Put back a file a lifecycle change of [docId] moved that turned out not to be its document's.
-     * When another file took its old path meanwhile, it stays where the move left it, and the log
-     * says where.
+     * When another file took its old path meanwhile (a process writing it in place recreates it), it
+     * goes beside that path under a recovery name instead ([Indexer.putBackForeign]): left where the
+     * move put it, another file's bytes would sit in the trash under [docId]'s name, where no restore
+     * or purge ever takes them. A failure is logged, and says where the file stayed.
      */
     private suspend fun putBackForeign(
         docId: String,
         move: FileMove,
     ) {
-        log.runLogged("Putting back ${move.from}, which was not the file of $docId when moved") {
-            indexer.moveFile(move.to, move.from)
+        log.runLogged("Putting back ${move.from}, which was not the file of $docId when moved, from ${move.to}") {
+            val at = indexer.putBackForeign(move.from, move.to)
+            if (at != move.from) log.warn("${move.from} was taken again before its file could go back; it is at $at")
         }
     }
 

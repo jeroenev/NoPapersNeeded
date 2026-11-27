@@ -66,7 +66,7 @@ internal class Indexer(
     private val log: NpnLog = NpnLog.None,
     /** Where files are hashed, [HASH_CONCURRENCY] at a time. */
     private val hashing: CoroutineDispatcher = Dispatchers.Default,
-    ids: IdSource = IdSource.Random,
+    private val ids: IdSource = IdSource.Random,
 ) {
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
 
@@ -108,6 +108,25 @@ internal class Indexer(
         from: String,
         to: String,
     ) = fs.move(from, to)
+
+    /**
+     * Move a file a lifecycle change moved from [from] to [to], which turned out not to be its
+     * document's, back to [from]; or, when another file is there now, to a recovery name beside it
+     * ([NpnPaths.Temp.recoveryPath]), an ordinary name the next rescan indexes. Returns where it went.
+     */
+    suspend fun putBackForeign(
+        from: String,
+        to: String,
+    ): String {
+        if (fs.stat(from) == null) {
+            val back = runCatchingCancellable { fs.move(to, from) }
+            // A move that reports a failure may still have landed.
+            if (back.isSuccess || fs.stat(to) == null) return from
+        }
+        val aside = NpnPaths.Temp.recoveryPath(beside = from, nonce = ids.next())
+        fs.move(to, aside)
+        return aside
+    }
 
     /**
      * Whether a move from [from] to [to] that failed took the file all the same: it is at [to] and
