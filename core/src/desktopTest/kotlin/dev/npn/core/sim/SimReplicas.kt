@@ -558,19 +558,26 @@ internal class SyncSimulation(
 
     /**
      * A full sync through the cloud: every replica passes in turn and settles, round after round,
-     * until a round in which no pass changed anything. A remote that fails no call then (faults are
-     * off while the simulation comes to rest) leaves nothing to keep them apart.
+     * until a round after the replicas settled in which no pass changed anything. Settling rescans,
+     * and a rescan finds what no pass has carried yet (a file another process wrote where no watcher
+     * reports it, which no step rescanned since), so only a quiet round after it ends the sync; the
+     * checks at rest then read the indexes that settle left, which the quiet round changed nothing
+     * in. A remote that fails no call then (faults are off while the simulation comes to rest)
+     * leaves nothing to keep them apart.
      */
     private fun cloudFlush() {
-        var rounds = 0
+        var round = 0
+        var busy = 0
+        var settled = false
         while (true) {
-            val quiet = cloudRound(rounds + 1)
+            val quiet = cloudRound(++round)
+            if (quiet && settled) break
             present.forEach { it.sim.settle() }
-            if (quiet) break
-            if (++rounds >= CLOUD_SYNC_ROUNDS) {
+            settled = true
+            if (!quiet && ++busy >= CLOUD_SYNC_ROUNDS) {
                 fail(
                     members[0],
-                    "the replicas do not converge through the cloud: after $rounds rounds, a pass still " +
+                    "the replicas do not converge through the cloud: after $busy rounds, a pass still " +
                         "changes something (the trace has each round's passes)",
                 )
             }

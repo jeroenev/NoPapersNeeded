@@ -128,7 +128,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   a first pass before anything is added on it; a step is then a replica's pass run to its end, or
   one started beside whatever comes next (other passes, its own session's work, a crash), or time
   for passes under way. A full sync is rounds of a pass on every replica and settling, until a round
-  changes nothing; the remote's faults are off at rest. What a pass installs from the remote counts
+  after the replicas settled changes nothing: settling rescans, which may find a file no pass has
+  carried yet (one another process wrote on storage no watcher reports), and only the round after it
+  carries that. The remote's faults are off at rest. What a pass installs from the remote counts
   as delivered, not as the app's own write, and a copy on the remote keeps a document's last copy.
 - On request (`-Dnpn.sim.bisync=<percent>`, drawn for that share of the seeds without a cloud), the
   folder sync tool is rclone bisync through one remote instead (`SimBisync`, behind the same
@@ -239,8 +241,9 @@ when the session's rescans first found the file back, and before it a rescan sho
 that scan only. The day runs everything time brings (the 15-minute tick, the queues'
 backoffs, and a trash purge after any rescan the watch starts). Then 20 virtual minutes pass and
 every replica rescans. Half the time, and always at the end, that comes after a full sync, round
-after round until a round leaves every folder equal; replicas that keep changing their folders
-after six rounds do not converge, which fails the run. Then:
+after round until a round leaves every folder equal (through the cloud: until a pass round after
+settling changes nothing); replicas that keep changing their folders after six rounds (through the
+cloud, eight) do not converge, which fails the run. Then:
 
 - No replica blocks writes.
 - On each replica: every live document's file holds its hash; every live row stores its file's

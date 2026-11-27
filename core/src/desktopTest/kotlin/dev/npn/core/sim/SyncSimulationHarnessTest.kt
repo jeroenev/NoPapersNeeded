@@ -96,6 +96,57 @@ class SyncSimulationHarnessTest {
             }
         }
 
+    /**
+     * A cloud seed's full sync ends only on a round of passes that follows the replicas settling: the
+     * settle's rescan may find what no pass has carried yet, here a file another process wrote after
+     * the last step on storage with no watcher, and the next round carries it. A full sync that ended
+     * on the round before compared the replicas before they converged (seed 2000279 at 68e504f9).
+     */
+    @Test
+    fun aFileOnlyTheSettlingRescanFindsIsSyncedBeforeTheReplicasAreCompared() =
+        runTest {
+            val base = config()
+            val sync =
+                SyncConfig.forSeed(base).let {
+                    it.copy(
+                        profiles = List(it.replicas) { StorageProfile.SAF },
+                        joinsAt = List(it.replicas) { 0 },
+                        cloud =
+                            CloudOptions(
+                                caseInsensitive = false,
+                                reportsHashes = false,
+                                failPercent = 0,
+                                reportsDropboxHash = false,
+                            ),
+                        bisync = null,
+                    )
+                }
+            val found = SimPdf.bytes("found at rest", "x", BAKED_SIZE + 3)
+            val simulation =
+                SyncSimulation(testScheduler, base, { step ->
+                    if (step == STEPS) {
+                        // Everything up to here synced, so the full sync's first round after the day
+                        // finds nothing to do and only the settle's rescan finds the file.
+                        repeat(SYNC_ROUNDS) {
+                            members.forEach { member ->
+                                member.sim.letThrough()
+                                world.read("${member.name} rescans and syncs") {
+                                    member.replica.session!!.rescan()
+                                    member.replica.session!!
+                                        .sync
+                                        .syncNow()
+                                }
+                            }
+                        }
+                        members[0].fs.externalWriteAtomic("found at rest.pdf", found)
+                    }
+                }, sync)
+            simulation.run()
+            simulation.members.forEach { member ->
+                member.fs.bytesAt("found at rest.pdf")?.let(::sha256Bytes) shouldBe sha256Bytes(found)
+            }
+        }
+
     @Test
     fun twoVersionsOfAWriteOnceNameFailTheRun() =
         runTest {
@@ -332,5 +383,6 @@ class SyncSimulationHarnessTest {
         const val JOIN_STEPS = 60
         const val JOIN_AT = 20
         const val HASH = 64
+        const val SYNC_ROUNDS = 3
     }
 }
