@@ -487,7 +487,10 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
 - `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are last-writer-wins pairs by HLC; an
   undelete also takes the document out of the trash.
 - Trash, restore and delete for good read the row, check the file and move it under the writer lock,
-  in one step with their journal write, so no rescan or storage-path move lands in between.
+  in one step with their journal write, so no rescan or storage-path move lands in between. A
+  refused commit puts the file back, and so does a move that took the file and then failed: a
+  trash's file left in the trash with no event is a document missing with its bytes in an entry
+  newer than any restore, which nothing brings back.
 - A trash moves the file at the document's path only while it is the document's own (stored size
   and mtime, else its hash). A file written over it since the last rescan stays, and the trash is
   recorded as for a document whose file is gone.

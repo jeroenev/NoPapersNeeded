@@ -635,7 +635,17 @@ internal class JournalCoordinator(
                 var published: PublishedTransaction? = null
                 try {
                     change.move?.let { move ->
-                        indexer.moveFile(move.from, move.to)
+                        runCatchingCancellable { indexer.moveFile(move.from, move.to) }.onFailure { failure ->
+                            // A move can land and still fail (a provider that times out after acting):
+                            // one that took the file is put back below, as for a refused commit. Left
+                            // in the trash with no event, it would leave the document missing with
+                            // its bytes where no restore looks for them.
+                            fileMoved =
+                                log.runLogged("Checking where the failed move of $id left its file") {
+                                    indexer.moveLanded(move.from, move.to)
+                                } == true
+                            throw failure
+                        }
                         fileMoved = true
                         if (change.movedHolds?.invoke(move.to) == false) {
                             fileMoved = false
@@ -647,8 +657,8 @@ internal class JournalCoordinator(
                     published = writeTransaction(change.ops)
                 } finally {
                     @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
-                    if (published == null && moved) {
-                        log.runLogged("Putting back the row of $id") { indexer.putBack(docs, before) }
+                    if (published == null) {
+                        if (moved) log.runLogged("Putting back the row of $id") { indexer.putBack(docs, before) }
                         change.move?.takeIf { fileMoved }?.let { move ->
                             log.runLogged("Moving the file of $id back") { indexer.moveFile(move.to, move.from) }
                         }

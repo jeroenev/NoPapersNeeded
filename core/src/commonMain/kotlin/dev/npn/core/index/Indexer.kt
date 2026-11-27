@@ -109,6 +109,15 @@ internal class Indexer(
         to: String,
     ) = fs.move(from, to)
 
+    /**
+     * Whether a move from [from] to [to] that failed took the file all the same: it is at [to] and
+     * gone from [from]. A move never replaces, so a file at [to] is the one it moved.
+     */
+    suspend fun moveLanded(
+        from: String,
+        to: String,
+    ): Boolean = fs.stat(to) != null && fs.stat(from) == null
+
     /** Where the documents [copies] name are, by id. */
     private suspend fun pathsOf(copies: List<DuplicateReport>): Map<String, String> =
         if (copies.isEmpty()) {
