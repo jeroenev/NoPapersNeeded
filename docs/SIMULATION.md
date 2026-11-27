@@ -227,10 +227,10 @@ After every step, on every replica:
   record's hash, vouches only for journal objects that replica published from a transaction of its
   own, and claims another device's chain only through records whose objects are all in its folder
   (`SimPublications`). They are write-once, and under the writing device's own name.
-- A trash records what it moved: each `doc-trash` a replica publishes carries the size and mtime of
-  the file its trash moved into `.npn/trash/` (a stat the app moved that document's bytes there
-  with), and none when it moved none. The app's moves into the trash still waiting for their event
-  are forgotten at a fault, a crash or a close, since a trash cut short publishes nothing.
+- A trash records what it moved: a stat a `doc-trash` a replica publishes carries is one the app moved
+  that document's bytes into `.npn/trash/` with. (That a trash which moved a file records it is the
+  unit tests' to check: cloud sync's moves into the trash, carrying another device's trash, are the
+  app's moves too, and a trash of the same document then rightly records none.)
 - Index structure: every live row is at a document path, and a row waiting at a sentinel waits at
   its own (`missingSentinel`). OCR queue rows stay in their declared states, and neither their
   attempts nor the enrichment queue's go negative.

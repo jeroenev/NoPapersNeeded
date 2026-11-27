@@ -60,6 +60,19 @@ class AckRecordsTest {
         }
 
     /**
+     * A record of its own that cannot be read just now holds the next one back: written under the
+     * number after it, never under its name.
+     */
+    @Test
+    fun anUnreadableRecordOfItsOwnHoldsTheNextBack() =
+        indexTest { rig ->
+            rig.fs.writeBytesOnce(AckRecords.path(SELF, 1), "not a record".encodeToByteArray())
+
+            acks(rig, AuthoredObjects(rig.deviceDb.keyValueDao())).publish().shouldBeNull()
+            rig.fs.readBytes(AckRecords.path(SELF, 1)).decodeToString() shouldBe "not a record"
+        }
+
+    /**
      * Another device's chain counts as far as its records link and every object they vouch for is
      * applied here; a record that does not link to the one before ends it.
      */

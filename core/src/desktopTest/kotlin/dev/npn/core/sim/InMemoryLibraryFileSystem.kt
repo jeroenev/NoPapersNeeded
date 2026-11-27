@@ -159,7 +159,7 @@ class InMemoryLibraryFileSystem(
         effect: () -> T,
     ): T {
         latency.pause()
-        faultChecked(method, path, SimFaults.Point.BEFORE)
+        faults.check(method, path, SimFaults.Point.BEFORE)
         actor = method
         val result =
             try {
@@ -167,17 +167,10 @@ class InMemoryLibraryFileSystem(
             } finally {
                 actor = null
             }
-        faultChecked(method, path, SimFaults.Point.AFTER)
+        faults.check(method, path, SimFaults.Point.AFTER)
         latency.pause()
         return result
     }
-
-    /** [SimFaults.check]; a fault it injects cuts a trash short ([SimPublications.forget]). */
-    private fun faultChecked(
-        method: FsMethod,
-        path: String,
-        point: SimFaults.Point,
-    ) = runCatching { faults.check(method, path, point) }.onFailure { publications.forget() }.getOrThrow()
 
     override suspend fun listAllIndexable(): List<FileMeta> =
         io(FsMethod.LIST_INDEXABLE, "") {

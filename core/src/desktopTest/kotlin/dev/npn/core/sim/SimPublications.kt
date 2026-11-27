@@ -13,8 +13,10 @@ import dev.npn.core.util.NpnJson
 
 /**
  * What the app publishes in one folder, checked as it lands:
- * - each `doc-trash` records the stat of the file its trash moved into `.npn/trash/`
- *   (`JournalOp.DocTrash.stat`), and none when it moved none;
+ * - each `doc-trash` records, when it records one, a stat the app moved the document's bytes into
+ *   `.npn/trash/` with (`JournalOp.DocTrash.stat`). That one that moved a file records it is the
+ *   unit tests': here, cloud sync's own moves into the trash, carrying another device's trash, are
+ *   the app's moves too, and a trash of the same document here then rightly records none;
  * - each acknowledgment record (`AckRecords`) links to its device's previous one, vouches only for
  *   journal objects this folder's app published itself, and claims of another device's chain only
  *   records whose objects are all in this folder.
@@ -29,23 +31,6 @@ class SimPublications(
     /** The journal objects, by hash, this folder's app published from a transaction it made. */
     private val ownObjects = HashSet<String>()
 
-    /** A file the app moved into the trash: its bytes' hash, and the size and mtime the move kept. */
-    private class TrashMove(
-        val hash: String,
-        val size: Long,
-        val mtime: Long,
-    )
-
-    /**
-     * The app's moves into the trash whose `doc-trash` this folder has not published yet, by the
-     * trash path each put its file at. A trash moves the file, then publishes its event under the
-     * writer lock, so the next journal object the app publishes names it. Forgotten at every journal
-     * object, at an injected fault and at a crash or close ([forget]): a trash cut short leaves its
-     * file in the trash and publishes nothing, and a later trash of the document, which moves nothing,
-     * must not answer for it.
-     */
-    private val pending = HashMap<String, TrashMove>()
-
     /** Every size and mtime the app moved each document's bytes into the trash with, by their hash. */
     private val trashedStats = HashMap<String, MutableSet<Pair<Long, Long>>>()
 
@@ -59,9 +44,6 @@ class SimPublications(
     /** Where a `doc-trash` the app published does not record the stat of the file its trash moved. */
     val violations = ArrayList<String>()
 
-    /** The process that made the pending trash moves ended (a crash or a close), or a fault cut one short. */
-    fun forget() = pending.clear()
-
     /** The app wrote the file at [path] itself. */
     fun wrote(path: String) {
         written += path
@@ -69,7 +51,6 @@ class SimPublications(
 
     /** The file at [path] left it: moved away or removed. */
     fun left(path: String) {
-        pending.remove(path)
         written.remove(path)
     }
 
@@ -81,17 +62,14 @@ class SimPublications(
         mtime: Long,
     ) {
         if (from.startsWith(TRASH_PREFIX) || !to.startsWith(TRASH_PREFIX) || NpnPaths.Temp.kindOf(to) != null) return
-        val move = TrashMove(sha256Bytes(bytes), bytes.size.toLong(), mtime)
-        pending[to] = move
-        trashedStats.getOrPut(move.hash) { HashSet() } += move.size to move.mtime
+        trashedStats.getOrPut(sha256Bytes(bytes)) { HashSet() } += bytes.size.toLong() to mtime
     }
 
     /**
      * [bytes], staged at [staging], were published at [path]. When that is a journal object of a
      * transaction the app made (it wrote the staging file itself; one a cloud sync brought is another
      * device's), each `doc-trash` in it records a stat the app moved the document's bytes into the
-     * trash with, or none, and a document whose bytes a pending move put in the trash, still there,
-     * has its trash record one.
+     * trash with, or none.
      */
     fun published(
         staging: String,
@@ -105,7 +83,6 @@ class SimPublications(
             ownObjects += sha256Bytes(bytes)
             trashesIn(bytes).forEach { (doc, trash) -> check(path, doc, trash) }
         }
-        pending.clear()
     }
 
     /** The acknowledgment record [bytes] the app published at [path]: its link, what it vouches for, what it claims. */
@@ -154,25 +131,10 @@ class SimPublications(
         doc: String,
         trash: JournalOp.DocTrash,
     ) {
-        val stat = trash.stat
-        val moves =
-            pending.filter { (at, move) -> move.hash == doc && bytesAt(at)?.let(::sha256Bytes) == doc }
-        val problem =
-            when {
-                stat != null && (stat.size to stat.mtimeMillis) !in trashedStats[doc].orEmpty() -> {
-                    "records size ${stat.size}, mtime ${stat.mtimeMillis}, which no move of its bytes into the " +
-                        "trash had (${trashedStats[doc].orEmpty()})"
-                }
-
-                stat == null && moves.isNotEmpty() -> {
-                    "records no stat, though the app moved its file to ${moves.keys} and it is still there"
-                }
-
-                else -> {
-                    null
-                }
-            }
-        problem?.let { violations += "the doc-trash of ${doc.take(ID)} in '$path' $it" }
+        val stat = trash.stat ?: return
+        if ((stat.size to stat.mtimeMillis) in trashedStats[doc].orEmpty()) return
+        violations += "the doc-trash of ${doc.take(ID)} in '$path' records size ${stat.size}, mtime " +
+            "${stat.mtimeMillis}, which no move of its bytes into the trash had (${trashedStats[doc].orEmpty()})"
     }
 
     /** Each `doc-trash` in a journal object's [bytes], with its document. */

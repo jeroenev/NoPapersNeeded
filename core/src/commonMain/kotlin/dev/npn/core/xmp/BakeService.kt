@@ -166,7 +166,9 @@ internal class BakeService(
             }.getOrDefault(false)
         if (!verified) {
             // Left behind, the next bake of this document removes it first.
-            log.runLogged("Removing the unverified bake of ${sensitive(norm, DOCUMENT)}") { fs.delete(tmpPath) }
+            log.runLogged(
+                "Removing the unverified bake of ${sensitive(norm, DOCUMENT)}",
+            ) { setAsideLeftover(norm, tmpPath) }
             throw BakeRefusedException("Bake verification failed for $norm; original left untouched")
         }
         val newSha = sha256Bytes(bakedBytes)
@@ -175,7 +177,7 @@ internal class BakeService(
             // Only the file that was read goes: same size and mtime as then.
             if (fs.stat(norm) != read) {
                 log.runLogged("Removing the bake of ${sensitive(norm, DOCUMENT)}, written over since it was read") {
-                    fs.delete(tmpPath)
+                    setAsideLeftover(norm, tmpPath)
                 }
                 return@withContext null
             }
@@ -215,14 +217,15 @@ internal class BakeService(
     }
 
     /**
-     * Clear the temporary file [tmpPath] an earlier bake at [norm] left: one interrupted or undone
-     * here, or another device's that a sync tool carried here, of this document or of another one
-     * that had this path then. A bake undone after its relink landed parks the baked bytes there,
-     * and they may be the only copy of the document they are, which the library shows: such a file
-     * goes aside under a recovery name beside [norm], an ordinary one the next rescan indexes as that
-     * document's file (seeds 4230199 and 4240158). Any other is a spare (a failed bake's output that
-     * no relink names, or bytes the document's own file holds) and is deleted, so nothing the library
-     * does not show turns up as a document.
+     * Clear the temporary file [tmpPath] of a bake at [norm]: this bake's own, which it gives up, or
+     * one an earlier bake left (interrupted or undone here, or another device's that a sync tool
+     * carried here), of this document or of another one that had this path then. Its bytes may be the
+     * only copy of a document the library shows: a bake undone after its relink landed parks them
+     * there (seeds 4230199 and 4240158), and another device's bake of the same document can make the
+     * same bytes and relink them (seed 5200390). Such a file goes aside under a recovery name beside
+     * [norm], an ordinary one the next rescan indexes as that document's file. Any other is a spare (a
+     * failed bake's output that no relink names, or bytes the document's own file holds) and is
+     * deleted, so nothing the library does not show turns up as a document.
      */
     private suspend fun setAsideLeftover(
         norm: String,
@@ -268,7 +271,7 @@ internal class BakeService(
             fs.move(aside, norm)
         }
         log.runLogged("Removing the bake of ${sensitive(norm, DOCUMENT)}, written over since it was read") {
-            fs.delete(tmpPath)
+            setAsideLeftover(norm, tmpPath)
         }
     }
 
@@ -355,7 +358,7 @@ internal class BakeService(
             // Only while it is still there: another hand that replaced it since may have made the
             // baked bytes something else's last copy (a relink of them that landed before the failure).
             log.runLogged("Removing the baked bytes of ${sensitive(norm, DOCUMENT)} after its bake was undone") {
-                if (fs.exists(tmpPath) && normHolds()) fs.delete(tmpPath)
+                if (fs.exists(tmpPath) && normHolds()) setAsideLeftover(norm, tmpPath)
                 // The original is back at its name: the one left aside is an extra copy of it.
                 gate.reap(aside, oldSha, DeleteAuthority.ExtraCopy(norm))
             }

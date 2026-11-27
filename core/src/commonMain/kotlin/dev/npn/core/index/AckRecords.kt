@@ -94,8 +94,15 @@ internal class AckRecords(
      */
     suspend fun publish(): AckRecord? {
         val chains = chains()
-        val own = chains[deviceId].orEmpty()
-        val last = own.lastOrNull()
+        // Numbered from the files there, not from what parsed: a record of its own that cannot be read
+        // just now (a read failure) is still there, and a new one under its name would be refused.
+        val ownTop =
+            fs
+                .listAllUnder("${NpnPaths.ACKS_DIR}/$deviceId")
+                .filter { !it.isDirectory && it.name.endsWith(JSON) }
+                .mapNotNull { it.name.removeSuffix(JSON).toLongOrNull() }
+                .maxOrNull()
+        val last = ownTop?.let { n -> record(path(deviceId, n)) ?: return null }
         val pending = authored.pending()
         val (published, never) = pending.partition { fs.exists(JournalPaths.objectPath(it)) }
         val applied = appliedObjects()
@@ -115,7 +122,7 @@ internal class AckRecords(
         val record =
             AckRecord(
                 device = deviceId,
-                n = (last?.first?.n ?: 0L) + 1,
+                n = (ownTop ?: 0L) + 1,
                 prev = last?.second,
                 atMillis = now,
                 authored = published,
@@ -177,7 +184,7 @@ internal class AckRecords(
                 .filter { !it.isDirectory && NpnPaths.Temp.kindOf(it.relPath) == null && it.name.endsWith(JSON) }
         val records =
             listed.mapNotNull { meta ->
-                (read[meta.relPath] ?: parse(meta.relPath)?.also { read[meta.relPath] = it })?.takeIf { (record, _) ->
+                record(meta.relPath)?.takeIf { (record, _) ->
                     meta.relPath == path(record.device, record.n)
                 }
             }
@@ -206,6 +213,10 @@ internal class AckRecords(
         }
         return out
     }
+
+    /** The record at [path] with the hash of its bytes, read once it parses; null while it cannot be read or parsed. */
+    private suspend fun record(path: String): Pair<AckRecord, String>? =
+        read[path] ?: parse(path)?.also { read[path] = it }
 
     /** The record at [path] with the hash of its bytes, or null for one that cannot be read or parsed (yet). */
     private suspend fun parse(path: String): Pair<AckRecord, String>? {
