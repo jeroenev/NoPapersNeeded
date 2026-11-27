@@ -19,6 +19,7 @@ import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import dev.npn.core.watch.WatchedFolderImporter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -62,6 +63,7 @@ enum class OpKind(
     // The app's content operations: bake in place, multi-page imports and split, and the relink of
     // a missing document to other bytes.
     BAKE(4),
+    BAKE_RESCANNED(1),
     IMPORT_MULTIPAGE(3),
     SPLIT(4),
     SPLIT_SEEN_FAILING(1),
@@ -244,6 +246,7 @@ internal class SimGenerator(
             OpKind.RESCAN -> rescan()
             OpKind.OCR_COMPLETE -> ocrComplete()
             OpKind.BAKE -> s.live.pickOrNull()?.let(::bake)
+            OpKind.BAKE_RESCANNED -> s.live.pickOrNull()?.let { bakeRescanned(sim, it, bake(it)) }
             OpKind.IMPORT_MULTIPAGE -> importMultipage()
             OpKind.SPLIT -> splitAny(s)
             OpKind.SPLIT_SEEN_FAILING -> splitAny(s)?.let { splitSeenFailing(random, sim, syncScan, it) }
@@ -972,6 +975,46 @@ private fun rescan() =
     }
 
 private val EMPTY_TAGS = List(3) { "empty-$it" }
+
+/**
+ * [bake] of [doc], whose move of the original aside lands but reports a failure, so the bake puts
+ * it back, while the app rescans back to back, as its watcher does after another change in the
+ * folder: a rescan that lists the original under its recovery name sees the document there, and
+ * must leave the file to the bake rather than move it on to the document's path meanwhile.
+ */
+private fun bakeRescanned(
+    sim: Simulation,
+    doc: SimDoc,
+    bake: Planned.Act,
+): Planned.Group {
+    val folder = NpnPaths.parentDir(doc.relPath)
+    val aside = (if (folder.isEmpty()) "" else "$folder/") + NpnPaths.Temp.RECOVERY_PREFIX
+    val rule = SimFaults.Rule(FsMethod.MOVE, aside, SimFaults.Point.AFTER, times = 1)
+    val fault =
+        Planned.Control("arm fault $rule", instant = true) {
+            sim.fs.faults.arm(rule)
+            "armed"
+        }
+    val baking = CompletableDeferred<Unit>()
+    val baked =
+        Planned.Act(bake.text) { session ->
+            try {
+                bake.body(session)
+            } finally {
+                baking.complete(Unit)
+            }
+        }
+    val rescans =
+        Planned.Act("rescan until the bake ends") { session ->
+            var count = 0
+            while (!baking.isCompleted) {
+                session.rescan()
+                count++
+            }
+            "$count rescan(s)"
+        }
+    return Planned.Group(listOf(baked, rescans), listOf(0L to fault))
+}
 
 /**
  * [split], whose last step, the trash of its original, fails, so it takes its parts back, while the

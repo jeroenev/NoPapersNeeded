@@ -187,7 +187,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   by the real `WatchedFolderImporter`) and in-memory thumbnails.
 - `SimGenerator` picks an `OpKind` by weight, from one seeded stream per replica: the app's writes
   through the facets (a user's change to a seeded field among them: relabelled or removed), rescans,
-  OCR completions, bake in place, multi-page imports and split (also one whose trash of the
+  OCR completions, bake in place (also one whose move of the original aside lands but reports a
+  failure while the app rescans back to back, so a rescan can list the original under its recovery
+  name while the bake puts it back), multi-page imports and split (also one whose trash of the
   original fails while the sync tool scans the replica part-way, so a part it takes back may be on
   the other devices already), the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
