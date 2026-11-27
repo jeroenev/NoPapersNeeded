@@ -4,6 +4,8 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DuplicateDao
 import dev.npn.core.db.isLive
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.hasStoredStat
@@ -22,6 +24,8 @@ internal class DuplicateResolver(
      */
     private val serialize: suspend (suspend () -> Unit) -> Unit,
 ) {
+    private val gate = DeleteGate(fs)
+
     /**
      * Resolve an external duplicate recorded at [extraRelPath] for [docId]: delete the extra copy
      * and its duplicates row, keeping the document's own file.
@@ -42,7 +46,11 @@ internal class DuplicateResolver(
         val copy = copyOf(docId, extraRelPath)
         serialize {
             val row = documentDao.getByDocId(docId)
-            if (row != null && copy != null && isExtraCopy(row, extraRelPath, copy)) fs.delete(extraRelPath)
+            if (row != null && copy != null && isExtraCopy(row, extraRelPath, copy)) {
+                val ownStat =
+                    FileMeta(row.relPath, row.fileName, size = row.size, mtimeMillis = row.mtime, isDirectory = false)
+                gate.reap(extraRelPath, docId, DeleteAuthority.ExtraCopy(row.relPath, ownStat), copy)
+            }
             duplicateDao.delete(docId, extraRelPath)
         }
     }

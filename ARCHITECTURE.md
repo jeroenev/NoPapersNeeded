@@ -484,6 +484,16 @@ Kept by `ImportService`:
 - A file is moved, trashed or deleted as a document's only while it holds the document's bytes by
   the same proof (`holdsDocument`) or a hash; another file at the document's path is left for the
   next rescan.
+- Every delete of a file holding a document's bytes goes through `DeleteGate.reap`, by a
+  `DeleteAuthority` it checks when it acts: the journal has the document deleted for good
+  (`Tombstone`: a delete for good, an import taken back, cloud sync's copy of one), in the trash
+  (`Trash`: the purge), or superseded by a relink (`Superseded`: a bake's original); or another
+  file, verified, holds the same bytes (`ExtraCopy`: a duplicate's removal, a returned document's
+  trash copies). The facts come from `LockedJournal` under the writer lock, or a fold the caller
+  holds (`FoldedState.facts`). A sync tool carries a delete to every device, so a delete a device
+  inferred from its own view alone is how a library loses its last copy; the simulation fails any
+  delete of a folder's last copy of a document that its journal gives no fact for. Temporary files
+  that hold no document are not deleted through it.
 
 ### 6.3 Trash, restore and delete for good
 

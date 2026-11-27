@@ -226,27 +226,34 @@ class MutableClock(
 
 /**
  * [ImportService]'s serialize where no coordinator holds a lock: each step runs at once, against a
- * journal that holds no relink and hides no document.
+ * journal that holds no relink and hides no document but one it was told was taken back. Each read
+ * of it is a journal of its own.
  */
-internal val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit = { step ->
-    step(
-        object : LockedJournal {
-            override suspend fun successorOf(docId: String): String = docId
+internal val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit
+    get() {
+        val takenBack = HashSet<String>()
+        return { step -> step(takingBack(takenBack)) }
+    }
 
-            override suspend fun isDeleted(docId: String): Boolean = false
+/** The journal of [unserialized], which has deleted the documents in [takenBack] and no other. */
+private fun takingBack(takenBack: MutableSet<String>): LockedJournal =
+    object : LockedJournal {
+        override suspend fun successorOf(docId: String): String = docId
 
-            override suspend fun isTrashed(docId: String): Boolean = false
+        override suspend fun isDeleted(docId: String): Boolean = docId in takenBack
 
-            override suspend fun isCurrent(docId: String): Boolean = true
+        override suspend fun isTrashed(docId: String): Boolean = false
 
-            override suspend fun restoreReturned(
-                docId: String,
-                relPath: String,
-            ): Boolean = false
+        override suspend fun isCurrent(docId: String): Boolean = true
 
-            override suspend fun recordTakenBack(docId: String) = Unit
+        override suspend fun restoreReturned(
+            docId: String,
+            relPath: String,
+        ): Boolean = false
 
-            override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
-        },
-    )
-}
+        override suspend fun recordTakenBack(docId: String) {
+            takenBack += docId
+        }
+
+        override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
+    }

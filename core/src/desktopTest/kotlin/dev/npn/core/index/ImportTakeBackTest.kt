@@ -142,8 +142,9 @@ class ImportTakeBackTest {
         }
 
     /** An import service over this rig whose journal answers [restoreReturned] as given. */
-    private fun importsOver(restoreReturned: suspend (docId: String, relPath: String) -> Boolean) =
-        ImportService(
+    private fun importsOver(restoreReturned: suspend (docId: String, relPath: String) -> Boolean): ImportService {
+        val takenBack = HashSet<String>()
+        return ImportService(
             rig.fs,
             rig.db,
             rig.deviceDb.ocrQueueDao(),
@@ -153,7 +154,7 @@ class ImportTakeBackTest {
                     object : LockedJournal {
                         override suspend fun successorOf(docId: String): String = docId
 
-                        override suspend fun isDeleted(docId: String): Boolean = false
+                        override suspend fun isDeleted(docId: String): Boolean = docId in takenBack
 
                         override suspend fun isTrashed(docId: String): Boolean = false
 
@@ -164,13 +165,16 @@ class ImportTakeBackTest {
                             relPath: String,
                         ): Boolean = restoreReturned(docId, relPath)
 
-                        override suspend fun recordTakenBack(docId: String) = Unit
+                        override suspend fun recordTakenBack(docId: String) {
+                            takenBack += docId
+                        }
 
                         override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
                     },
                 )
             },
         )
+    }
 
     /** Trash the document of [content] at [relPath], its file into the trash, as this device does; returns its id. */
     private suspend fun trashed(

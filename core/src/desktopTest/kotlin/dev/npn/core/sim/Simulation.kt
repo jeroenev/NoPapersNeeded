@@ -331,6 +331,9 @@ internal class Simulation(
         fs.trashStats.violations
             .firstOrNull()
             ?.let { fail("trash stat not recorded as moved: $it") }
+        fs.deleteAuthority.violations
+            .firstOrNull()
+            ?.let { fail("a delete without authority: $it") }
         checkLog()
         if (replica.session == null) return
         val problems =

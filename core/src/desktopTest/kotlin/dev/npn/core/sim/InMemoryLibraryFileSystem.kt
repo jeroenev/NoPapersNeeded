@@ -759,12 +759,19 @@ class InMemoryLibraryFileSystem(
 
     /** Every document a journal object in this folder relinks another onto. */
     private fun relinkTargets(): Set<String> =
+        journalObjects().values.flatMapTo(HashSet()) { bytes ->
+            journalEventsIn(bytes).mapNotNull { (it.op as? JournalOp.Relink)?.newDoc }
+        }
+
+    /** This folder's journal objects, by path, but for one a sync tool is still writing. */
+    private fun journalObjects(): Map<String, ByteArray> =
         files
             .keysWithPrefix("${NpnPaths.JOURNAL_DIR}/")
             .filter { JournalPaths.classify(it) is JournalPath.ObjectV2 && it !in writing }
-            .flatMapTo(HashSet()) { path ->
-                journalEventsIn(files.getValue(path).bytes).mapNotNull { (it.op as? JournalOp.Relink)?.newDoc }
-            }
+            .associateWith { files.getValue(it).bytes }
+
+    /** Whether the app holds a fact for each last copy here it deletes ([SimDeleteAuthority]). */
+    val deleteAuthority = SimDeleteAuthority(::journalObjects)
 
     private var syncCalls = 0
 
@@ -804,6 +811,7 @@ class InMemoryLibraryFileSystem(
             }
         val lastAnywhere = !kept && !heldElsewhere(hash, norm)
         losses.record(hash, LossAt(now(), cause, norm, lastHere = !kept, lastAnywhere = lastAnywhere))
+        if (byApp && !kept) deleteAuthority.tookLastCopy(norm, hash, now()) { historyOf(norm) }
     }
 
     /**

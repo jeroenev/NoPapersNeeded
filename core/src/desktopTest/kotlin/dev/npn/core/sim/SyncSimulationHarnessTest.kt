@@ -238,6 +238,7 @@ class SyncSimulationHarnessTest {
             val losses = ArrayList<LossAt>()
             allFromTheStart { step ->
                 if (step == 2) {
+                    members[0].fs.deleteAuthority.enabled = false
                     members[1].fs.externalWriteAtomic("elsewhere.pdf", bytes)
                     world.read("import, then delete as the app") {
                         val imported = members[0].replica.session!!.importPdfBytes(bytes, "here.pdf")
@@ -250,6 +251,31 @@ class SyncSimulationHarnessTest {
             losses.single { it.loss == Loss.APP }.lastAnywhere shouldBe false
         }
 
+    /**
+     * The app deleting a document's last copy in its folder with no fact for it in that folder's
+     * journal (no tombstone, trash or relink) fails the run at the delete itself, even while another
+     * replica still holds the bytes: the shape of every last-copy loss, caught before the sync tool
+     * carries it anywhere.
+     */
+    @Test
+    fun theAppDeletingALastCopyHereWithoutAFactFailsTheRun() =
+        runTest {
+            val failure =
+                shouldThrow<SimFailure> {
+                    allFromTheStart { step ->
+                        if (step == 2) {
+                            val bytes = SimPdf.bytes("no fact", "v", BAKED_SIZE + 5)
+                            members[1].fs.externalWriteAtomic("elsewhere.pdf", bytes)
+                            world.read("import, then delete as the app") {
+                                val imported = members[0].replica.session!!.importPdfBytes(bytes, "here.pdf")
+                                members[0].fs.delete((imported as ImportOutcome.Imported).relPath)
+                            }
+                        }
+                    }.run()
+                }
+            failure.message shouldContain "a delete without authority"
+        }
+
     /** A copy at the same path in another folder keeps nothing: the sync tool carries the app's deletion there. */
     @Test
     fun theAppDeletingACopyAnotherReplicaHoldsAtTheSamePathFailsTheRun() =
@@ -260,6 +286,7 @@ class SyncSimulationHarnessTest {
                         if (step == 2) {
                             val bytes = SimPdf.bytes("same path", "v", BAKED_SIZE + 4)
                             val other = members[1].fs
+                            members[0].fs.deleteAuthority.enabled = false
                             world.read("import, then delete as the app") {
                                 val imported = members[0].replica.session!!.importPdfBytes(bytes, "same.pdf")
                                 val path = (imported as ImportOutcome.Imported).relPath
@@ -543,6 +570,7 @@ class SyncSimulationHarnessTest {
             allFromTheStart { step ->
                 if (step == 2) {
                     val fs = members[0].fs
+                    fs.deleteAuthority.enabled = false
                     val bytes = SimPdf.bytes("only copy", "v", BAKED_SIZE + 1)
 
                     fun writeAndDeleteElsewhere() {

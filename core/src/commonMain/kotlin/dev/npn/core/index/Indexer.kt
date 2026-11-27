@@ -7,12 +7,12 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.BakeAsides
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TempFileSweep
-import dev.npn.core.fs.hasStoredStat
-import dev.npn.core.fs.holds
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.PendingOp
@@ -88,6 +88,9 @@ internal class Indexer(
     val scanState: StateFlow<IndexProgress?> get() = _scanState.asStateFlow()
 
     private val documentDao get() = db.documentDao()
+
+    /** The one way a rescan takes a document's bytes: a bake's original, once its relink stands. */
+    private val gate = DeleteGate(fs)
     private val duplicateDao get() = db.duplicateDao()
 
     /**
@@ -322,10 +325,7 @@ internal class Indexer(
         for ((meta, hash, successor) in originals) {
             successors[successor]?.takeIf { it.isLive && contentAt[it.relPath] == successor } ?: continue
             log.runLogged("Removing ${sensitive(meta.relPath, DOCUMENT)}, the original of a baked document") {
-                val now = fs.stat(meta.relPath)?.takeIf { !it.isDirectory }
-                if (now != null && (now.hasStoredStat(meta.size, meta.mtimeMillis) || fs.holds(meta.relPath, hash))) {
-                    fs.delete(meta.relPath)
-                }
+                gate.reap(meta.relPath, hash, DeleteAuthority.Superseded(state.facts()), meta)
             }
         }
     }

@@ -1,7 +1,5 @@
 package dev.npn.core.fs
 
-import dev.npn.core.util.runCatchingCancellable
-
 /**
  * Soft-delete operations backed by [LibraryFileSystem] and the `.npn/trash/` convention.
  * Moving to trash is a plain file move: the file stays in the library so it
@@ -12,6 +10,8 @@ import dev.npn.core.util.runCatchingCancellable
 internal class TrashOps(
     private val fs: LibraryFileSystem,
 ) {
+    private val gate = DeleteGate(fs)
+
     /**
      * Where the trash puts [relPath], the file of the document [sha256] trashed at [episodeMillis]:
      * [NpnPaths.trashPath], or, when that is taken (two trashes in the same millisecond), the next
@@ -134,14 +134,16 @@ internal class TrashOps(
      *   another device's trash of a document never edited is unknown until its event arrives, which
      *   may come after the file; and a crash may have left a document's only copy here.
      *
-     * An entry whose documents are all old still goes only once its bytes hash to one of them
-     * ([holds], as [copiesOf] proves a copy). The name's 8 hex are a 32-bit prefix
-     * another document shares by chance, known here or not: an old colliding document must not
-     * destroy an unknown document's only copy. Only an entry otherwise about to go is hashed.
+     * An entry whose documents are all old still goes only once its bytes hash to one of them, and
+     * [facts] has that one in the trash or deleted for good ([DeleteGate], [DeleteAuthority.Trash]).
+     * The name's 8 hex are a 32-bit prefix another document shares by chance, known here or not: an
+     * old colliding document must not destroy an unknown document's only copy. Only an entry
+     * otherwise about to go is hashed.
      */
     suspend fun purgeOlderThan(
         cutoffMillis: Long,
         documents: Map<String, Long?>,
+        facts: DocumentFacts,
         listing: List<FileMeta>? = null,
     ) {
         val byPrefix = documents.entries.groupBy { it.key.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) }
@@ -150,12 +152,7 @@ internal class TrashOps(
             if (episode != null && episode >= cutoffMillis) continue
             val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get).orEmpty()
             val allOld = owners.all { (_, trashed) -> trashed != null && trashed < cutoffMillis }
-            val owned =
-                allOld &&
-                    owners.any { (doc, _) ->
-                        runCatchingCancellable { fs.holds(meta.relPath, doc) }.getOrDefault(false)
-                    }
-            if (owned) fs.delete(meta.relPath)
+            if (allOld) owners.any { (doc, _) -> gate.reap(meta.relPath, doc, DeleteAuthority.Trash(facts)) }
         }
     }
 }

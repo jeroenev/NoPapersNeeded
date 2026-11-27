@@ -101,7 +101,7 @@ class TrashOpsTest {
             Files.setLastModifiedTime(odd, FileTime.fromMillis(1000))
 
             trash.listTrash().map { it.relPath } shouldBe listOf(old.entry)
-            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(old.id to 1_000L))
+            purge(cutoffMillis = 500_000, documents = mapOf(old.id to 1_000L))
             fs.exists(old.entry).shouldBeFalse()
             Files.exists(odd).shouldBeTrue()
         }
@@ -126,7 +126,7 @@ class TrashOpsTest {
             val old = trashWithMtime("x/old.pdf", "old bytes", mtime = 1_000, episodeMillis = 100_000)
             val recent = trashWithMtime("y/recent.pdf", "recent bytes", mtime = 1_000, episodeMillis = 900_000)
 
-            trash.purgeOlderThan(
+            purge(
                 cutoffMillis = 500_000,
                 documents = mapOf(old.id to 1_000L, recent.id to 900_000L),
             )
@@ -142,7 +142,7 @@ class TrashOpsTest {
             val recent = trashWithMtime("x/recent.pdf", "recent bytes", mtime = 1_000, episodeMillis = 1_000)
             val longAgo = trashWithMtime("y/longago.pdf", "long ago bytes", mtime = 1_000, episodeMillis = 1_000)
 
-            trash.purgeOlderThan(
+            purge(
                 cutoffMillis = 500_000,
                 documents = mapOf(recent.id to 900_000L, longAgo.id to 100_000L),
             )
@@ -157,7 +157,7 @@ class TrashOpsTest {
             // The move into trash runs before its doc-trash commit: the row is still live.
             val moving = trashWithMtime("x/moving.pdf", "moving bytes", mtime = 1_000, episodeMillis = 1_000)
 
-            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(moving.id to null))
+            purge(cutoffMillis = 500_000, documents = mapOf(moving.id to null))
 
             fs.exists(moving.entry).shouldBeTrue()
         }
@@ -174,7 +174,7 @@ class TrashOpsTest {
                 trashWithMtime("x/doc.pdf", "restored and trashed again", mtime = 1_000, episodeMillis = 900_000)
 
             // What a journal holding only the first trash (long past) says about it.
-            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(reTrashed.id to 100_000L))
+            purge(cutoffMillis = 500_000, documents = mapOf(reTrashed.id to 100_000L))
 
             fs.exists(reTrashed.entry).shouldBeTrue()
         }
@@ -192,7 +192,7 @@ class TrashOpsTest {
             Files.setLastModifiedTime(stray, FileTime.fromMillis(1_000))
             val owned = trashWithMtime("x/owned.pdf", "owned bytes", mtime = 1_000, episodeMillis = 1_000)
 
-            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(owned.id to 100_000L))
+            purge(cutoffMillis = 500_000, documents = mapOf(owned.id to 100_000L))
 
             fs.exists(orphan.entry).shouldBeTrue()
             Files.exists(stray).shouldBeTrue()
@@ -212,11 +212,11 @@ class TrashOpsTest {
             entry.id.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) shouldBe clash.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
             val trashedLongAgo = entry.id to 100_000L
 
-            trash.purgeOlderThan(500_000, mapOf(trashedLongAgo, clash to null))
+            purge(500_000, mapOf(trashedLongAgo, clash to null))
             fs.exists(entry.entry).shouldBeTrue()
-            trash.purgeOlderThan(500_000, mapOf(trashedLongAgo, clash to 900_000L))
+            purge(500_000, mapOf(trashedLongAgo, clash to 900_000L))
             fs.exists(entry.entry).shouldBeTrue()
-            trash.purgeOlderThan(500_000, mapOf(trashedLongAgo, clash to 200_000L))
+            purge(500_000, mapOf(trashedLongAgo, clash to 200_000L))
             fs.exists(entry.entry).shouldBeFalse()
         }
 
@@ -234,7 +234,7 @@ class TrashOpsTest {
             val entry = moveToTrash("y/unknown.pdf", colliding.id, 100_000)
             Files.setLastModifiedTime(root.resolve(entry), FileTime.fromMillis(1_000))
 
-            trash.purgeOlderThan(500_000, mapOf(colliding.id to 100_000L))
+            purge(500_000, mapOf(colliding.id to 100_000L))
 
             fs.exists(entry).shouldBeTrue()
             fs.exists(colliding.entry).shouldBeFalse()
@@ -248,6 +248,36 @@ class TrashOpsTest {
         NpnPaths.trashHashPrefix("noext__deadbeef-1") shouldBe "deadbeef"
         NpnPaths.trashHashPrefix("doc.pdf") shouldBe null
     }
+
+    /**
+     * The journal has a document in the trash, but the index's map of trash times, which a lagging
+     * row can stretch, says it left long ago: the entry still goes only by the journal's fact.
+     */
+    @Test
+    fun purgeKeepsAnEntryTheJournalDoesNotHaveInTheTrash() =
+        runTest {
+            val entry = trashWithMtime("x/kept.pdf", "kept bytes", mtime = 1_000, episodeMillis = 1_000)
+
+            trash.purgeOlderThan(500_000, mapOf(entry.id to 100_000L), DocumentFacts.None)
+
+            fs.exists(entry.entry).shouldBeTrue()
+        }
+
+    /** [TrashOps.purgeOlderThan] by a journal that has in the trash each of [documents] with a time. */
+    private suspend fun purge(
+        cutoffMillis: Long,
+        documents: Map<String, Long?>,
+    ) = trash.purgeOlderThan(cutoffMillis, documents, trashedIn(documents))
+
+    /** A journal that has in the trash each of [documents] mapped to a time, and nothing else. */
+    private fun trashedIn(documents: Map<String, Long?>): DocumentFacts =
+        object : DocumentFacts {
+            override suspend fun isDeleted(docId: String) = false
+
+            override suspend fun isTrashed(docId: String) = documents[docId] != null
+
+            override suspend fun successorOf(docId: String) = docId
+        }
 
     /** Move [relPath] into the trash as the session's trash does, returning the entry. */
     private suspend fun moveToTrash(

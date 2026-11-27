@@ -9,6 +9,8 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -119,6 +121,9 @@ internal class ImportService(
 ) {
     private val documentDao get() = db.documentDao()
     private val trash = TrashOps(fs)
+
+    /** The one way an import's take-back or a returned document's trash copies leave the library. */
+    private val gate = DeleteGate(fs)
 
     suspend fun importPdf(
         source: ExternalSource,
@@ -237,9 +242,10 @@ internal class ImportService(
         serialize { journal ->
             val row = documentDao.getByDocId(imported.docId) ?: return@serialize
             if (row.deleted || row.trashed) return@serialize
-            if (fs.holds(row.relPath, imported.docId)) {
+            val checked = fs.stat(row.relPath)
+            if (checked != null && fs.holds(row.relPath, imported.docId)) {
                 journal.recordTakenBack(imported.docId)
-                fs.delete(row.relPath)
+                gate.reap(row.relPath, imported.docId, DeleteAuthority.Tombstone(journal), checked)
             }
             forget(imported.docId)
             ocrQueueDao.delete(imported.docId)
@@ -393,8 +399,10 @@ internal class ImportService(
                     previous
                 }
 
-                trash.copiesOf(docId).isNotEmpty() -> {
-                    fs.delete(placedAt)
+                // The trash keeps a copy: the one the import placed is an extra.
+                trash.copiesOf(docId).firstOrNull()?.let { kept ->
+                    gate.reap(placedAt, docId, DeleteAuthority.ExtraCopy(kept))
+                } == true -> {
                     previous
                 }
 
@@ -441,7 +449,12 @@ internal class ImportService(
             serialize { _ ->
                 val row = documentDao.getByDocId(docId)
                 if (row == null || !row.isLive || !fs.holdsDocument(row)) return@serialize
-                for (path in trash.copiesOf(docId, hashed)) fs.delete(path)
+                // The document's own file, proved by the stat its row stored, keeps the bytes.
+                val ownStat =
+                    FileMeta(row.relPath, row.fileName, size = row.size, mtimeMillis = row.mtime, isDirectory = false)
+                val kept = DeleteAuthority.ExtraCopy(row.relPath, ownStat)
+                val proved = hashed.filterValues { it }.keys.associateBy { it.relPath }
+                for (path in trash.copiesOf(docId, hashed)) gate.reap(path, docId, kept, proved[path])
             }
         }
     }

@@ -1,14 +1,17 @@
 package dev.npn.core.index
 
+import dev.npn.core.fs.DocumentFacts
+
 /**
  * The journal as a step under the writer lock reads and writes it
  * ([JournalCoordinator.serialized]): an import's ([ImportService]), a delete for
  * good's removal of the bytes and the trash purge's deletes. Its calls take no lock of their own, so
- * they are for that step alone.
+ * they are for that step alone. What it says of a document is what the [dev.npn.core.fs.DeleteGate]
+ * deletes its bytes by.
  */
-internal interface LockedJournal {
+internal interface LockedJournal : DocumentFacts {
     /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
-    suspend fun successorOf(docId: String): String
+    override suspend fun successorOf(docId: String): String
 
     /**
      * Whether the journal has [docId] deleted: its latest delete is newer than any undelete. An
@@ -18,10 +21,10 @@ internal interface LockedJournal {
      * lifecycle change; a rescan showing its file again soon after the delete writes none, and
      * leaves it deleted.
      */
-    suspend fun isDeleted(docId: String): Boolean
+    override suspend fun isDeleted(docId: String): Boolean
 
     /** Whether the journal has [docId] in the trash (and not deleted). */
-    suspend fun isTrashed(docId: String): Boolean
+    override suspend fun isTrashed(docId: String): Boolean
 
     /** Whether the library shows [docId]: neither trashed, deleted, nor superseded by a relink. */
     suspend fun isCurrent(docId: String): Boolean

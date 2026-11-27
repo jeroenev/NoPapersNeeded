@@ -1,6 +1,9 @@
 package dev.npn.core.xmp
 
 import dev.npn.core.fs.BakeAsides
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.DeleteGate
+import dev.npn.core.fs.DocumentFacts
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -63,7 +66,16 @@ internal class BakeService(
      * ([setAsideLeftover]). Answered by the caller, as the relink is, so this package reads no journal.
      */
     private val shownWithoutItsFile: suspend (String) -> Boolean = { false },
+    /**
+     * What the journal says of a document, for the original's delete once the bake's relink
+     * stands ([DeleteGate]); answered by the caller, as the relink is. Without it the original stays
+     * under its recovery name, which a rescan removes once the relink stands.
+     */
+    facts: DocumentFacts = DocumentFacts.None,
 ) {
+    private val gate = DeleteGate(fs)
+    private val superseded = DeleteAuthority.Superseded(facts)
+
     /**
      * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
      * or null when the file there is not the document's: another file would leave carrying this
@@ -193,7 +205,9 @@ internal class BakeService(
                     if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
                 }
                 log.runLogged("Removing the original of ${sensitive(norm, DOCUMENT)} after its bake") {
-                    if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
+                    // Superseded by the relink; or, a bake that changed no byte, the same bytes as in place.
+                    val authority = if (newSha != docId) superseded else DeleteAuthority.ExtraCopy(norm)
+                    gate.reap(aside, docId, authority, read)
                 }
                 newSha
             }
@@ -342,7 +356,8 @@ internal class BakeService(
             // baked bytes something else's last copy (a relink of them that landed before the failure).
             log.runLogged("Removing the baked bytes of ${sensitive(norm, DOCUMENT)} after its bake was undone") {
                 if (fs.exists(tmpPath) && normHolds()) fs.delete(tmpPath)
-                if (asideHolds()) fs.delete(aside)
+                // The original is back at its name: the one left aside is an extra copy of it.
+                gate.reap(aside, oldSha, DeleteAuthority.ExtraCopy(norm))
             }
         }.onFailure { failure ->
             val message = "Restoring ${sensitive(norm, DOCUMENT)} after a failed bake failed"

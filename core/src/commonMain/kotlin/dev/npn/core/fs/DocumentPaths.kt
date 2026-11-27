@@ -17,6 +17,9 @@ internal class DocumentPaths(
     /** The originals this session's bakes keep aside while they swap: no source to move from. */
     private val bakeAsides: BakeAsides = BakeAsides(),
 ) {
+    /** The one way the copy a move across volumes left behind goes: once the target holds its bytes. */
+    private val gate = DeleteGate(fs)
+
     /**
      * Where a document's file is once [settle] moved it toward its intended path: [path], and
      * [stat], the stat of the bytes checked as the document's there, which a row records as its
@@ -110,7 +113,7 @@ internal class DocumentPaths(
             if (fs.exists(target)) throw failure
             val staging = NpnPaths.Temp.relocationPath(target, ids.next())
             fs.publishStagedOnce(staging, target, docId) { fs.copyOnce(recovery, staging) }
-            fs.delete(recovery)
+            gate.reap(recovery, docId, DeleteAuthority.ExtraCopy(target))
         }
     }
 

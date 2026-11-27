@@ -48,7 +48,7 @@ internal class TrashPurge(
         for (batch in trash.listTrash().chunked(PURGE_BATCH)) {
             coordinator.serialized { journal ->
                 val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
-                trash.purgeOlderThan(cutoff, keptLonger(journal.trashTimes(), rows), batch)
+                trash.purgeOlderThan(cutoff, keptLonger(journal.trashTimes(), rows), journal, batch)
             }
         }
     }

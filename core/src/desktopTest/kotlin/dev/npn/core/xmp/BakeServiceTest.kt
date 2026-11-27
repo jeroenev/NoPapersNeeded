@@ -1,5 +1,6 @@
 package dev.npn.core.xmp
 
+import dev.npn.core.fs.DocumentFacts
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -84,12 +85,14 @@ class BakeServiceTest {
             var relinkOld: String? = null
             var relinkNew: String? = null
             val data = xmp(tags = listOf("filed", "acme"), reviewed = "true")
+            val relinks = Relinks()
 
             val newSha =
-                BakeService(fs, io)
+                BakeService(fs, io, facts = relinks)
                     .bakeInPlace("doc.pdf", oldSha, data) { old, new ->
                         relinkOld = old
                         relinkNew = new
+                        relinks.successors[old] = new
                     }.shouldNotBeNull()
 
             // Relink called with correct shas.
@@ -511,11 +514,17 @@ class BakeServiceTest {
                     val oldSha = fs.sha256(doc)
                     val cancelling = CancelledDuring(fs, doc, step, suspendAfterCancel)
                     var relink: Pair<String, String>? = null
+                    val relinks = Relinks()
 
                     val bake =
                         launch {
-                            BakeService(cancelling, io).bakeInPlace(doc, oldSha, xmp(tags = listOf("t"))) { old, new ->
+                            BakeService(
+                                cancelling,
+                                io,
+                                facts = relinks,
+                            ).bakeInPlace(doc, oldSha, xmp(tags = listOf("t"))) { old, new ->
                                 relink = old to new
+                                relinks.successors[old] = new
                             }
                         }
                     cancelling.job = bake
@@ -664,4 +673,18 @@ class BakeServiceTest {
             if (suspendAfterCancel) yield()
         }
     }
+}
+
+/**
+ * A journal that has the relinks the bakes under test emit, as the session's has once a bake's relink
+ * stands: what the bake deletes its original by ([dev.npn.core.fs.DeleteGate]).
+ */
+private class Relinks : DocumentFacts {
+    val successors = HashMap<String, String>()
+
+    override suspend fun isDeleted(docId: String) = false
+
+    override suspend fun isTrashed(docId: String) = false
+
+    override suspend fun successorOf(docId: String) = successors[docId] ?: docId
 }

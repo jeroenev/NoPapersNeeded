@@ -3,6 +3,8 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.DeleteGate
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -51,6 +53,9 @@ internal class DocLifecycleImpl(
     private val followUp: suspend (docId: String) -> Unit = {},
 ) : DocLifecycle {
     private val documentDao = db.documentDao()
+
+    /** The one way a delete for good takes a document's bytes. */
+    private val gate = DeleteGate(fs)
 
     /** Trash [docId], or what a bake made of it once that bake is done: the receipt names the one trashed. */
     override suspend fun trashDoc(docId: String): TrashReceipt? = lifetime.owned { bakeLock.held { trash(docId) } }
@@ -193,9 +198,9 @@ internal class DocLifecycleImpl(
      * there may be another one now. Each is hashed before the lock, as a whole file read under it
      * would hold up every other write; one whose stat changed since, or that appeared since, is
      * hashed again under it, since skipping it would leave bytes a rescan brings the document back
-     * from. Each goes only while the journal still has the document deleted: an import of its bytes
-     * can have brought it back meanwhile, with that very file. Its row cannot say: a rescan meanwhile
-     * shows a file still in place again without that being a return.
+     * from. Each goes only while the journal still has the document deleted ([DeleteGate]): an
+     * import of its bytes can have brought it back meanwhile, with that very file. Its row cannot
+     * say: a rescan meanwhile shows a file still in place again without that being a return.
      */
     private suspend fun removeBytes(
         doc: DocumentEntity,
@@ -208,7 +213,11 @@ internal class DocLifecycleImpl(
             if (!journal.isDeleted(docId)) return@serialized
             val inTrash = trashOps.confirmedCopiesOf(docId, hashed)
             val atItsPath = listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
-            (inTrash + atItsPath).distinct().forEach { fs.delete(it) }
+            // The stat each was proved by before the lock, so the gate hashes none again that is unchanged.
+            val proved = (hashed + file).filterValues { it }.keys.associateBy { it.relPath }
+            for (path in (inTrash + atItsPath).distinct()) {
+                gate.reap(path, docId, DeleteAuthority.Tombstone(journal), proved[path])
+            }
         }
     }
 

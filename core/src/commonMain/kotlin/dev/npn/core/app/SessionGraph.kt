@@ -7,6 +7,7 @@ import dev.npn.core.ai.RoomAiLedger
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
+import dev.npn.core.fs.DocumentFacts
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
 import dev.npn.core.index.DuplicateResolver
@@ -283,6 +284,20 @@ internal class SessionGraph(
             onStaleFile = { staleFiles.trySend(Unit) },
         )
 
+    /**
+     * What the journal says of a document, each answer read under the writer lock: for a delete a
+     * step outside it makes by a fact that never goes back, such as a bake's original once its relink
+     * stands ([dev.npn.core.fs.DeleteGate]).
+     */
+    private val journalFacts =
+        object : DocumentFacts {
+            override suspend fun isDeleted(docId: String): Boolean = coordinator.serialized { it.isDeleted(docId) }
+
+            override suspend fun isTrashed(docId: String): Boolean = coordinator.serialized { it.isTrashed(docId) }
+
+            override suspend fun successorOf(docId: String): String = coordinator.serialized { it.successorOf(docId) }
+        }
+
     val content =
         DocContentFacadeImpl(
             lifetime,
@@ -296,7 +311,7 @@ internal class SessionGraph(
                 documentDao = db.documentDao(),
                 renderGate = renderGate,
             ),
-            BakeService(deps.fs, deps.xmpIO, log, deps.ids, indexer.bakeAsides, ::shownWithoutItsFile),
+            BakeService(deps.fs, deps.xmpIO, log, deps.ids, indexer.bakeAsides, ::shownWithoutItsFile, journalFacts),
             coordinator,
             relinkBake = bakeRelink::relink,
             renderGate,

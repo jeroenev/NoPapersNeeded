@@ -1,5 +1,8 @@
 package dev.npn.core.sync
 
+import dev.npn.core.fs.DeleteAuthority
+import dev.npn.core.fs.DeleteGate
+import dev.npn.core.fs.DocumentFacts
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.hasStoredStat
@@ -26,6 +29,9 @@ class LocalApplier(
     private val nowMillis: Long,
 ) {
     private val trashOps = TrashOps(fs)
+
+    /** The one way cloud sync takes a document's bytes from the library: a deleted or superseded document's. */
+    private val gate = DeleteGate(fs)
 
     /** Returns how many actions changed the library folder. */
     suspend fun apply(
@@ -139,8 +145,11 @@ class LocalApplier(
         successor: String,
     ) {
         hooks.serialized { journal ->
+            val checked = fs.stat(relPath) ?: return@serialized
             val held = fs.sha256(relPath)
-            if (held != successor && journal.successorOf(held) == successor) fs.delete(relPath)
+            if (held != successor && journal.successorOf(held) == successor) {
+                gate.reap(relPath, held, DeleteAuthority.Superseded(journal.facts()), checked)
+            }
         }
     }
 
@@ -220,11 +229,11 @@ class LocalApplier(
         report: SyncReportBuilder,
     ): Boolean =
         hooks.serialized { journal ->
+            val checked = fs.stat(action.relPath)
             if (!journal.isDeleted(action.docId) || !verified(action.relPath, action.docId, report)) {
                 return@serialized false
             }
-            fs.delete(action.relPath)
-            true
+            gate.reap(action.relPath, action.docId, DeleteAuthority.Tombstone(journal.facts()), checked)
         }
 
     private suspend fun downloadTrash(action: SyncAction.DownloadTrash): Boolean {
@@ -255,5 +264,17 @@ class LocalApplier(
         if (fs.sha256(relPath) == docId) return true
         report.conflicts += SyncConflict(docId, relPath, ConflictKind.LOCAL_CHANGED)
         return false
+    }
+}
+
+/** What [this] journal says of a document, for the [DeleteGate]. */
+private fun SyncJournal.facts(): DocumentFacts {
+    val journal = this
+    return object : DocumentFacts {
+        override suspend fun isDeleted(docId: String): Boolean = journal.isDeleted(docId)
+
+        override suspend fun isTrashed(docId: String): Boolean = journal.isTrashed(docId)
+
+        override suspend fun successorOf(docId: String): String = journal.successorOf(docId)
     }
 }
