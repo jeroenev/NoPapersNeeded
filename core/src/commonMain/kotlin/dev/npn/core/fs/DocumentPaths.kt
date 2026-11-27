@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
 internal class DocumentPaths(
     private val fs: LibraryFileSystem,
     private val ids: IdSource = IdSource.Random,
+    /** The originals this session's bakes keep aside while they swap: no source to move from. */
+    private val bakeAsides: BakeAsides = BakeAsides(),
 ) {
     /**
      * Where a document's file is once [settle] moved it toward its intended path: [path], and
@@ -29,6 +31,9 @@ internal class DocumentPaths(
      * Move [docId]'s file from [source] to [target] where it can, and say where it is now with the
      * stat of the bytes the move checked: taken before the move, of the file it moved, never of the
      * target afterwards, which by then may be another file a sync tool put there.
+     *
+     * A [source] where a bake in progress keeps the document's original ([BakeAsides]) stays: the
+     * bake puts it back at its path, or deletes it once the baked bytes stand there.
      */
     suspend fun settle(
         docId: String,
@@ -38,6 +43,7 @@ internal class DocumentPaths(
         if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation) {
             return Settled(source, null)
         }
+        if (bakeAsides.holds(source)) return Settled(source, null)
         val placed = if (fs.exists(target)) alreadyPlaced(docId, source, target) else relocate(docId, source, target)
         return if (placed != null) Settled(target, placed) else Settled(source, null)
     }

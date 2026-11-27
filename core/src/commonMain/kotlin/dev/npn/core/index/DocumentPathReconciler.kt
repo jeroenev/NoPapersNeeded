@@ -6,6 +6,7 @@ import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
+import dev.npn.core.fs.BakeAsides
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -26,8 +27,10 @@ internal class DocumentPathReconciler(
     /** Where this device last saw each settled document; the rescan detects external moves from it. */
     private val externalMoves: ExternalDocumentMoves,
     ids: IdSource = IdSource.Random,
+    /** The originals this session's bakes keep aside while they swap, which no settle moves on. */
+    bakeAsides: BakeAsides = BakeAsides(),
 ) {
-    private val paths = DocumentPaths(fs, ids)
+    private val paths = DocumentPaths(fs, ids, bakeAsides)
 
     /** The work of the outermost [deferring] call in progress; null outside one. */
     private var open: PathWork? = null

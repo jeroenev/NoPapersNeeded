@@ -1,5 +1,6 @@
 package dev.npn.core.xmp
 
+import dev.npn.core.fs.BakeAsides
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -48,6 +49,11 @@ internal class BakeService(
     private val io: PdfXmpIO,
     private val log: NpnLog = NpnLog.None,
     private val ids: IdSource = IdSource.Random,
+    /**
+     * Where a bake keeps its original during the swap, held there so that the session's rescans
+     * leave the file to the bake ([dev.npn.core.index.Indexer.bakeAsides]).
+     */
+    private val bakeAsides: BakeAsides = BakeAsides(),
 ) {
     /**
      * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
@@ -91,7 +97,10 @@ internal class BakeService(
      * (fail-if-exists, required for the write-once invariant elsewhere), and SAF offers no atomic
      * replace. So the swap is move-aside-then-move, leaving a small window where the original path
      * does not exist; the original is under its recovery name (an ordinary, indexable PDF) and the
-     * baked bytes in the temp file (`*.npnbake.tmp`) throughout, and a crash there leaves both. The
+     * baked bytes in the temp file (`*.npnbake.tmp`) throughout, and a crash there leaves both. Until
+     * the swap ends the recovery name is held in [bakeAsides]: a rescan of the session that lists
+     * the original there leaves it to the bake, rather than move it on to the document's path while
+     * the bake restores or deletes it. The
      * swap and the relink run to their end even when the bake is cancelled: cut short, the baked
      * bytes could be left in place without their relink. A failed swap is undone ([restoreOriginal])
      * and rethrown: the document keeps its hash, so no relink is owed.
@@ -152,27 +161,31 @@ internal class BakeService(
             // stat above, and only the document's own bytes may go. Kept under an ordinary recovery
             // name until the relink stands, so a crash in between loses nothing.
             val aside = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
-            var standing = false
-            var movedAside = false
-            try {
-                fs.move(norm, aside)
-                movedAside = true
-                if (!holdsWhatWasRead(aside, read, docId)) {
+            // Held from before the move aside until the original is back or deleted: a rescan
+            // meanwhile sees the document under its recovery name, and must not move it on.
+            bakeAsides.holding(aside) {
+                var standing = false
+                var movedAside = false
+                try {
+                    fs.move(norm, aside)
+                    movedAside = true
+                    if (!holdsWhatWasRead(aside, read, docId)) {
+                        standing = true
+                        putBack(norm, aside, tmpPath)
+                        return@holding null
+                    }
+                    fs.move(tmpPath, norm)
+                    if (newSha != docId) emitRelink(docId, newSha)
                     standing = true
-                    putBack(norm, aside, tmpPath)
-                    return@withContext null
+                } finally {
+                    @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
+                    if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
                 }
-                fs.move(tmpPath, norm)
-                if (newSha != docId) emitRelink(docId, newSha)
-                standing = true
-            } finally {
-                @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
-                if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
+                log.runLogged("Removing the original of $norm after its bake") {
+                    if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
+                }
+                newSha
             }
-            log.runLogged("Removing the original of $norm after its bake") {
-                if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
-            }
-            newSha
         }
     }
 

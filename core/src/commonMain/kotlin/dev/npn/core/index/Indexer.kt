@@ -6,6 +6,7 @@ import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.isLive
+import dev.npn.core.fs.BakeAsides
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -66,7 +67,13 @@ internal class Indexer(
     ids: IdSource = IdSource.Random,
 ) {
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
-    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids)
+
+    /**
+     * Where this session's bakes in place keep their originals while they swap: a rescan between a
+     * bake's move aside and its restore or relink sees the document there, and leaves its file be.
+     */
+    val bakeAsides = BakeAsides()
+    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids, bakeAsides)
     private val folds = FoldProjection(db, documentPaths)
     private val tempFiles = TempFileSweep(fs, log)
 
