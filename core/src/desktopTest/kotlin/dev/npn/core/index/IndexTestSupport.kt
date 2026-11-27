@@ -244,6 +244,8 @@ internal val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit = {
                 relPath: String,
             ): Boolean = false
 
+            override suspend fun recordTakenBack(docId: String) = Unit
+
             override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
         },
     )

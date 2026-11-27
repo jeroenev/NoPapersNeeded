@@ -39,6 +39,14 @@ internal interface LockedJournal {
     ): Boolean
 
     /**
+     * Record [docId] deleted for good (`doc-delete`), for an import taken back
+     * ([ImportService.undoImport]) before its file is deleted: a sync tool may have carried the file
+     * to another device meanwhile, where it is a document, and the deletion it carries there next
+     * must be one the journal says. Throws only when nothing was published.
+     */
+    suspend fun recordTakenBack(docId: String)
+
+    /**
      * For the trash purge: every document the journal knows that is deleted, or else not superseded,
      * mapped to when it was deleted for good or trashed, or to null while it is neither
      * ([dev.npn.core.journal.FoldedState.trashTimes]).

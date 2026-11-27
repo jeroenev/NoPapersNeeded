@@ -185,10 +185,11 @@ internal class MaintenanceFacadeImpl(
         var finished = false
         try {
             // Trash last, so a failure anywhere leaves the original untouched; the parts the split
-            // made are then taken back, from wherever the storage-path rules moved them. Metadata
-            // already copied onto them, and the paths the rules chose, stay in the journal under
-            // their hashes, unused: only a file with those bytes makes a row, and a retry makes
-            // other bytes (the PDF writer stamps each file's /ID with the time).
+            // made are then taken back, from wherever the storage-path rules moved them, each deleted
+            // for good in the journal before its file goes (another device may have it by then).
+            // Metadata already copied onto them, and the paths the rules chose, stay in the journal
+            // under their hashes, unused: a retry makes other bytes (the PDF writer stamps each
+            // file's /ID with the time).
             runCatchingCancellable {
                 copyMetadataToParts(docId, made)
                 // Null for an original trashed or deleted meanwhile: it is out of the library, as

@@ -164,6 +164,8 @@ class ImportTakeBackTest {
                             relPath: String,
                         ): Boolean = restoreReturned(docId, relPath)
 
+                        override suspend fun recordTakenBack(docId: String) = Unit
+
                         override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
                     },
                 )

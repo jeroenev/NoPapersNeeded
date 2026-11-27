@@ -214,21 +214,31 @@ internal class ImportService(
      * Take back an import this service just made, for a caller whose larger operation failed after
      * it: a split whose later part could not be made, or whose original could not be trashed. An
      * import writes no journal event beyond the restore of bytes the journal had hidden, so taking
-     * it back is removing the file and its rows, not a trash or a tombstone; a tombstone would hide
-     * the same bytes should they be imported again.
+     * it back is deleting the file, but only once the journal says the document is deleted for good
+     * ([LockedJournal.recordTakenBack]). The file was a document in the library from its move into
+     * place on, and a sync tool may have carried it to other devices since; they index it, and the
+     * deletion the tool carries next must not leave them a live document with its file gone, or
+     * take it from them unannounced. When the tombstone cannot be published, the file stays, and
+     * the document with it. Bytes a split made are its own (the PDF writer stamps each file's /ID
+     * with the time), so the tombstone hides nothing anyone else imports.
      *
      * Follows the document, not the path the import chose: metadata the caller wrote meanwhile can
      * have moved it (a storage-path rule), and another file can have taken the name it left. Only
      * the document's own bytes are deleted, and a document since trashed or deleted is left alone.
      * So is a document the import brought back ([ImportResult.Imported.broughtBack]): it was the
-     * user's before the import, and with its trashed copy gone its file may be the only one.
+     * user's before the import, and with its trashed copy gone its file may be the only one. A
+     * document whose bytes are no longer at its path has no file to delete and gets no tombstone:
+     * its rows go, and a rescan indexes its bytes wherever another process put them.
      */
     suspend fun undoImport(imported: ImportResult.Imported) {
         if (imported.broughtBack) return
-        serialize { _ ->
+        serialize { journal ->
             val row = documentDao.getByDocId(imported.docId) ?: return@serialize
             if (row.deleted || row.trashed) return@serialize
-            if (fs.holds(row.relPath, imported.docId)) fs.delete(row.relPath)
+            if (fs.holds(row.relPath, imported.docId)) {
+                journal.recordTakenBack(imported.docId)
+                fs.delete(row.relPath)
+            }
             forget(imported.docId)
             ocrQueueDao.delete(imported.docId)
         }

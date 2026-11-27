@@ -576,6 +576,14 @@ internal class JournalCoordinator(
                 return true
             }
 
+            override suspend fun recordTakenBack(docId: String) {
+                val current = foldedState()
+                ensureWritable()
+                withContext(NonCancellable) {
+                    projectStanding(current, writeTransaction(listOf(PendingOp.docDelete(docId))))
+                }
+            }
+
             override suspend fun trashTimes(): Map<String, Long?> = foldedState().trashTimes()
         }
 
