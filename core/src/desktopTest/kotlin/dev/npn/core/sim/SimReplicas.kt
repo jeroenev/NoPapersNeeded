@@ -937,7 +937,10 @@ internal class SyncSimulation(
                     member,
                     "replicas diverge after a full sync: ${first.name} (\"live\") and " +
                         "${member.name} (\"rebuilt\") show " +
-                        "other libraries over equal folders:\n  " + differences.joinToString("\n  "),
+                        "other libraries over equal folders:\n  " + differences.joinToString("\n  ") +
+                        // The report ends with the failing replica's folder and rows; the other side's
+                        // are half of the story.
+                        "\n\n${first.name}'s side:\n" + first.sim.folderAndRows(),
                 )
             }
         }

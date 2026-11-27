@@ -752,6 +752,12 @@ internal class Simulation(
                 .takeLast(LOG_LINES)
                 .forEach { appendLine("  $it") }
             appendLine()
+            append(folderAndRows())
+        }
+
+    /** This replica's library files (outside `.npn/`, and the trash) and its index rows, for a failure report. */
+    fun folderAndRows(): String =
+        buildString {
             appendLine("Library files (outside .npn/, and the trash):")
             fs
                 .allFiles()
