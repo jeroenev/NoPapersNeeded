@@ -75,7 +75,6 @@ class LockViewModel(
         outcome.value = null
         viewModelScope.launch {
             val result = withContext(verifyDispatcher) { lock.unlockWithSecret(secret) }
-            // Keep a wrong secret on screen to be corrected; clear the field only once it opened.
             outcome.value = result.takeUnless { it == UnlockResult.Success }
             checking.value = false
         }

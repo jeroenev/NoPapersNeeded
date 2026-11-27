@@ -30,4 +30,6 @@
     <string name="security_confirm_current_help">Um die App-Sperre auszuschalten oder zu ändern, wird zuerst die aktuelle PIN benötigt.</string>
     <string name="security_confirm_device">Mit Gerät bestätigen</string>
     <string name="security_lock_now">Jetzt sperren</string>
+    <string name="security_pin_use_letters">Auch Buchstaben verwenden</string>
+    <string name="security_pin_use_number_pad">Ziffernblock verwenden</string>
 </resources>

@@ -30,4 +30,6 @@
     <string name="security_confirm_current_help">Om de app-vergrendeling uit te zetten of te wijzigen is eerst de huidige pincode nodig.</string>
     <string name="security_confirm_device">Bevestigen met apparaat</string>
     <string name="security_lock_now">Nu vergrendelen</string>
+    <string name="security_pin_use_letters">Ook letters gebruiken</string>
+    <string name="security_pin_use_number_pad">Het cijferblok gebruiken</string>
 </resources>

@@ -30,4 +30,6 @@
     <string name="security_confirm_current_help">Para desactivar o cambiar el bloqueo de la aplicación, primero hace falta el PIN actual.</string>
     <string name="security_confirm_device">Confirmar con el dispositivo</string>
     <string name="security_lock_now">Bloquear ahora</string>
+    <string name="security_pin_use_letters">Usar también letras</string>
+    <string name="security_pin_use_number_pad">Usar el teclado numérico</string>
 </resources>

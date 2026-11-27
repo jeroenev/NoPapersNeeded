@@ -30,4 +30,6 @@
     <string name="security_confirm_current_help">Turning the app lock off or changing it needs the current PIN first.</string>
     <string name="security_confirm_device">Confirm with device</string>
     <string name="security_lock_now">Lock now</string>
+    <string name="security_pin_use_letters">Use letters as well</string>
+    <string name="security_pin_use_number_pad">Use the number pad</string>
 </resources>

@@ -3,10 +3,10 @@ package dev.npn.app.ui.settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,10 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.appLockRecoveryFile
+import dev.npn.app.platform.usesOnScreenKeyboard
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.FocusOnEntry
@@ -53,6 +53,8 @@ import no_papers_needed.composeapp.generated.resources.security_pin
 import no_papers_needed.composeapp.generated.resources.security_pin_confirm
 import no_papers_needed.composeapp.generated.resources.security_pin_mismatch
 import no_papers_needed.composeapp.generated.resources.security_pin_too_short
+import no_papers_needed.composeapp.generated.resources.security_pin_use_letters
+import no_papers_needed.composeapp.generated.resources.security_pin_use_number_pad
 import no_papers_needed.composeapp.generated.resources.security_recovery_android
 import no_papers_needed.composeapp.generated.resources.security_recovery_desktop
 import no_papers_needed.composeapp.generated.resources.security_recovery_title
@@ -158,7 +160,7 @@ internal fun SecuritySettingsPane(
  * has one. Its buffer is plain [remember]: a secret never goes in saved state.
  */
 @Composable
-private fun CurrentSecretDialog(
+internal fun CurrentSecretDialog(
     numeric: Boolean,
     check: SecurityCheck,
     deviceAuthAvailable: Boolean,
@@ -169,6 +171,13 @@ private fun CurrentSecretDialog(
     var secret by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     FocusOnEntry(focus)
+    // Each try starts from an empty field, as on the lock screen.
+    val submit = {
+        if (secret.isNotEmpty() && !check.checking) {
+            onConfirm(secret)
+            secret = ""
+        }
+    }
     val error =
         when (val outcome = check.outcome) {
             is UnlockResult.TooManyAttempts -> {
@@ -185,7 +194,7 @@ private fun CurrentSecretDialog(
         }
     ConfirmDialog(
         title = stringResource(Res.string.security_confirm_current_title),
-        onConfirm = { onConfirm(secret) },
+        onConfirm = submit,
         onDismiss = onDismiss,
         confirmLabel = stringResource(Res.string.common_confirm),
         confirmEnabled = secret.isNotEmpty() && !check.checking,
@@ -202,7 +211,7 @@ private fun CurrentSecretDialog(
                 readOnly = check.checking,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = secretKeyboard(numeric, ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (secret.isNotEmpty()) onConfirm(secret) }),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
                 isError = error != null,
             )
             if (error != null) ErrorText(error)
@@ -230,7 +239,13 @@ internal fun SecurityDialogContent(
     dialog: SecurityDialog,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
+    /** Offer the switch between the number pad and a keyboard with letters; only an on-screen keyboard has one. */
+    offerKeyboardChoice: Boolean = usesOnScreenKeyboard(),
 ) {
+    // A PIN is digits by default, so the number pad comes up; letters stay allowed for a longer
+    // secret, one tap away. Which keyboard is shown is no secret, so it is saved.
+    var letters by rememberSaveable(dialog) { mutableStateOf(false) }
+    val keyboard = secretKeyboard(numeric = !letters)
     var pin by remember(dialog) { mutableStateOf("") }
     var confirmation by remember(dialog) { mutableStateOf("") }
     var showErrors by rememberSaveable(dialog) { mutableStateOf(false) }
@@ -265,7 +280,7 @@ internal fun SecurityDialogContent(
                 label = { Text(stringResource(Res.string.security_pin)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                keyboardOptions = keyboard,
                 isError = tooShort,
             )
             if (tooShort) {
@@ -284,7 +299,7 @@ internal fun SecurityDialogContent(
                 label = { Text(stringResource(Res.string.security_pin_confirm)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                keyboardOptions = keyboard,
                 isError = mismatch,
             )
             if (mismatch) {
@@ -292,6 +307,11 @@ internal fun SecurityDialogContent(
                     stringResource(Res.string.security_pin_mismatch),
                     color = androidx.compose.material3.MaterialTheme.colorScheme.error,
                 )
+            }
+            if (offerKeyboardChoice) {
+                val switchTo =
+                    if (letters) Res.string.security_pin_use_number_pad else Res.string.security_pin_use_letters
+                TextButton(onClick = { letters = !letters }) { Text(stringResource(switchTo)) }
             }
         }
     }

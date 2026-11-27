@@ -184,4 +184,4 @@ actual suspend fun copyToClipboard(text: String) {
 /** Android's settings are shared preferences, not a file the user can reach; the device unlocks instead. */
 actual fun appLockRecoveryFile(): String? = null
 
-actual fun focusesSecretFieldOnEntry(): Boolean = false
+actual fun usesOnScreenKeyboard(): Boolean = true

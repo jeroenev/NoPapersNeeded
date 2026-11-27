@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.appLockRecoveryFile
-import dev.npn.app.platform.focusesSecretFieldOnEntry
+import dev.npn.app.platform.usesOnScreenKeyboard
 import dev.npn.app.ui.common.FocusOnEntry
 import dev.npn.core.security.UnlockResult
 import kotlinx.coroutines.delay
@@ -83,7 +83,15 @@ fun LockScreen(
     val secretFocus = remember { FocusRequester() }
     // Where there is a keyboard to type with straight away; on a phone the device prompt comes
     // first, and a field taking focus would raise the on-screen keyboard behind it.
-    if (focusesSecretFieldOnEntry()) FocusOnEntry(secretFocus)
+    if (!usesOnScreenKeyboard()) FocusOnEntry(secretFocus)
+    // Each try starts from an empty field: what was typed goes to the check, and a wrong one is
+    // not left behind for the next attempt to be typed onto.
+    val submit = {
+        if (secret.isNotEmpty() && !state.checking) {
+            actions.unlock(secret)
+            secret = ""
+        }
+    }
     val deviceAuth = LocalAppLockAuthenticator.current
     val deviceAuthAvailable = remember(deviceAuth) { deviceAuth?.isAvailable() == true }
     val retryRemaining by
@@ -148,12 +156,12 @@ fun LockScreen(
                 readOnly = state.checking,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = secretKeyboard(state.lock.numeric, ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { actions.unlock(secret) }),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
                 isError = error != null,
             )
             if (error != null) ErrorText(error)
             Button(
-                onClick = { actions.unlock(secret) },
+                onClick = submit,
                 enabled = secret.isNotEmpty() && !state.checking && retryRemaining == 0L,
             ) {
                 if (state.checking) {

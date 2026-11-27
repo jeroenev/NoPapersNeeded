@@ -165,8 +165,9 @@ expect suspend fun copyToClipboard(text: String)
 expect fun appLockRecoveryFile(): String?
 
 /**
- * Whether the app lock's secret field takes focus as soon as it shows: on desktop, where the
- * keyboard is right there; not on a phone, where the device prompt comes first and a focused field
- * would raise the on-screen keyboard behind it.
+ * Whether text is typed on an on-screen keyboard (a phone) rather than a physical one (desktop).
+ * The app lock's secret field takes focus on entry only without one (on a phone the device prompt
+ * comes first, and a focused field would raise the keyboard behind it), and only with one does the
+ * PIN setup offer a choice between the number pad and a keyboard with letters.
  */
-expect fun focusesSecretFieldOnEntry(): Boolean
+expect fun usesOnScreenKeyboard(): Boolean

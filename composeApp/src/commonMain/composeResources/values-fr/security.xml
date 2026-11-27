@@ -30,4 +30,6 @@
     <string name="security_confirm_current_help">Pour désactiver ou modifier le verrouillage de l’application, saisissez d’abord le code actuel.</string>
     <string name="security_confirm_device">Confirmer avec l’appareil</string>
     <string name="security_lock_now">Verrouiller maintenant</string>
+    <string name="security_pin_use_letters">Utiliser aussi des lettres</string>
+    <string name="security_pin_use_number_pad">Utiliser le pavé numérique</string>
 </resources>
