@@ -87,7 +87,8 @@ object KnownIssues {
      * deleted for good that come back (an import, or a file a sync tool delivers) bring it back on the
      * device that imported them, for that session, and in the scan that finds the file, and nowhere
      * else: devices disagree on whether the library shows it, and a device disagrees with a rebuild of
-     * its own index. Off once this build writes the op.
+     * its own index. This build writes the op once every replica's records list `keep-v1` (`KeepGate`),
+     * so the checks allow it only for what happens before that; off once every build writes it.
      */
     const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
 

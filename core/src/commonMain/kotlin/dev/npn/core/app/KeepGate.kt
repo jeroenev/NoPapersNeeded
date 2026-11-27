@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Whether this device writes the keep store ([dev.npn.core.fs.KeepStore]): only once every other
+ * Whether this device writes the keep store ([dev.npn.core.fs.KeepStore]), and `doc-undelete`
+ * ([dev.npn.core.journal.JournalOp.DocUndelete]), which the same builds read: only once every other
  * device that may open the library reads it, as a build that does not cannot restore a document
  * whose bytes are only there. It would show it missing, not lose it, but the trash it relies on
  * would hold nothing to restore.

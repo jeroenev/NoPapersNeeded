@@ -646,9 +646,11 @@ Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `Writ
   the document's path, or at the path it was trashed from when no other row holds that, and the
   hash must be the document's. Another file under the same name, or a file still being written,
   brings nothing back.
-- `doc-undelete` is newer than the other lifecycle ops. This build reads and folds it but does not
-  write it (`JournalOp.DocUndelete.WRITTEN` is false; the coordinator's `writeUndelete` defaults
-  from it), so a build from before the op never meets one. Until it is turned on, a deleted
+- `doc-undelete` is newer than the other lifecycle ops. This build reads and folds it, and writes
+  it only once every device that may open the library reads it: the same gate as the keep store's
+  (`KeepGate`; the coordinator's `undeleteRead`), as every build that lists `keep-v1` reads the op.
+  `JournalOp.DocUndelete.WRITTEN` stays false, so a build from before the op never meets one while
+  such a device is active. Until the gate opens, a deleted
   document's return records nothing: an import of its bytes stands until a fold hides it again, a
   rescan shows its file for that scan only, and a delete for good that still removes the bytes
   leaves such an import's file in place, since the coordinator remembers, for the session, which

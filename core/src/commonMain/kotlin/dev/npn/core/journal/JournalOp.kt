@@ -159,9 +159,11 @@ internal sealed interface JournalOp {
      * [DocRestore], over an older [DocTrash]. Builds that predate it refuse an object holding it,
      * as any [Unknown] op.
      *
-     * This build reads and folds it but does not write it ([WRITTEN] is false): the builds in use
-     * do not know it yet. Until a later build turns [WRITTEN] on, a deleted document whose bytes
-     * come back is shown again by the rescan that finds them, for that scan only.
+     * This build reads and folds it, and writes it once every device that may open the library
+     * reads it too: every active device's acknowledgment record lists `keep-v1`, which every build
+     * that reads this op lists ([dev.npn.core.app.KeepGate]). Until then ([WRITTEN] is false), a
+     * deleted document whose bytes come back is shown again by the rescan that finds them, for that
+     * scan only.
      */
     data object DocUndelete : JournalOp {
         override val wire get() = WIRE

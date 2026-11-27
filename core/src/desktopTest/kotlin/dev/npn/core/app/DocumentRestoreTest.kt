@@ -394,6 +394,34 @@ class DocumentRestoreTest {
                 .shouldBeEmpty()
         }
 
+    /**
+     * Once every device reads `doc-undelete` (their records list `keep-v1`; here, the only device),
+     * a re-import of a deleted document records its return, whatever this build's default says.
+     */
+    @Test
+    fun aReImportedDeletedDocumentIsUndeletedOnceEveryDeviceReadsTheOp() =
+        withRig {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            deleteForGood(id)
+            rig.session.keepGate
+                .refresh()
+                .shouldBeTrue()
+
+            rig.session
+                .importPdfBytes(bytes, "a.pdf")
+                .shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
+
+            assertVisible(id)
+            rig.fs
+                .journalObjectTexts()
+                .any { JournalOp.DocUndelete.WIRE in it }
+                .shouldBeTrue()
+        }
+
     /** Trash [id], then delete it for good from the trash, as the user does. */
     private suspend fun deleteForGood(id: String) {
         rig.session.docLifecycle.trashDoc(id)

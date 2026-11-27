@@ -195,6 +195,16 @@ internal class JournalCoordinator(
 ) {
     private val mutex = Mutex()
 
+    /**
+     * Whether every device that may open the library reads `doc-undelete`, so this one may write it
+     * whatever [writeUndelete] says: the session points it at its capability gate
+     * ([dev.npn.core.app.KeepGate]: a build that lists `keep-v1` reads the op).
+     */
+    var undeleteRead: () -> Boolean = { false }
+
+    /** Whether a deleted document's return is recorded now: [writeUndelete], or [undeleteRead]. */
+    private val undeleteWritten: Boolean get() = writeUndelete || undeleteRead()
+
     private val blockFlow = MutableStateFlow<WriteBlock?>(null)
 
     /**
@@ -578,7 +588,7 @@ internal class JournalCoordinator(
                 relPath: String,
             ): Boolean {
                 val current = foldedState()
-                val ops = current.restoreOps(docId, relPath, writeUndelete)
+                val ops = current.restoreOps(docId, relPath, undeleteWritten)
                 if (ops.isEmpty()) {
                     if (current.isDeleted(docId)) returnedUnrecorded += docId
                     return false
@@ -836,7 +846,8 @@ internal class JournalCoordinator(
             resurrected.filter {
                 it.immediate || (it.hiddenAtMillis <= settled && seen.getValue(it.docId).sinceMillis <= settled)
             }
-        val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
+        val written = undeleteWritten
+        val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, written) }
         if (ops.isEmpty()) return
         log.runLogged("Recording the return of ${returned.size} documents") {
             withContext(NonCancellable) { recordProjected(state, ops) }

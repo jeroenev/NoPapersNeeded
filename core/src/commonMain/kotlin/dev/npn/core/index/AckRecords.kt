@@ -251,7 +251,10 @@ internal class AckRecords(
         /** This build writes acknowledgment records ([AckRecords]). */
         const val ACKS_V1 = "acks-v1"
 
-        /** This build reads, and once every device does writes, the keep store ([dev.npn.core.fs.KeepStore]). */
+        /**
+         * This build reads, and once every device does writes, the keep store
+         * ([dev.npn.core.fs.KeepStore]) and the `doc-undelete` op ([dev.npn.core.journal.JournalOp.DocUndelete]).
+         */
         const val KEEP_V1 = "keep-v1"
 
         /** What this build reads and writes, as its records say. */

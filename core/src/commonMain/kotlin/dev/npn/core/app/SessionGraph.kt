@@ -202,7 +202,11 @@ internal class SessionGraph(
     val keepStore = KeepStore(deps.fs, deps.installationId, deps.ids)
 
     /** Whether every device reads the keep store, so this one may write it; read after each background rescan. */
-    val keepGate = KeepGate(ackRecords, coordinator::setting, deps.clock)
+    val keepGate =
+        KeepGate(ackRecords, coordinator::setting, deps.clock).also { gate ->
+            // A build that lists keep-v1 reads doc-undelete too: once every device does, it is written.
+            coordinator.undeleteRead = { gate.open }
+        }
 
     /** This device's durable intents: what a crash cut short, settled before each background rescan. */
     val intents =
