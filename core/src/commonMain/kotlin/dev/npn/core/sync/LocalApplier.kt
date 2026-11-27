@@ -2,6 +2,7 @@ package dev.npn.core.sync
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.uniquifyPath
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -179,16 +180,34 @@ class LocalApplier(
         return moved
     }
 
+    /**
+     * Move the document's file into the trash, as the device that trashed it did. The check of the
+     * file and the move are two steps another process can come between (an overwrite by rename), so
+     * the file the move took is checked again where it went, by the stat the check saw, which a move
+     * keeps, or else by its hash. Another file goes back to the path, or beside it when that was
+     * taken again: left in the trash under the document's name, it would be hidden for good, as no
+     * rescan indexes the trash and no restore or purge takes it.
+     */
     private suspend fun moveToTrash(
         action: SyncAction.MoveLocalToTrash,
         report: SyncReportBuilder,
     ): Boolean =
         hooks.serialized { journal ->
-            if (!journal.isTrashed(action.docId) || !verified(action.relPath, action.docId, report)) {
+            val checked = fs.stat(action.relPath)
+            if (!journal.isTrashed(action.docId) || checked == null ||
+                !verified(action.relPath, action.docId, report)
+            ) {
                 return@serialized false
             }
-            fs.move(action.relPath, trashOps.trashTarget(action.relPath, action.docId, action.episodeMillis))
-            true
+            val target = trashOps.trashTarget(action.relPath, action.docId, action.episodeMillis)
+            fs.move(action.relPath, target)
+            val moved = fs.stat(target)
+            if (moved != null && moved.hasStoredStat(checked.size, checked.mtimeMillis)) return@serialized true
+            if (fs.sha256(target) == action.docId) return@serialized true
+            report.conflicts += SyncConflict(action.docId, action.relPath, ConflictKind.LOCAL_CHANGED)
+            val back = uniquifyPath(action.relPath, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
+            fs.move(target, back)
+            back != action.relPath
         }
 
     /**

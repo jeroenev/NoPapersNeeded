@@ -1,7 +1,10 @@
 package dev.npn.core.sync
 
+import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.ImportOutcome
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.trashEntries
 import dev.npn.core.journal.JournalPaths
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -139,6 +142,54 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             Files.readAllBytes(pair.b.libRoot.resolve("inbox/keep.pdf")) shouldBe keep
             Files.readAllBytes(pair.b.libRoot.resolve("inbox/gone.pdf")) shouldBe gone
         }
+
+    /**
+     * Another process replaces B's file between the pass's check of it and its move into the trash
+     * (an overwrite by rename): the move takes the other file. It goes back to its path, and never
+     * stays in the trash under the document's name, where no restore or purge ever takes it (seed
+     * 4210027 at 43fbf8e5, "files in the trash hold bytes no document of their name has").
+     */
+    @Test
+    fun aFileReplacedBeforeTheMoveIntoTheTrashGoesBack() {
+        var interfere = false
+        var rig: AppSessionRig? = null
+        val foreign = pdf("replaced by rename after the pass checked it")
+        withPair(
+            filesOnB = { fs ->
+                object : LibraryFileSystem by fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        if (interfere && fromRelPath == "inbox/keep.pdf" &&
+                            toRelPath.startsWith(NpnPaths.TRASH_DIR + "/")
+                        ) {
+                            interfere = false
+                            rig?.writePdf(fromRelPath, foreign)
+                        }
+                        fs.move(fromRelPath, toRelPath)
+                    }
+                }
+            },
+        ) { pair ->
+            rig = pair.b
+            val docId = pair.importOnA("keep.pdf", "trashed elsewhere")
+            pair.a.session.syncCompleted()
+            pair.b.session.syncCompleted()
+            pair.a.session.docLifecycle
+                .trashDoc(docId)
+            pair.a.session.syncCompleted()
+
+            interfere = true
+            pair.b.session.syncCompleted()
+            interfere.shouldBeFalse()
+            pair.b.fs
+                .trashEntries()
+                .filter { pair.b.fs.sha256(it.relPath) != docId }
+                .shouldBeEmpty()
+            Files.readAllBytes(pair.b.libRoot.resolve("inbox/keep.pdf")) shouldBe foreign
+        }
+    }
 
     @Test
     fun aRemoteFileGoneFromTheListingIsUnknownNotDeletedAndIsReUploaded() =

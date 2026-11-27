@@ -2,6 +2,7 @@ package dev.npn.core.sync
 
 import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.LibrarySessionImpl
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
@@ -236,6 +237,8 @@ internal class SyncPair private constructor(
         suspend fun create(
             scope: CoroutineScope,
             reportsHashes: Boolean = false,
+            /** Wraps B's library filesystem, as [AppSessionRig.create]'s `files` does. */
+            filesOnB: (LibraryFileSystem) -> LibraryFileSystem = { it },
         ): SyncPair {
             val remote = DirectoryRemoteStore(Files.createTempDirectory("npn-sync-remote"), reportsHashes)
             val transport = DirectoryTransport(remote)
@@ -253,6 +256,7 @@ internal class SyncPair private constructor(
                     syncTransport = transport,
                     cloudSync = config,
                     installationId = "install-b",
+                    files = filesOnB,
                 )
             return SyncPair(remote, a, b)
         }

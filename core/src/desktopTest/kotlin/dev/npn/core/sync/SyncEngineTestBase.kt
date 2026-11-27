@@ -2,6 +2,7 @@ package dev.npn.core.sync
 
 import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.ImportOutcome
+import dev.npn.core.fs.LibraryFileSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,10 +21,11 @@ internal open class SyncEngineTestBase {
 
     protected fun withPair(
         reportsHashes: Boolean = false,
+        filesOnB: (LibraryFileSystem) -> LibraryFileSystem = { it },
         block: suspend (SyncPair) -> Unit,
     ) = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val pair = SyncPair.create(scope, reportsHashes)
+        val pair = SyncPair.create(scope, reportsHashes, filesOnB)
         try {
             block(pair)
         } finally {
