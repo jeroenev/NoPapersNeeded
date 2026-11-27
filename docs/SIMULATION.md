@@ -189,7 +189,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   through the facets (a user's change to a seeded field among them: relabelled or removed), rescans,
   OCR completions, bake in place (also one whose move of the original aside lands but reports a
   failure while the app rescans back to back, so a rescan can list the original under its recovery
-  name while the bake puts it back), multi-page imports and split (also one whose trash of the
+  name while the bake puts it back, and one whose moves into place and back are both refused),
+  multi-page imports and split (also one whose trash of the
   original fails while the sync tool scans the replica part-way, so a part it takes back may be on
   the other devices already), the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder

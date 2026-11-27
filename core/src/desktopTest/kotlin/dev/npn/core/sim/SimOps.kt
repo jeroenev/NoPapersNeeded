@@ -64,6 +64,7 @@ enum class OpKind(
     // a missing document to other bytes.
     BAKE(4),
     BAKE_RESCANNED(1),
+    BAKE_RESTORE_REFUSED(1),
     IMPORT_MULTIPAGE(3),
     SPLIT(4),
     SPLIT_SEEN_FAILING(1),
@@ -247,6 +248,7 @@ internal class SimGenerator(
             OpKind.OCR_COMPLETE -> ocrComplete()
             OpKind.BAKE -> s.live.pickOrNull()?.let(::bake)
             OpKind.BAKE_RESCANNED -> s.live.pickOrNull()?.let { bakeRescanned(sim, it, bake(it)) }
+            OpKind.BAKE_RESTORE_REFUSED -> s.live.pickOrNull()?.let { bakeRestoreRefused(sim, it, bake(it)) }
             OpKind.IMPORT_MULTIPAGE -> importMultipage()
             OpKind.SPLIT -> splitAny(s)
             OpKind.SPLIT_SEEN_FAILING -> splitAny(s)?.let { splitSeenFailing(random, sim, syncScan, it) }
@@ -975,6 +977,26 @@ private fun rescan() =
     }
 
 private val EMPTY_TAGS = List(3) { "empty-$it" }
+
+/**
+ * [bake] of [doc] whose move of the baked bytes into place fails, and so does the move of the
+ * original back from its recovery name: the bake fails with the original kept there, which the
+ * next rescan indexes, and the storage's refusal is the reason it reports.
+ */
+private fun bakeRestoreRefused(
+    sim: Simulation,
+    doc: SimDoc,
+    bake: Planned.Act,
+): Planned.Group {
+    // Both moves land at the document's path; the move aside, to a recovery name, does not.
+    val rule = SimFaults.Rule(FsMethod.MOVE, doc.relPath, SimFaults.Point.BEFORE, times = 2)
+    val fault =
+        Planned.Control("arm fault $rule", instant = true) {
+            sim.fs.faults.arm(rule)
+            "armed"
+        }
+    return Planned.Group(listOf(bake), listOf(0L to fault))
+}
 
 /**
  * [bake] of [doc], whose move of the original aside lands but reports a failure, so the bake puts
