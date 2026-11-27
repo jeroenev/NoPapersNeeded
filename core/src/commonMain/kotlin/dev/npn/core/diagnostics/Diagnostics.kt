@@ -247,11 +247,11 @@ object Diagnostics {
     }
 
     /**
-     * Document names, with the library-relative folders in front of them (often correspondents).
-     * A name may hold spaces, so where it starts is a guess: it runs back to the start of its
-     * clause, but never into an entry's timestamp, level or first word (the action, "Importing").
+     * Document names and library-relative paths, folders included: a folder is user data, and often
+     * names a correspondent. A name may hold spaces, so where it starts is a guess: it runs back to
+     * the start of its clause, but never into an entry's timestamp, level or action ("Importing").
      * The guess errs toward removing too much; call sites mark user data ([dev.npn.core.util.sensitive])
-     * so that this is only the backstop.
+     * so that this is only the backstop, for text such as a library's exception message.
      */
     private fun scrubDocumentNames(text: String): String =
         text.lineSequence().joinToString("\n") { line ->
@@ -259,7 +259,7 @@ object Diagnostics {
             if (head.isEmpty() && STACK_FRAME.matches(line)) {
                 line
             } else {
-                head + scrubNames(line.substring(head.length))
+                head + scrubFolders(scrubNames(line.substring(head.length)))
             }
         }
 
@@ -285,6 +285,56 @@ object Diagnostics {
             // Fail closed, as [replace] does.
             ""
         }
+
+    /**
+     * Replace each library-relative path [scrubNames] left, one without a document's extension
+     * (`Steuer 2024/Alte Briefe`), with `<path>`: from the start of its clause to its end, as where a
+     * folder's name ends is as much a guess as where it starts. A separator between digits (`3/10`)
+     * is no path, nor is a protocol or media type ([NOT_A_PATH]).
+     */
+    private fun scrubFolders(text: String): String =
+        try {
+            val out = StringBuilder()
+            var copied = 0
+            var i = 0
+            while (i < text.length) {
+                if (!isPathSeparator(text, i)) {
+                    i++
+                    continue
+                }
+                var start = i
+                while (start > copied && text[start - 1] !in CLAUSE_END) start--
+                while (start < i && text[start] in " ,") start++
+                var end = i + 1
+                while (end < text.length && text[end] !in CLAUSE_END) end++
+                while (end > i + 1 && text[end - 1] == ' ') end--
+                out.append(text, copied, start).append("<path>")
+                copied = end
+                i = end
+            }
+            out.append(text, copied, text.length).toString()
+        } catch (_: RuntimeException) {
+            // Fail closed, as [replace] does.
+            ""
+        }
+
+    private fun isPathSeparator(
+        text: String,
+        at: Int,
+    ): Boolean {
+        if (text[at] != '/' && text[at] != '\\') return false
+        val before = text.getOrNull(at - 1) ?: return false
+        val after = text.getOrNull(at + 1) ?: return false
+        // Inside a word on both sides, and with a letter beside it: `3/10` is no path.
+        val inWord = { c: Char -> !c.isWhitespace() && c !in CLAUSE_END }
+        if (!inWord(before) || !inWord(after)) return false
+        if (!before.isLetter() && !after.isLetter()) return false
+        var tokenStart = at
+        while (tokenStart > 0 && !text[tokenStart - 1].isWhitespace()) tokenStart--
+        var tokenEnd = at
+        while (tokenEnd < text.length && !text[tokenEnd].isWhitespace()) tokenEnd++
+        return !NOT_A_PATH.matches(text.substring(tokenStart, tokenEnd).trimEnd(',', '.', ')'))
+    }
 
     private fun onlyLogLines(text: String): String =
         text
@@ -353,8 +403,15 @@ object Diagnostics {
     private val LOG_ENTRY = Regex("^\\d{4}-\\d{2}-\\d{2}T\\S+ (?:INFO|WARN|ERROR) ")
     private val DEBUG_MORE = Regex("^\\.\\.\\. \\d+ more$")
 
-    /** An entry's timestamp, level and first word, when that word is no file name: "… WARN Importing ". */
-    private val ENTRY_HEAD = Regex("^\\d{4}-\\d{2}-\\d{2}T\\S+ (?:INFO|WARN|ERROR) (?:[^\\s./\\\\:]+ )?")
+    /**
+     * An entry's timestamp, level and action: "… WARN Importing ". The app's own messages open with
+     * an action ("Importing", "Hashing"); any other first word may begin a folder's name, so it goes
+     * with the path that follows it.
+     */
+    private val ENTRY_HEAD = Regex("^\\d{4}-\\d{2}-\\d{2}T\\S+ (?:INFO|WARN|ERROR) (?:[A-Za-z]+ing )?")
+
+    /** Text with a slash that names no file: `HTTP/1.1`, a media type such as `application/json`. */
+    private val NOT_A_PATH = Regex("(?i)HTTP/\\d(?:\\.\\d)?|(?:application|text|image|audio|video|multipart)/[\\w.+-]+")
 
     /**
      * `at dev.npn.Foo.<init>(Foo.kt:12)`, and a JDK or class loader frame with its module in front:
@@ -376,10 +433,19 @@ object Diagnostics {
     private val FILE_URI = Regex("(?i)\\b(?:file|content)://[^\\s\"'<>)]+")
     private val URL_SHAPE = Regex("(?i)\\b(?:https?|ftp|s3|webdav)://[^\\s\"'<>)]+")
 
-    // An absolute path with at least one nested segment; `and/or` and a bare `/` stay readable.
-    // Spaces inside a segment are allowed, so "My Documents/Steuerbescheid 2024.pdf" goes whole.
-    private val POSIX_PATH = Regex("(?<![\\w<])/(?:[^/\\n\"'<>]+/)+[^/\\n\"'<>]+")
-    private val WINDOWS_PATH = Regex("(?i)\\b[A-Z]:\\\\[^\\n\"'<>|]+")
+    // An absolute path with at least one nested segment; a bare `/` stays readable. Spaces inside a
+    // segment are allowed, so "My Documents/Steuerbescheid 2024.pdf" goes whole. It ends with a
+    // document's extension, or else where its clause does, so the words after it stay.
+    private val POSIX_PATH =
+        Regex(
+            "(?<![\\w<])/(?:[^/\\n\"'<>]+/)+" +
+                "(?:[^/\\n\"'<>:;=|]*?\\.(?:$DOCUMENT_EXTENSIONS)\\b|[^/\\n\"'<>:;=|]+)",
+        )
+    private val WINDOWS_PATH =
+        Regex(
+            "(?i)\\b[A-Z]:\\\\+(?:[^\\\\\\n\"'<>|]+\\\\+)*" +
+                "(?:[^\\\\\\n\"'<>|:;=]*?\\.(?:$DOCUMENT_EXTENSIONS)\\b|[^\\\\\\n\"'<>|:;=]*)",
+        )
 
     /** Extensions a scanned or imported source can carry; the whole name is a document name. */
     private const val DOCUMENT_EXTENSIONS = "pdf|jpe?g|png|heic|tiff?|webp|bmp"

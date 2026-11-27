@@ -166,6 +166,48 @@ class DiagnosticsTest {
             """.trimIndent()
     }
 
+    /**
+     * Text no call site marked (a library's or the JDK's exception message, or an entry that is one)
+     * loses the whole path, folders included: a folder is user data. An entry keeps its timestamp,
+     * level and action.
+     */
+    @Test
+    fun unmarkedPathsGoWholeFoldersIncluded() {
+        val text =
+            Diagnostics.sanitize(
+                """
+                2026-11-22T10:00:00Z WARN Private Records/Invoice.pdf
+                java.io.IOException: Private Records/Invoice.pdf (No such file or directory)
+                2026-11-22T10:01:00Z WARN Hashing Steuer Unterlagen/Bank Auszüge 2024/März Abrechnung.pdf failed
+                2026-11-22T10:02:00Z WARN Reading C:\Users\bob\My Documents\Tax Return.pdf failed
+                java.nio.file.AccessDeniedException: C:\Users\bob\Private Records
+                Caused by: java.io.IOException: Private Records\Arzt Briefe\Befund.pdf
+                2026-11-22T10:03:00Z WARN Reading /home/alice/My Docs/Tax.pdf failed
+                2026-11-22T10:04:00Z WARN Restoring failed: Steuer 2024/Alte Briefe was deleted meanwhile
+                java.nio.file.NoSuchFileException: Private Records/Arzt
+                2026-11-22T10:05:00Z WARN Private Records/Arzt
+                2026-11-22T10:06:00Z WARN Rendering page 3/10 failed
+                java.io.IOException: unexpected status HTTP/1.1 500 for application/json
+                """.trimIndent(),
+            )
+
+        text shouldBe
+            """
+            2026-11-22T10:00:00Z WARN <document>
+            java.io.IOException: <document> (No such file or directory)
+            2026-11-22T10:01:00Z WARN Hashing <document> failed
+            2026-11-22T10:02:00Z WARN Reading <path> failed
+            java.nio.file.AccessDeniedException: <path>
+            Caused by: java.io.IOException: <document>
+            2026-11-22T10:03:00Z WARN Reading <path> failed
+            2026-11-22T10:04:00Z WARN Restoring failed: <path>
+            java.nio.file.NoSuchFileException: <path>
+            2026-11-22T10:05:00Z WARN <path>
+            2026-11-22T10:06:00Z WARN Rendering page 3/10 failed
+            java.io.IOException: unexpected status HTTP/1.1 500 for application/json
+            """.trimIndent()
+    }
+
     @Test
     fun jdkAndConstructorFramesStayInTheTrace() {
         val trace =
