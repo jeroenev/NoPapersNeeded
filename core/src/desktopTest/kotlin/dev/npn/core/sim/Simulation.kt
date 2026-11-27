@@ -112,7 +112,15 @@ object KnownIssues {
 
     /** Each finding by the phrases its failure message holds, all of them. */
     val knownFailures: Map<List<String>, String> =
-        emptyMap()
+        mapOf(
+            // A split that fails after copying the original's metadata onto its parts takes their
+            // files back but leaves that metadata in the journal, which then shows the parts as
+            // documents: Verify library reports each missing (seed 1248005, and seed 2000113's
+            // split rollback). fix/split-rollback-synced-part deletes a part for good in the journal
+            // before taking its file back; remove this entry with it.
+            listOf("verification reports", "which the journal shows but the app took from", "(part ") to
+                "a failed split's parts keep their copied metadata in the journal",
+        )
 
     /** The finding [message] reports, or null for a new failure. */
     fun classify(message: String): String? = knownFailures.entries.firstOrNull { it.key.all(message::contains) }?.value

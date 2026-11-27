@@ -326,6 +326,11 @@ means turning its switch off (or removing its `knownFailures` entry) and making 
   convergence check compares the libraries without document paths, and traces the paths that
   differ. Off once renames are settled with a temporary name.
 
+- **A failed split's parts stay in the journal**: a split that fails after copying the original's
+  metadata onto its parts takes their files back, but the metadata stays, so the journal shows the
+  parts and Verify library reports them missing (seed 1248005). Listed in `knownFailures` until
+  the fix that deletes a part for good in the journal before taking its file back lands.
+
 ## Finding: rclone bisync loses documents
 
 Run with `-Dnpn.sim.bisync=40` over seeds 1..80 (250 steps), nearly every bisync seed failed the
