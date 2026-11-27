@@ -143,6 +143,11 @@ internal class ReplicaSetup(
     val watched: SimWatchedFolder?,
     /** Whether the watched folder's importer deletes what it imported. */
     val deleteAfterImport: Boolean,
+    /**
+     * The folder sync tool scanning this replica's folder now, at any instant of a step, returning
+     * how many paths changed; null where no folder sync tool syncs it (a cloud seed).
+     */
+    val syncScan: (() -> Int)? = null,
 )
 
 /** The world's log, each entry naming the replica it came from. */
@@ -239,6 +244,7 @@ internal class SyncSimulation(
                     LABEL_STRIDE * index,
                     watched,
                     sync.deleteAfterImport[index],
+                    syncScan = if (remote == null) ({ tool.scan(index) }) else null,
                 ),
                 tamperWithRebuild,
             )

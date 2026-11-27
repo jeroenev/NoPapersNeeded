@@ -64,6 +64,7 @@ enum class OpKind(
     BAKE(4),
     IMPORT_MULTIPAGE(3),
     SPLIT(4),
+    SPLIT_SEEN_FAILING(1),
     RELINK_MISSING(2),
 
     // The auto-match rules, whose field sets drive the storage-path rule, which moves documents on
@@ -177,6 +178,8 @@ internal class SimGenerator(
     private val watched: SimWatchedFolder?,
     /** Whether the watched folder's importer deletes what it imported. */
     private val deleteAfterImport: Boolean,
+    /** The folder sync tool scanning this replica's folder now, or null where none syncs it. */
+    private val syncScan: (() -> Int)? = null,
 ) {
     private var nextLabel = labelBase
     private val receipts = ArrayList<TrashReceipt>()
@@ -243,6 +246,7 @@ internal class SimGenerator(
             OpKind.BAKE -> s.live.pickOrNull()?.let(::bake)
             OpKind.IMPORT_MULTIPAGE -> importMultipage()
             OpKind.SPLIT -> splitAny(s)
+            OpKind.SPLIT_SEEN_FAILING -> splitAny(s)?.let { splitSeenFailing(random, sim, syncScan, it) }
             OpKind.RELINK_MISSING -> relinkMissing(s)
             OpKind.RULE_SAVE -> saveRule()
             OpKind.RULE_DELETE -> ruleAct("delete") { session, id -> session.rules.delete(id) }
@@ -285,12 +289,6 @@ internal class SimGenerator(
             .sorted()
             .pickOrNull()
             ?.let { watchedDrop(sim.known.getValue(it)) }
-
-    private fun rescan() =
-        Planned.Act("rescan") { session ->
-            val report = session.rescan()
-            "added ${report.added}, retry ${report.retryAfterMillis}"
-        }
 
     private fun dropIndex() =
         Planned.Control("drop index.db and reopen") { sim.dropIndexAndReopen(crash = random.chance(50)) }
@@ -871,6 +869,10 @@ private const val OCR_BURST = 4
 private const val CONCURRENCY = 3
 private const val DURING = 2
 private const val DURING_MILLIS = 600L
+
+/** How many times, and within how many virtual millis of its start, the sync tool scans during a failing split. */
+private const val SPLIT_SCANS = 2
+private const val SPLIT_SCAN_MILLIS = 1_500L
 private const val RETENTION_MAX_DAYS = 60
 private const val LABELS = 5
 
@@ -963,7 +965,39 @@ private val WATCHED_KINDS =
         OpKind.WATCHED_SWEEP,
     )
 
+private fun rescan() =
+    Planned.Act("rescan") { session ->
+        val report = session.rescan()
+        "added ${report.added}, retry ${report.retryAfterMillis}"
+    }
+
 private val EMPTY_TAGS = List(3) { "empty-$it" }
+
+/**
+ * [split], whose last step, the trash of its original, fails, so it takes its parts back, while the
+ * sync tool scans the replica part-way through ([scan]; null where none syncs it, and no step): a
+ * part it carries to the other devices before the split takes it back is a document there.
+ */
+private fun splitSeenFailing(
+    random: Random,
+    sim: Simulation,
+    scan: (() -> Int)?,
+    split: Planned.Act,
+): Planned.Group? {
+    if (scan == null) return null
+    val rule = SimFaults.Rule(FsMethod.MOVE, NpnPaths.TRASH_DIR, SimFaults.Point.BEFORE, times = 1)
+    val fault =
+        Planned.Control("arm fault $rule", instant = true) {
+            sim.fs.faults.arm(rule)
+            "armed"
+        }
+    val scans =
+        List(SPLIT_SCANS) {
+            random.nextLong(0, SPLIT_SCAN_MILLIS) to
+                Planned.Control("sync: scan this device", instant = true) { "${scan()} path(s) changed" }
+        }
+    return Planned.Group(listOf(split), listOf(0L to fault) + scans)
+}
 
 private fun emptyTag(
     random: Random,

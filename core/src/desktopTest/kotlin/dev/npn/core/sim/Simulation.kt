@@ -156,7 +156,8 @@ internal class Simulation(
     private val trace = setup.trace
     private val label = "[${setup.name}] "
 
-    private val generator = SimGenerator(setup.random, this, setup.labelBase, setup.watched, setup.deleteAfterImport)
+    private val generator =
+        SimGenerator(setup.random, this, setup.labelBase, setup.watched, setup.deleteAfterImport, setup.syncScan)
 
     init {
         replica.onOpen = generator::startImporter
