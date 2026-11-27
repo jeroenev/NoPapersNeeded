@@ -1,5 +1,6 @@
 package dev.npn.core.sim
 
+import dev.npn.core.app.IngestFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.ocr.OcrEngine
@@ -261,13 +262,46 @@ class SimXmpIO(
  * by the path [ExternalSource] names. A delete keeps to the interface's contract (only while the
  * file still holds what was imported), and records as a violation a delete of bytes the library
  * has no document of.
+ *
+ * The importer proves the library holds the document ([IngestFacade.holdsDocument]) and then
+ * deletes the source, two calls on two filesystems with time between them: the sync tool or another
+ * process may take the library's file in that gap, as they may a moment after the delete. A delete
+ * whose bytes the library no longer holds is no violation when the importer's last proof of the
+ * document, made through [proving], held when it was made and only the sync tool or the outside
+ * world took the document's bytes from the library folder since: the app acted on a fresh proof and
+ * took nothing itself. A delete with no such proof, or after the app itself took the bytes, is one.
  */
 internal class SimWatchedFolder(
     private val name: String,
     private val now: () -> Long,
     /** Whether the library has a document of these bytes: holds them, or a relink superseded them. */
     private val accounted: suspend (hash: String) -> Boolean,
+    /** Every time bytes left the library folder: who took a document's bytes since a proof. */
+    private val losses: Losses,
 ) : WatchedFolder {
+    /** When the importer last started a [IngestFacade.holdsDocument] that answered yes, by document. */
+    private val provenAt = HashMap<String, Long>()
+
+    /** [ingest], with every proof that the library holds a document recorded for [delete] to judge by. */
+    fun proving(ingest: IngestFacade): IngestFacade =
+        object : IngestFacade by ingest {
+            override suspend fun holdsDocument(docId: String): Boolean {
+                val startedAt = now()
+                return ingest.holdsDocument(docId).also { if (it) provenAt[docId] = startedAt }
+            }
+        }
+
+    /**
+     * Whether, since the importer last proved the library holds [docId], something other than the
+     * app took its bytes from the library folder (the last copy there among them) and the app took
+     * none: the gap between a proof and the delete, not a stale or skipped proof.
+     */
+    private fun takenSinceProof(docId: String): Boolean {
+        val since = provenAt[docId] ?: return false
+        val taken = losses.recordsOf(docId).filter { it.atMillis >= since }
+        return taken.any { it.lastHere } && taken.none { it.loss == Loss.APP || it.loss == Loss.APP_TRASH }
+    }
+
     private class Entry(
         var bytes: ByteArray,
         var mtime: Long,
@@ -336,7 +370,7 @@ internal class SimWatchedFolder(
         val entry = files[file.name] ?: return false
         if (!file.stillHolds(docId, entry.bytes.size.toLong(), entry.mtime) { sha256Bytes(entry.bytes) }) return false
         val hash = sha256Bytes(entry.bytes)
-        if (!accounted(hash)) {
+        if (!accounted(hash) && !takenSinceProof(docId)) {
             violations += "$name deleted '${file.name}' (${hash.take(ID)}), which the library holds nowhere"
         }
         files.remove(file.name)

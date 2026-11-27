@@ -770,7 +770,7 @@ internal class SimGenerator(
         session: LibrarySessionImpl,
         folder: SimWatchedFolder,
     ) = WatchedFolderImporter(
-        ingest = session,
+        ingest = folder.proving(session),
         folder = folder,
         deleteAfterImport = { deleteAfterImport },
         log = sim.replica.log,

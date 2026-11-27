@@ -300,6 +300,88 @@ class SyncSimulationHarnessTest {
             losses.map { it.loss } shouldBe listOf(Loss.OUTSIDE)
         }
 
+    /**
+     * The sync tool replacing the library's file between the watched-folder importer's proof that the
+     * library holds the document and its delete of the source is the gap between two calls on two
+     * filesystems, as it would be a moment after the delete: no finding (seed 7000007 at 8a15f0f7,
+     * where the tool resolved a conflict on another device and replaced this one's file, the bytes
+     * kept in that device's conflict copy).
+     */
+    @Test
+    fun aWatchedSourceDeletedOnAProofTheSyncToolOvertookIsNoFinding() =
+        runTest {
+            watchedSourceDeleted(proved = true, takenBy = Loss.SYNC) shouldBe null
+        }
+
+    /** The same delete with no proof that the library held the document fails the run. */
+    @Test
+    fun aWatchedSourceDeletedWithNoProofFailsTheRun() =
+        runTest {
+            watchedSourceDeleted(proved = false, takenBy = Loss.SYNC)?.message shouldContain
+                "which the library holds nowhere"
+        }
+
+    /** A proof excuses nothing the app itself took since: the delete then threw the document away. */
+    @Test
+    fun aWatchedSourceDeletedAfterTheAppTookTheLibraryFileFailsTheRun() =
+        runTest {
+            watchedSourceDeleted(proved = true, takenBy = Loss.APP)?.message shouldContain
+                "which the library holds nowhere"
+        }
+
+    /**
+     * At step 2, replica 0 imports bytes into the library and finds them in its watched folder too;
+     * the importer proves the library holds them when [proved], [takenBy] then takes the library's
+     * file (the app deleting it, or else the sync tool writing other bytes over it), and the source is
+     * deleted. The run's failure, or null when it passes.
+     */
+    private fun TestScope.watchedSourceDeleted(
+        proved: Boolean,
+        takenBy: Loss,
+    ): SimFailure? {
+        val config = config()
+        val sync =
+            SyncConfig.forSeed(config).let {
+                it.copy(
+                    joinsAt = List(it.replicas) { 0 },
+                    watched = List(it.replicas) { i -> i == 0 },
+                    deleteAfterImport = List(it.replicas) { false },
+                    cloud = null,
+                    bisync = null,
+                )
+            }
+        val simulation =
+            SyncSimulation(testScheduler, config, { step ->
+                if (step == 2) {
+                    val member = members[0]
+                    val folder = member.watched!!
+                    val fs = member.fs
+                    val bytes = SimPdf.bytes("watched duplicate", "v", BAKED_SIZE + 6)
+                    val docId = sha256Bytes(bytes)
+                    world.read("import, prove, take the library file, delete the source") {
+                        val session = member.replica.session!!
+                        val path = (session.importPdfBytes(bytes, "duplicate.pdf") as ImportOutcome.Imported).relPath
+                        folder.write(WATCHED_SOURCE, bytes)
+                        val source = folder.listPdfs().single { it.name == WATCHED_SOURCE }
+                        if (proved) folder.proving(session).holdsDocument(docId).shouldBeTrue()
+                        if (takenBy == Loss.APP) {
+                            fs.delete(path)
+                        } else {
+                            val other = SimPdf.bytes("written over it", "w", BAKED_SIZE + 7)
+                            fs.bySyncTool { fs.externalWriteAtomic(path, other) }
+                        }
+                        folder.delete(source, docId).shouldBeTrue()
+                    }
+                }
+            }, sync)
+        return try {
+            simulation.run()
+            null
+        } catch (failure: SimFailure) {
+            failure
+        }
+    }
+
     /** When another process writes the bytes elsewhere and deletes them again, if it does. */
     private enum class OutsideLoss { NONE, BEFORE, AFTER }
 
@@ -384,5 +466,6 @@ class SyncSimulationHarnessTest {
         const val JOIN_AT = 20
         const val HASH = 64
         const val SYNC_ROUNDS = 3
+        const val WATCHED_SOURCE = "harness-duplicate.pdf"
     }
 }

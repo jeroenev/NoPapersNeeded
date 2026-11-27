@@ -229,7 +229,8 @@ internal class SyncSimulation(
             )
         val replica =
             SimReplica(world, "sim-$name", fs, ids = SimIds(Random(salted(3))), log = ReplicaLog(name, world.log))
-        val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
+        val watched =
+            if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted, fs.losses) else null
         val sim =
             Simulation(
                 config.copy(profile = sync.profiles[index], mtimes = sync.mtimes[index]),
