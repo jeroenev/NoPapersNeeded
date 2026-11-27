@@ -11,6 +11,7 @@ import dev.npn.core.journal.PendingOp
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.TestScope
@@ -416,6 +417,62 @@ class SyncSimulationHarnessTest {
                     fs.externalMove("second.pdf", "first.pdf")
                 }
             }, sync).run()
+        }
+
+    /**
+     * A trashed document's own bytes found back in a folder no watch reports on (SAF storage) are
+     * recorded as its restore by the time the replicas are checked at rest, as docs/SIMULATION.md
+     * has it: each replica rescans once the day at rest begins, so the restore window counts from
+     * then (`JournalCoordinator.recordRestores`). Seen first by the rescan after the day, the file
+     * was shown for that scan only, and a fold before the check hid it again: a settled PDF that is
+     * neither a live document nor a known duplicate (seed 4101227 at 44dee63c). Here another process
+     * moves the file before the trash, which then has no file to move.
+     */
+    @Test
+    fun aTrashedDocumentsBytesBackOnStorageNoWatchReportsOnAreRestoredByTheCheckAtRest() =
+        runTest {
+            val bytes = SimPdf.bytes("back unwatched", "v", BAKED_SIZE + 7)
+            val docId = sha256Bytes(bytes)
+            // At rest after the step that trashes it, checked at the next step.
+            val config = config().copy(quiesceEvery = STEPS / 2)
+            val sync =
+                SyncConfig.forSeed(config).let {
+                    it.copy(
+                        profiles = List(it.replicas) { StorageProfile.SAF },
+                        joinsAt = List(it.replicas) { 0 },
+                        cloud = null,
+                        bisync = null,
+                    )
+                }
+            val lifecycle = ArrayList<String?>()
+            SyncSimulation(testScheduler, config, { step ->
+                val member = members[0]
+                if (step == config.quiesceEvery) {
+                    member.fs.externalWriteAtomic("back.pdf", bytes)
+                    world.advance(SETTLED_MILLIS)
+                    world.read("index it") { member.replica.session!!.rescan() }
+                    member.fs.externalMove("back.pdf", "moved.pdf")
+                    world.read("trash it, its file moved away") {
+                        member.replica.session!!
+                            .docLifecycle
+                            .trashDoc(docId)
+                            .shouldNotBeNull()
+                    }
+                }
+                if (step == config.quiesceEvery + 1) {
+                    lifecycle +=
+                        world.read("its lifecycle") {
+                            member.replica.indexDb
+                                .rows(
+                                    "SELECT operation FROM metadata_events WHERE documentId = '$docId' " +
+                                        "AND operation IN ('doc-trash', 'doc-restore') " +
+                                        "ORDER BY hlcPhysical, hlcCounter",
+                                ).map { it[0] }
+                        }
+                }
+            }, sync).run()
+            // Each replica that found it back may record the restore.
+            lifecycle.distinct() shouldBe listOf("doc-trash", "doc-restore")
         }
 
     /** When another process writes the bytes elsewhere and deletes them again, if it does. */

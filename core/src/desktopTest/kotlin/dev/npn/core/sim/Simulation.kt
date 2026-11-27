@@ -397,15 +397,16 @@ internal class Simulation(
         world.advance(SETTLE_MILLIS)
         // A fault a concurrent step armed while it ran (Planned.Group.during) may have landed since.
         fs.faults.disarmAll()
-        val rescanned = world.run("quiescent rescan") { session.rescan() }
-        rescanned.exceptionOrNull()?.let {
-            fail(
-                "the quiescent rescan failed: ${it::class.simpleName}: ${it.reason()}",
-            )
-        }
+        rescanAtRest("quiescent rescan")
         // A rescan reads the journal whole, so once it succeeded nothing refuses writes.
         session.writeBlock.value?.let { fail("writes stay blocked ($it) after a rescan that succeeded") }
         world.advance(AFTER_RESCAN_MILLIS)
+    }
+
+    /** A rescan at rest, [what] the trace calls it: one that fails, faults cleared, is a finding. */
+    fun rescanAtRest(what: String) {
+        val rescanned = world.run(what) { session.rescan() }
+        rescanned.exceptionOrNull()?.let { fail("the $what failed: ${it::class.simpleName}: ${it.reason()}") }
     }
 
     /**

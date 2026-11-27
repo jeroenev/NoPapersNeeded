@@ -244,9 +244,10 @@ At rest (every `quiesceEvery` steps, and at the end), deliveries under way land,
 cleared, OCR runs through and background operations end on every replica, the sync tool scans
 every device once and lets those deliveries land (it runs through the day as well; frozen, it
 would leave another device's trash unannounced, and the file still at its path would pass the
-window as one come back), and then a virtual day (`RESTORE_SETTLE_MS`) passes, so every trash is
-older than the restore settle window by the rescans
-that follow: the app records the return of a trashed document's own bytes as a restore only once
+window as one come back), every replica rescans its folder, as the app does on Android at every
+resume (on storage no watch reports on, nothing else would before the day ends), and then a virtual
+day (`RESTORE_SETTLE_MS`) passes, so every trash, and every return those rescans found, is older than
+the restore settle window by the rescans that follow: the app records the return of a trashed document's own bytes as a restore only once
 that window has passed (`JournalCoordinator.recordRestores`), counted both from the trash and from
 when the session's rescans first found the file back, and before it a rescan shows such a file for
 that scan only. The day runs everything time brings (the 15-minute tick, the queues'

@@ -709,8 +709,9 @@ internal class SyncSimulation(
     }
 
     /**
-     * Let [JournalCoordinator.RESTORE_SETTLE_MS] pass with every replica let through and its changes
-     * synced once, so every trash the replicas know of is older than that by the rescans of settling
+     * Let [JournalCoordinator.RESTORE_SETTLE_MS] pass with every replica let through, its changes
+     * synced once and its folder rescanned, so every trash the replicas know of, and every return of a
+     * trashed document's own bytes their rescans found, is older than that by the rescans of settling
      * (whose own wait is the margin): each records the return of a trashed document's own bytes to
      * its path as a restore, as the app does once that window has passed
      * (`JournalCoordinator.recordRestores`), and the live index, a rebuild and the other replicas
@@ -730,6 +731,12 @@ internal class SyncSimulation(
             present.forEach { tool.scan(it.index) }
             tool.finishInFlight()
         }
+        // Each replica looks at its folder as the day begins, as the app does on Android at every
+        // resume and a watch does when files land. Storage no watch reports on (SAF) is rescanned by
+        // nothing else, and a trashed document's own bytes found back there first by the rescan after
+        // the day started the restore window then: it had not passed by the checks, and the file was
+        // neither a live document nor a known duplicate (seed 4101227 at 44dee63c).
+        present.forEach { it.sim.rescanAtRest("rescan as the day at rest begins") }
         world.advance(JournalCoordinator.RESTORE_SETTLE_MS)
         trace += "   == past the restore settle window at t=${world.scheduler.currentTime}"
     }
