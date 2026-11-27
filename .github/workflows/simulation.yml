@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       seeds:
-        description: How many seeds to run
+        description: How many seeds to run (seeds * steps at most 32000, so a run fits in 30 minutes)
         required: false
         default: "60"
       steps:

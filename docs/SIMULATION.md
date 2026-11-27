@@ -86,7 +86,11 @@ covers fresh ones. `.github/scripts/simulation-seeds.sh` picks the seeds.
 A seed of 400 steps costs about 9.6 s on a laptop core, and the eight shards run on eight cores at
 that speed each (400 seeds took 9 minutes). A two-core hosted runner gets one test JVM, so at an
 assumed 1.5 times the laptop's cost per seed, about 15 s, the default 60 seeds of 400 steps take
-about fifteen minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout. A
+about fifteen minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout.
+Measured, a hosted runner took 18 to 22 minutes for 100 seeds of 400 steps, so the seed script
+refuses a run of more than 32000 seed-steps (80 seeds of 400) before building anything, rather than
+let the timeout cut it off with no result; a longer run is several runs with their own
+`first_seed`. A
 long local run (AGENTS.md, "Commands") is faster on a machine with more cores. The workflow's `--tests`
 filter must name the shards, `dev.npn.core.sim.LibrarySimulationTest*`: the exact class name
 matches nothing since the seeds were dealt over eight classes, and Gradle fails a filter that
