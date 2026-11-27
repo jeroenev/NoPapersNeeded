@@ -533,31 +533,6 @@ internal class SyncSimulation(
         return quiet
     }
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    private fun outcomeText(pass: Deferred<SyncOutcome>): String {
-        pass.getCompletionExceptionOrNull()?.let { return "ended by ${it::class.simpleName}: ${it.message}" }
-        return when (val outcome = pass.getCompleted()) {
-            is SyncOutcome.Completed -> {
-                val report = outcome.report
-                "down ${report.downloadedDocuments}+${report.downloadedObjects}, " +
-                    "up ${report.uploadedDocuments}+${report.uploadedObjects}, moved ${report.movedRemote}, " +
-                    "deleted ${report.deletedRemote}, applied ${report.appliedLocally}" +
-                    report.conflicts.joinToString(
-                        "",
-                    ) { "\n      conflict ${it.kind} ${it.remotePath} ${it.otherPath.orEmpty()}" } +
-                    report.errors.joinToString("") { "\n      error ${it.path}: ${it.message}" }
-            }
-
-            is SyncOutcome.Failed -> {
-                "failed: ${outcome.reason} ${outcome.detail.orEmpty()}"
-            }
-
-            else -> {
-                outcome.toString()
-            }
-        }
-    }
-
     /**
      * A full sync through the cloud: every replica passes in turn and settles, round after round,
      * until a round after the replicas settled in which no pass changed anything. Settling rescans,
@@ -1010,5 +985,31 @@ internal class SyncSimulation(
         const val HLC_PHYSICAL = 2
         const val HLC_COUNTER = 3
         const val HLC_DEVICE = 4
+    }
+}
+
+/** What a cloud pass that ended came to, for the trace. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+private fun outcomeText(pass: Deferred<SyncOutcome>): String {
+    pass.getCompletionExceptionOrNull()?.let { return "ended by ${it::class.simpleName}: ${it.message}" }
+    return when (val outcome = pass.getCompleted()) {
+        is SyncOutcome.Completed -> {
+            val report = outcome.report
+            "down ${report.downloadedDocuments}+${report.downloadedObjects}, " +
+                "up ${report.uploadedDocuments}+${report.uploadedObjects}, moved ${report.movedRemote}, " +
+                "deleted ${report.deletedRemote}, applied ${report.appliedLocally}" +
+                report.conflicts.joinToString(
+                    "",
+                ) { "\n      conflict ${it.kind} ${it.remotePath} ${it.otherPath.orEmpty()}" } +
+                report.errors.joinToString("") { "\n      error ${it.path}: ${it.message}" }
+        }
+
+        is SyncOutcome.Failed -> {
+            "failed: ${outcome.reason} ${outcome.detail.orEmpty()}"
+        }
+
+        else -> {
+            outcome.toString()
+        }
     }
 }
