@@ -78,7 +78,7 @@ internal class Indexer(
     private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids, bakeAsides)
     private val folds = FoldProjection(db, documentPaths)
     private val tempFiles = TempFileSweep(fs, log)
-    private val strandedCopies = StrandedTrashCopies(fs, db, log)
+    private val strandedCopies = StrandedTrashCopies(fs, db, clock, log)
 
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 

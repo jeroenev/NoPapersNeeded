@@ -524,8 +524,12 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   (`StrandedTrashCopies`), to its intended path or a `(restored)` name beside it, and scans again:
   only a copy that hashes to the document and whose name's trash episode
   (`NpnPaths.trashEpisodeMillis`) is no later than the restore that took it out of the trash last.
-  A later episode is a trash whose event has not arrived yet, and an entry with no episode says
-  nothing; both stay. Left there, the copy would go with the first purge on a device that had not
+  A later episode is a trash the journal does not have: one whose event has not arrived yet, or one
+  that never published it (its commit failed and its file could not be put back, or a crash cut it
+  short). Such a copy comes back only once its episode is a day old (`RESTORE_SETTLE_MS`) and the
+  session's rescans have found it so, with no trash in the journal, for a day as well, as a return
+  is counted (section 6.4): a trash's event travels with its file move. An entry with no episode
+  says nothing and stays. Left there, a copy would go with the first purge on a device that had not
   seen the restore yet, the library's last copy.
 - The trash auto-purge runs after a watch-triggered rescan. It lists the trash before the writer
   lock and deletes an entry under it, in batches, once every document its name's hash prefix ties it

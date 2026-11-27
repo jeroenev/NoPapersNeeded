@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.VerifiedPublicationFailedException
 import dev.npn.core.fs.trashEntries
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
@@ -97,7 +98,7 @@ class StrandedTrashCopyTest {
         appSessionTest(files = faults::over) {
             rig = it
             val id = importAlpha()
-            val before = rig.db.documentDao().getByDocId(id)
+            val before = lifecycleOf(id)
             val objects = rig.journalObjectCount()
 
             faults.failNext(FileSystemFaults.Point.AFTER_MOVE)
@@ -106,7 +107,7 @@ class StrandedTrashCopyTest {
             rig.exists(PATH).shouldBeTrue()
             rig.fs.trashEntries().shouldBeEmpty()
             rig.journalObjectCount() shouldBe objects
-            rig.db.documentDao().getByDocId(id) shouldBe before
+            lifecycleOf(id) shouldBe before
         }
     }
 
@@ -118,16 +119,60 @@ class StrandedTrashCopyTest {
             rig = it
             val id = importAlpha()
             rig.session.docLifecycle.trashDoc(id)
-            val before = rig.db.documentDao().getByDocId(id)
+            val before = lifecycleOf(id)
 
             faults.failNext(FileSystemFaults.Point.AFTER_MOVE, PATH)
             assertFailsWith<IOException> { rig.session.docLifecycle.restoreDoc(id) }
 
             rig.exists(PATH).shouldBeFalse()
             rig.fs.trashEntries() shouldHaveSize 1
-            rig.db.documentDao().getByDocId(id) shouldBe before
+            lifecycleOf(id) shouldBe before
         }
     }
+
+    /**
+     * A trash whose commit failed and whose file could not be put back leaves a copy no event
+     * explains. A rescan leaves it for a day, as it would a trash whose event is still on its way,
+     * and then brings it back.
+     */
+    @Test
+    fun aCopyNoTrashEventExplainsComesBackAfterTheSettleWindow() {
+        val faults = FileSystemFaults()
+        appSessionTest(files = faults::over) {
+            rig = it
+            val id = importAlpha()
+            faults.publishFailures = 1
+            faults.failNext(FileSystemFaults.Point.BEFORE_MOVE, PATH)
+            assertFailsWith<VerifiedPublicationFailedException> { rig.session.docLifecycle.trashDoc(id) }
+            rig.exists(PATH).shouldBeFalse()
+
+            rig.session.rescan()
+            rig.clock.advance(DAY / 2)
+            rig.session.rescan()
+            rig.exists(PATH).shouldBeFalse()
+            rig.fs.trashEntries() shouldHaveSize 1
+
+            rig.clock.advance(DAY / 2 + 1)
+            rig.session.rescan()
+
+            rig.exists(PATH).shouldBeTrue()
+            rig.fs.trashEntries().shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .missing
+                .shouldBeFalse()
+        }
+    }
+
+    /** The row's lifecycle and file, which a failed change must leave as it found them; OCR may move on. */
+    private suspend fun lifecycleOf(id: String) =
+        rig.db
+            .documentDao()
+            .getByDocId(id)
+            .shouldNotBeNull()
+            .let { listOf(it.relPath, it.size, it.mtime, it.trashed, it.trashedAt, it.deleted, it.missing) }
 
     private suspend fun importAlpha(): String {
         rig.writePdf(PATH, PdfFixtures.embeddedTextPdf("alpha"))
@@ -137,6 +182,7 @@ class StrandedTrashCopyTest {
 
     private companion object {
         const val MINUTE = 60_000L
+        const val DAY = 24L * 60L * MINUTE
         const val PATH = "a.pdf"
     }
 }

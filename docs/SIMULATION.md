@@ -312,9 +312,10 @@ cloud, eight) do not converge, which fails the run. Then:
 - After a full sync, no replica shows a live document as missing while a folder's trash holds its
   bytes. A restore, an Undo or an import of the same bytes on a device that had another device's
   trash event but not yet its file move claims the file still at the document's path, which the
-  move then takes away into the trash; the rescan brings such a copy back
-  (`StrandedTrashCopies`). Left in the trash, it goes with the first purge on a device that had
-  not seen the restore yet, the library's last copy.
+  move then takes away into the trash; so does a trash whose commit failed and whose file could not
+  be put back. The rescan brings such a copy back (`StrandedTrashCopies`; the second kind after the
+  restore settle window, which the day at rest lets pass). Left in the trash, it goes with the first
+  purge on a device that had not seen the restore yet, the library's last copy.
 - After a full sync, no seeded field a user relabelled or removed shows its seed's label again on
   any replica (no step writes a seed's label, so one back took a seed over the user's change).
 - Last, the log and the scope handlers once more: the rebuild oracles log into the same world, and
