@@ -36,7 +36,7 @@ class LocalSnapshotReader(
     /** Canonical journal objects, snapshots and write-once internals present locally: path to size. */
     suspend fun metadataFiles(): Map<String, Long> {
         val out = LinkedHashMap<String, Long>()
-        for (dir in listOf(NpnPaths.JOURNAL_DIR, NpnPaths.OCR_DIR, NpnPaths.DEVICES_DIR)) {
+        for (dir in listOf(NpnPaths.JOURNAL_DIR, NpnPaths.OCR_DIR, NpnPaths.DEVICES_DIR, NpnPaths.ACKS_DIR)) {
             for (meta in fs.listAllUnder(dir)) {
                 if (!meta.isDirectory && SyncPaths.classify(meta.relPath).isMetadata) out[meta.relPath] = meta.size
             }

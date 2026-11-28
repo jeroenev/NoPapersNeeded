@@ -690,6 +690,8 @@ internal class SyncSimulation(
         present.forEach(::checkOwnNames)
         checkLastCopies()
         if (full) {
+            keepGatesWaitingOnRecords(world, members.map { it.fs }, present.map { it.name to it.replica })
+                ?.let { (name, why) -> fail(present.first { it.name == name }, why) }
             checkConvergence(views)
             verifiedMissingButHeld(present.map { it.name to it.sim }, present.map { it.fs })?.let { (name, why) ->
                 fail(present.first { it.name == name }, why)

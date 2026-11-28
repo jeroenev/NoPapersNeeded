@@ -570,12 +570,15 @@ Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalC
   after is a restore past the retention. Active: it writes records, is not retired (the synced
   setting `device.retired.<deviceId>`), and wrote one within 90 days. A build that writes none is
   unknown, and goes by the retention alone. A device writes its first record at once, then at most
-  daily when something changed and at least weekly. Cloud sync's remote trash still goes by the
-  retention alone. Settings > Library > Devices (`DevicesFacade`) lists them, with Retire.
-- The keep store (`KeepStore`, `.npn/keep/<xx>/<sha256>.pdf`) holds a copy of the bytes the app
-  takes from a document's path, named by their hash: published as a journal object is (a staged
-  copy, verified, published without replacement), so an entry never holds other bytes than its
-  name's, and two devices keeping one document make one file. An entry is a copy, never a state.
+  daily when something changed and at least weekly. Cloud sync carries the records both ways, as it
+  does the markers; its remote trash still goes by the retention alone. Settings > Library > Devices (`DevicesFacade`) lists them, with Retire.
+- The keep store (`KeepStore`, `.npn/keep/<xx>/<sha256>-<episode>.pdf`) holds a copy of the bytes
+  the app takes from a document's path, named by their hash and by the episode, the time of the
+  event that kept them, taken before that event: published as a journal object is (a staged copy,
+  verified, published without replacement, with the original's mtime), so an entry never holds
+  other bytes than its name's. The purge takes an entry only for an event at least as late as its
+  episode, so a later trash's entry, on a device whose event has not arrived here yet, is never
+  taken for an earlier one's. An entry is a copy, never a state.
   It is written only once every device that may open the library reads it (`KeepGate`, the
   `keep-v1` capability in every active device's latest record; a device known by its installation
   marker alone, a build from before records, holds it shut until it is updated or retired, and the

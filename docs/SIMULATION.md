@@ -355,6 +355,10 @@ cloud, eight) do not converge, which fails the run. Then:
   be put back. The rescan brings such a copy back (`StrandedTrashCopies`; the second kind after the
   restore settle window, which the day at rest lets pass). Left in the trash, it goes with the first
   purge on a device that had not seen the restore yet, the library's last copy.
+- After a full sync, every replica's keep gate waits only for a device that published no
+  acknowledgment record anywhere (a session cut short before its first, known by its marker alone):
+  every replica runs this build, and the sync carries every device's records. Cloud sync once
+  uploaded none, and the gate never opened in a cloud-synced library.
 - After a full sync, no seeded field a user relabelled or removed shows its seed's label again on
   any replica (no step writes a seed's label, so one back took a seed over the user's change).
 - Last, the log and the scope handlers once more: the rebuild oracles log into the same world, and
