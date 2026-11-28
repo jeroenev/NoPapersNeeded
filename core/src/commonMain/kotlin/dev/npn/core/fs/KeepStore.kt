@@ -50,13 +50,14 @@ internal class KeepStore(
     /** Every entry the store holds. */
     suspend fun entries(): List<KeepEntry> = listed(NpnPaths.KEEP_DIR)
 
+    /** The entries under [dir], by hash and then episode: a listing's own order is the filesystem's. */
     private suspend fun listed(dir: String): List<KeepEntry> =
         runCatchingCancellable { fs.listAllUnder(dir) }
             .getOrDefault(emptyList())
             .filter { !it.isDirectory }
             .mapNotNull { meta ->
                 NpnPaths.Keep.parse(meta.relPath)?.let { (sha, episode) -> KeepEntry(sha, episode, meta) }
-            }
+            }.sortedWith(compareBy({ it.sha }, { it.episode }))
 
     /**
      * Keep a copy of [from], which should hold [sha]'s bytes, in the episode [episodeMillis]:
@@ -78,7 +79,7 @@ internal class KeepStore(
             fs.copyOnce(from, staging)
             held = fs.sha256(staging) == sha
             // The copy carries the original's mtime: what puts it back puts back the file it was.
-            if (held) fs.setModifiedTime(staging, source.mtimeMillis)
+            if (held) keepModifiedTime(staging, source.mtimeMillis)
         } finally {
             if (!held) withContext(NonCancellable) { runCatchingCancellable { fs.delete(staging) } }
         }
@@ -106,7 +107,7 @@ internal class KeepStore(
             check(fs.sha256(staging) == sha) { "The keep store's copy of $sha holds other bytes" }
             // Put back as the file it was, mtime and all: no write a rescan waits out, and a stat
             // that tells it from a return the user made.
-            fs.setModifiedTime(staging, kept.meta.mtimeMillis)
+            keepModifiedTime(staging, kept.meta.mtimeMillis)
             if (fs.exists(to)) return false
             fs.move(staging, to)
             placed = true
@@ -121,6 +122,18 @@ internal class KeepStore(
         entry: KeepEntry,
         authority: DeleteAuthority,
     ): Boolean = gate.reap(entry.path, entry.sha, authority, entry.meta)
+
+    /**
+     * Give [path] the mtime [mtimeMillis] where the filesystem lets it: best effort, as
+     * [LibraryFileSystem.setModifiedTime] is. A mount that refuses it (SMB, some FUSE) keeps the
+     * copy's own mtime: the bytes, not the time, are what the store vouches for.
+     */
+    private suspend fun keepModifiedTime(
+        path: String,
+        mtimeMillis: Long,
+    ) {
+        runCatchingCancellable { fs.setModifiedTime(path, mtimeMillis) }
+    }
 
     private fun staging(sha: String): String =
         NpnPaths.Keep.dir(sha) + "/" + NpnPaths.Temp.journalStagingName(sha, installationId, ids.next())

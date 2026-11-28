@@ -6,6 +6,7 @@ import dev.npn.core.fs.KeepStore
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.trashEntries
 import dev.npn.core.index.IndexRig
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.FileStat
 import dev.npn.core.journal.JournalOp
@@ -108,6 +109,32 @@ class KeepStoreLifecycleTest {
         }
 
     /**
+     * An entry of a later episode than the document's last restore belongs to a trash whose event has
+     * not arrived yet: another device trashed the document again, and its file's deletion came here
+     * first. Copying it back at once would leave that trash's file in the folder for good, so it
+     * comes back only once it has stood the settle window with no trash in the journal.
+     */
+    @Test
+    fun anEntryOfALaterEpisodeThanTheLastRestoreWaitsOutTheWindow() =
+        runTest {
+            val doc = indexed("a.pdf", "trashed again elsewhere")
+            lifecycle.trashDoc(doc)
+            lifecycle.restoreDoc(doc)
+            coordinator.rescan()
+            rig.clock.advance(MINUTE)
+            keep.put("a.pdf", doc, episodeMillis = rig.clock.now)
+            Files.delete(rig.libRoot.resolve("a.pdf"))
+
+            coordinator.rescan()
+            rig.exists("a.pdf").shouldBeFalse()
+            rowOf(doc).missing.shouldBeTrue()
+
+            rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + MINUTE)
+            coordinator.rescan()
+            rig.fs.sha256("a.pdf") shouldBe doc
+        }
+
+    /**
      * An entry holds the bytes its name is the hash of, one per episode: a copy of other bytes is
      * refused, with nothing left behind; and only an authority the journal holds deletes one.
      */
@@ -133,6 +160,10 @@ class KeepStoreLifecycleTest {
             keep.reap(first, DeleteAuthority.ExtraCopy("a.pdf")).shouldBeTrue()
             keep.entries().map { it.episode } shouldBe listOf(2L)
         }
+
+    private companion object {
+        const val MINUTE = 60_000L
+    }
 
     private suspend fun indexed(
         path: String,
