@@ -133,7 +133,7 @@ internal class TrashPurge(
      * the cloud sync purges the remote's trash by, so the two trashes go by one rule.
      */
     suspend fun trashTimes(): Map<String, Long?> =
-        coordinator.serialized(current = true) { journal ->
+        coordinator.serialized { journal ->
             keptLonger(journal.trashTimes(), db.documentDao().trashTimes().associate { it.docId to it.trashedAt })
         }
 
