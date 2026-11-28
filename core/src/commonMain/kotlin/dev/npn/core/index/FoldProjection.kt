@@ -320,6 +320,16 @@ internal class FoldProjection(
         val resurrected = ArrayList<Resurrected>()
         val filesBack = HashMap<String, String>()
 
+        /** The document paths a rescan found holding each document's bytes. */
+        private val copiesOf by lazy {
+            (scope as? FoldScope.FullRescan)
+                ?.contentAt
+                ?.entries
+                ?.filter { NpnPaths.isDocumentPath(it.key) }
+                ?.groupBy({ it.value }, { it.key })
+                .orEmpty()
+        }
+
         /** Which document's row holds each path, as the pass found them; a resurrection checks it. */
         private val holders by lazy { preloaded.rows.values.associate { it.relPath to it.docId } }
 
@@ -424,11 +434,9 @@ internal class FoldProjection(
             val preserved = scope is FoldScope.Events && doc in scope.preserveLifecycleDocs
             val rescan = scope as? FoldScope.FullRescan
             val statAt: (String) -> FileStat? = { rescan?.statAt?.get(it) }
-            val projected =
-                FoldLifecycle.resolve(doc, row, journal, preserved, rescan?.contentAt, statAt) {
-                    it in
-                        holders
-                }
+            val copies = copiesOf[doc].orEmpty().mapNotNull(statAt)
+            val held: (String) -> Boolean = { it in holders }
+            val projected = FoldLifecycle.resolve(doc, row, journal, preserved, rescan?.contentAt, statAt, copies, held)
             projected.resurrected?.let(resurrected::add)
             projected.fileBack?.let { filesBack[doc] = it }
             return projected

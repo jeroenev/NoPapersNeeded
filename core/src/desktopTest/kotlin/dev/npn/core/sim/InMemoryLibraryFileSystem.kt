@@ -323,6 +323,15 @@ class InMemoryLibraryFileSystem(
         io(FsMethod.DELETE, norm) { remove(norm, byApp = true) }
     }
 
+    override suspend fun setModifiedTime(
+        relPath: String,
+        mtimeMillis: Long,
+    ) {
+        val norm = NpnPaths.normalize(relPath)
+        io(FsMethod.STAT, norm) { fileAt(norm).mtime = mtimeMillis }
+        touch(norm)
+    }
+
     override suspend fun sha256(relPath: String): String {
         val norm = NpnPaths.normalize(relPath)
         return io(FsMethod.SHA256, norm) { sha256Bytes(fileAt(norm).bytes) }
@@ -553,21 +562,8 @@ class InMemoryLibraryFileSystem(
         return copy
     }
 
-    /** Journal objects and snapshots, under their canonical names, whose name is not the hash of their bytes. */
-    fun misnamedObjects(): List<String> =
-        files.keysWithPrefix("${NpnPaths.JOURNAL_DIR}/").mapNotNull { path ->
-            val node = files.getValue(path)
-            val expected =
-                when (val kind = JournalPaths.classify(path)) {
-                    is JournalPath.ObjectV2 -> kind.expectedHash
-                    is JournalPath.SnapshotV2 -> kind.expectedHash
-                    else -> null
-                }
-            path.takeIf {
-                expected != null && path !in writing && NpnPaths.fileName(path) == "$expected.jsonl" &&
-                    sha256Bytes(node.bytes) != expected
-            }
-        }
+    /** Whether the app is writing [path] now, so its bytes are not yet what they will be. */
+    fun isBeingWritten(path: String): Boolean = path in writing
 
     // ---- internals ------------------------------------------------------------------------------
 

@@ -16,6 +16,7 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileTime
 import kotlin.io.path.name
 
 /** The one no-replace primitive, abstracted so tests can simulate a filesystem without `link(2)`. */
@@ -374,6 +375,14 @@ internal class JvmLibraryFileSystem(
         val linked = linker.link(from, to)
         if (!linked && mayLatch) linksUnavailable = true
         return linked
+    }
+
+    override suspend fun setModifiedTime(
+        relPath: String,
+        mtimeMillis: Long,
+    ) = withContext(io) {
+        Files.setLastModifiedTime(resolve(relPath), FileTime.fromMillis(mtimeMillis))
+        Unit
     }
 
     override suspend fun delete(relPath: String) =

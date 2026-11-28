@@ -74,8 +74,11 @@ internal class KeepStore(
         val staging = staging(sha)
         var held = false
         try {
+            val source = fs.stat(from) ?: return null
             fs.copyOnce(from, staging)
             held = fs.sha256(staging) == sha
+            // The copy carries the original's mtime: what puts it back puts back the file it was.
+            if (held) fs.setModifiedTime(staging, source.mtimeMillis)
         } finally {
             if (!held) withContext(NonCancellable) { runCatchingCancellable { fs.delete(staging) } }
         }
@@ -101,6 +104,9 @@ internal class KeepStore(
         try {
             fs.copyOnce(kept.path, staging)
             check(fs.sha256(staging) == sha) { "The keep store's copy of $sha holds other bytes" }
+            // Put back as the file it was, mtime and all: no write a rescan waits out, and a stat
+            // that tells it from a return the user made.
+            fs.setModifiedTime(staging, kept.meta.mtimeMillis)
             if (fs.exists(to)) return false
             fs.move(staging, to)
             placed = true

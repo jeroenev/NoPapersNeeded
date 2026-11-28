@@ -48,12 +48,12 @@ internal object FoldLifecycle {
      * [held] says whether a row holds a path; [statAt] gives a listed file's stat.
      *
      * A trash that recorded the stat of the file it moved ([JournalLifecycle.trashStat]) says what
-     * its bytes back are, by their file's stat ([FileStat.sameAs]):
-     * - the same stat: the copy a sync tool has not taken away yet, as it carries the mtime with the
+     * its bytes back are, by the stats of every file holding them ([statsOfCopies], [FileStat.sameAs]):
+     * - all the same stat: the copy a sync tool has not taken away yet, as it carries the mtime with the
      *   bytes, or a put-back that kept it (a backup restored, a file manager's copy). Either way the
      *   document stays in the trash, with no window after which it comes back by itself: its file is
      *   reported as [ProjectedLifecycle.fileBack], for the user to restore in place;
-     * - another stat: no stale copy, a deliberate return, recorded at once
+     * - any other stat: no stale copy, a deliberate return, recorded at once
      *   ([Resurrected.immediate]).
      *
      * Without one (a trash that moved nothing, one an older build wrote, a delete for good) the
@@ -66,6 +66,8 @@ internal object FoldLifecycle {
         preserved: Boolean,
         contentAt: Map<String, String>?,
         statAt: (String) -> FileStat? = { null },
+        /** The stats of every listed file at a document path that holds [doc]'s bytes. */
+        statsOfCopies: List<FileStat> = emptyList(),
         held: (String) -> Boolean,
     ): ProjectedLifecycle {
         val journalDeleted = journal.deleted || journal.superseded
@@ -77,7 +79,8 @@ internal object FoldLifecycle {
         val recorded = journal.trashStat?.takeIf { journal.trashed && !journalDeleted }
         // Found only where the bytes are back: a stat says nothing of a path they are not at.
         val found = backAt?.let(statAt)
-        if (recorded != null && found != null && found.sameAs(recorded)) {
+        // Every copy decides, not only the one the row points at: a rebuilt index may point at another.
+        if (recorded != null && found != null && (statsOfCopies + found).all { it.sameAs(recorded) }) {
             return hiddenAs(doc, row, journal, preserved, fileBack = backAt)
         }
         if (backAt != null) {

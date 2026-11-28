@@ -170,6 +170,16 @@ interface LibraryFileSystem {
 
     suspend fun delete(relPath: String)
 
+    /**
+     * Give the file at [relPath] the modification time [mtimeMillis], its bytes unchanged: what a
+     * copy the app makes of a document carries over from the file it copied, as `cp -p` does, so a
+     * stat says the same of it as of the original. Platforms without it leave the copy's own.
+     */
+    suspend fun setModifiedTime(
+        relPath: String,
+        mtimeMillis: Long,
+    ) = Unit
+
     /** Streaming SHA-256 of the file's bytes, lowercase hex. */
     suspend fun sha256(relPath: String): String
 
