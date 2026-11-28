@@ -287,6 +287,10 @@ cloud, eight) do not converge, which fails the run. Then:
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
   written, a document deleted for good). A trashed document's own bytes back at its path is no
   exception: the rescan shows it, and records its restore once both windows have passed.
+- On each replica, every live document its index has as waiting for OCR has a row on its OCR queue
+  (`device.db`): the two are separate databases, and a process cut short between their writes left
+  a row waiting for a run nothing owed it, so only a rebuild ran it, and published what the rules
+  then set on its text.
 - Verify library holds: it reports nothing but documents whose files are gone from the folder (a
   document is missing only while no file at a document path there holds its bytes), and every
   document the library lists as missing is among them, named by its library path, never its

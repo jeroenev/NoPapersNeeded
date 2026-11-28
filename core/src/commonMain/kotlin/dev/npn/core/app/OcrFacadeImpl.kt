@@ -117,6 +117,11 @@ internal class OcrFacadeImpl(
      * After a rescan: adopt or re-select the sidecars it picked up, then queue every live document
      * still without OCR. A run this device's queue still owes keeps its attempts and requests (the
      * queue outlives a rebuilt index); the doc row only learns where that run stands.
+     *
+     * A live document the index has as pending with no queue row is queued again too: the row and
+     * the queue are separate databases, so a process cut short between their writes (the drain
+     * unqueueing a hidden document before its row learns it) leaves the row waiting for a run
+     * nothing owes it, and nothing else would ever queue it.
      */
     suspend fun reconcileAfterRescan() {
         pipeline.reconcileSidecars()
@@ -128,6 +133,11 @@ internal class OcrFacadeImpl(
                 QueueState.FAILED -> documentDao.updateOcrState(docId, OcrState.FAILED.column, null, null)
                 QueueState.PENDING -> documentDao.updateOcrState(docId, OcrState.PENDING.column, null, null)
             }
+        }
+        val pending = documentDao.liveDocIdsWithOcrState(OcrState.PENDING.column)
+        if (pending.isNotEmpty()) {
+            val queued = queue.queuedDocIds().toHashSet()
+            pending.filterNot { it in queued }.forEach { enqueue(it) }
         }
     }
 

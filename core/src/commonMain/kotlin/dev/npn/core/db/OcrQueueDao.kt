@@ -109,6 +109,10 @@ interface OcrQueueDao {
     @Query("SELECT * FROM ocr_queue WHERE docId = :docId")
     suspend fun getByDocId(docId: String): OcrQueueEntity?
 
+    /** Every document the queue has a row for, in any state. */
+    @Query("SELECT docId FROM ocr_queue")
+    suspend fun queuedDocIds(): List<String>
+
     /**
      * Count of rows still owed a pass, for [dev.npn.core.app.OcrStatus]. Counts exactly what
      * [nextPending] would eventually take, including rows waiting out a backoff, so the number the

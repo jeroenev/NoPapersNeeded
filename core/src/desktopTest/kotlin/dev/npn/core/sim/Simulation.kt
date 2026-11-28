@@ -435,6 +435,7 @@ internal class Simulation(
         checkTrashEntries()
         world.read("the fold") { lingeringOriginals(fs, replica.indexDb.fold(), live) }?.let { fail(it) }
         checkRowStats()
+        world.read("the OCR queue") { pendingOcrNotQueued(replica.indexDb, replica.deviceDb) }?.let { fail(it) }
         // Every operation ended, and the rescans settled what a crash or a failure cut short.
         world.read("open intents") { session.intents.all() }.takeIf { it.isNotEmpty() }?.let { open ->
             fail(
