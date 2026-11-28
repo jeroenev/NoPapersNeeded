@@ -396,7 +396,7 @@ internal class SessionGraph(
             ocrQueueDao = deps.deviceDb.ocrQueueDao(),
             clock = deps.clock,
             ruleProvider = storagePath::rule,
-            serialize = { coordinator.serialized(it) },
+            serialize = { coordinator.serialized(block = it) },
             log = log,
             ids = deps.ids,
             keep = keepStore,

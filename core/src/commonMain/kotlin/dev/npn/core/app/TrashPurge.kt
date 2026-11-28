@@ -60,7 +60,7 @@ internal class TrashPurge(
         // earlier read keeps entries longer, never shorter.
         val acknowledged = causal?.acknowledgedUntil() ?: CausalPurge.Acknowledged.ALL
         for (batch in trash.listTrash().chunked(PURGE_BATCH)) {
-            coordinator.serialized { journal ->
+            coordinator.serialized(current = true) { journal ->
                 val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
                 val times = acknowledged.filter(keptLonger(journal.trashTimes(), rows), retentionMillis)
                 trash.purgeOlderThan(cutoff, times, journal, batch)
@@ -86,7 +86,7 @@ internal class TrashPurge(
         acknowledged: CausalPurge.Acknowledged,
     ) {
         for (batch in store.entries().chunked(PURGE_BATCH)) {
-            coordinator.serialized { journal ->
+            coordinator.serialized(current = true) { journal ->
                 val docs = batch.mapTo(HashSet()) { it.sha }
                 val times = acknowledged.filter(journal.keepTimes(docs), retentionMillis)
                 for (entry in batch) {
@@ -133,7 +133,7 @@ internal class TrashPurge(
      * the cloud sync purges the remote's trash by, so the two trashes go by one rule.
      */
     suspend fun trashTimes(): Map<String, Long?> =
-        coordinator.serialized { journal ->
+        coordinator.serialized(current = true) { journal ->
             keptLonger(journal.trashTimes(), db.documentDao().trashTimes().associate { it.docId to it.trashedAt })
         }
 

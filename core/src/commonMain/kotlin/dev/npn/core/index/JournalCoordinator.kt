@@ -386,34 +386,7 @@ internal class JournalCoordinator(
     suspend fun rescan(): ScanReport = locked { latching { rescanFrom(foldedState()) } }
 
     /** Read the journal folder again and fold what changed in it. */
-    suspend fun reconcileMetadata() =
-        locked {
-            latching {
-                if (refoldPending) {
-                    recoverDurableProjection()
-                    return@locked
-                }
-                val reconciliation = accumulator.reconcile(folded)
-                val current = reconciliation.state
-                if (current == null) {
-                    // Nothing on disk changed and this session has never needed the fold. There is
-                    // nothing to project, and replaying the journal just to prove that is what made
-                    // the periodic tick as expensive as a boot.
-                    blocked = null
-                    return@locked
-                }
-                adopt(current) {
-                    // Bounded projection when reconcile only ADDED events onto the prior state;
-                    // otherwise full reproject (source removed/invalidated, mutation, full refold,
-                    // first load). Nothing read: nothing to project.
-                    if (reconciliation.incremental) {
-                        indexer.refreshEvents(current, reconciliation.newEvents)
-                    } else if (reconciliation.sourcesRead > 0) {
-                        indexer.refreshState(current)
-                    }
-                }
-            }
-        }
+    suspend fun reconcileMetadata() = serialized(current = true) { }
 
     /**
      * Read the current folded state under the lock, letting [block] build the ops it needs from
@@ -530,8 +503,51 @@ internal class JournalCoordinator(
      * only while the journal still has the document deleted, and the trash purge deletes an entry
      * only while its documents' trash times say it is due. It must not call another member here, as
      * the lock is not reentrant.
+     *
+     * With [current], the journal folder is read again first ([reconcileMetadata]), under the same
+     * lock: for a delete that must stand by every object the folder holds when it decides. The trash
+     * purge's does: a cloud sync publishes another device's objects outside the lock, and one it just
+     * put in the folder (a restore made after the retention's cutoff, which no acknowledgment covers
+     * yet) must keep the copy its document needs.
      */
-    suspend fun <T> serialized(block: suspend (LockedJournal) -> T): T = locked { block(lockedJournal) }
+    suspend fun <T> serialized(
+        current: Boolean = false,
+        block: suspend (LockedJournal) -> T,
+    ): T =
+        locked {
+            if (current) {
+                latching {
+                    val reconciliation = if (refoldPending) null else accumulator.reconcile(folded)
+                    val reconciled = reconciliation?.state
+                    when {
+                        reconciliation == null -> {
+                            recoverDurableProjection()
+                        }
+
+                        // Nothing on disk changed and this session has never needed the fold: there is
+                        // nothing to project, and replaying the journal just to prove that is what made
+                        // the periodic tick as expensive as a boot.
+                        reconciled == null -> {
+                            blocked = null
+                        }
+
+                        // Bounded projection when reconcile only ADDED events onto the prior state;
+                        // otherwise full reproject (source removed/invalidated, mutation, full refold,
+                        // first load). Nothing read: nothing to project.
+                        else -> {
+                            adopt(reconciled) {
+                                if (reconciliation.incremental) {
+                                    indexer.refreshEvents(reconciled, reconciliation.newEvents)
+                                } else if (reconciliation.sourcesRead > 0) {
+                                    indexer.refreshState(reconciled)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            block(lockedJournal)
+        }
 
     /**
      * What the live fold says of each of [docIds], read under the lock, for the cloud sync: where
