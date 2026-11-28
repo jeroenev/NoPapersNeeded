@@ -273,7 +273,13 @@ class FakeDevices : DevicesFacade {
     /** If set, [retire] and [unretire] throw this. */
     var fail: (() -> Nothing)? = null
 
-    override suspend fun devices(): List<LibraryDevice> = list.value
+    /** If set, [devices] throws this. */
+    var failList: (() -> Nothing)? = null
+
+    override suspend fun devices(): List<LibraryDevice> {
+        failList?.invoke()
+        return list.value
+    }
 
     override suspend fun retire(deviceId: String) = setRetired(deviceId, true)
 

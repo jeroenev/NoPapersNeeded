@@ -86,13 +86,20 @@ internal class IndexRig private constructor(
 
     /**
      * Build a [JournalCoordinator] over [writer] backed by this rig's indexer and [accumulator],
-     * running on [dispatcher].
+     * running on [dispatcher]. Its own windows (a return's settle window) go by the system clock,
+     * unless [onRigClock], when they go by [clock], as the indexer's do.
      */
     internal fun coordinator(
         writer: ContentAddressedJournalWriter = writer(),
         accumulator: MetadataAccumulator = this.accumulator,
         dispatcher: CoroutineDispatcher = Dispatchers.Default,
-    ): JournalCoordinator = JournalCoordinator(writer, indexer, accumulator, dispatcher = dispatcher)
+        onRigClock: Boolean = false,
+    ): JournalCoordinator =
+        if (onRigClock) {
+            JournalCoordinator(writer, indexer, accumulator, dispatcher = dispatcher, clock = clock)
+        } else {
+            JournalCoordinator(writer, indexer, accumulator, dispatcher = dispatcher)
+        }
 
     /** Write a fake PDF (bytes need not be valid; only the .pdf suffix matters to the indexer). */
     fun writePdf(

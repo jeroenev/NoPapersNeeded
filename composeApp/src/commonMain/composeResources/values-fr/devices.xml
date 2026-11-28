@@ -12,6 +12,7 @@
     <string name="common_devices_retire">Retirer</string>
     <string name="common_devices_unretire">Remettre en service</string>
     <string name="common_devices_empty">Aucun autre appareil n’a encore ouvert cette bibliothèque.</string>
+    <string name="common_devices_list_failed">Impossible d’afficher les appareils : %1$s</string>
     <string name="common_devices_retire_failed">Impossible de retirer l’appareil : %1$s</string>
     <string name="common_devices_unretire_failed">Impossible de remettre l’appareil en service : %1$s</string>
 </resources>

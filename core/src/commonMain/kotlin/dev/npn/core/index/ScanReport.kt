@@ -51,14 +51,11 @@ enum class RelinkSignal {
  * A document whose journal state says trashed/deleted but whose own bytes are in the library at
  * [relPath] (put back by a sync tool or the user). A rescan prefers the file and reports it, so
  * the coordinator can record a restore; [hiddenAtMillis] is the wall time of the event that hid it.
- * [immediate]: the file is no copy a sync tool has yet to take away, by the stat its trash recorded
- * ([FoldLifecycle.resolve]), so the restore is recorded at once rather than after a window.
  */
 internal data class Resurrected(
     val docId: String,
     val relPath: String,
     val hiddenAtMillis: Long,
-    val immediate: Boolean = false,
 )
 
 /** What a rescan's fold found back of the documents the journal hides ([FoldLifecycle.resolve]). */

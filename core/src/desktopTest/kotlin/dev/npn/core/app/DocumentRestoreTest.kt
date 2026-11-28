@@ -116,11 +116,12 @@ class DocumentRestoreTest {
         }
 
     /**
-     * A trashed document's file back with another mtime than its trash took it with is no copy a sync
-     * tool has yet to take away: the rescan that finds it records the return at once.
+     * A trashed document's file back with another mtime than its trash took it with may still be a
+     * copy a transport that keeps no mtimes has yet to take away, so it waits out the window as any
+     * return does; once past it, the rescan records the return, and an edit no longer hides it.
      */
     @Test
-    fun aTrashedFileBroughtBackWithANewMtimeIsRestoredForGoodAtOnce() =
+    fun aTrashedFileBroughtBackWithANewMtimeIsRestoredForGoodAfterTheWindow() =
         withRig {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf("a.pdf", bytes)
@@ -131,6 +132,8 @@ class DocumentRestoreTest {
 
             rig.writePdf("a.pdf", bytes)
             Files.setLastModifiedTime(rig.libRoot.resolve("a.pdf"), FileTime.fromMillis(stat.mtimeMillis + 60_000L))
+            rig.session.rescan()
+            rig.clock.advance(DAY + 1)
             rig.session.rescan()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
 

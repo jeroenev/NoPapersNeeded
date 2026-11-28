@@ -12,6 +12,7 @@
     <string name="common_devices_retire">Stilllegen</string>
     <string name="common_devices_unretire">Wieder aufnehmen</string>
     <string name="common_devices_empty">Noch kein anderes Gerät hat diese Bibliothek geöffnet.</string>
+    <string name="common_devices_list_failed">Die Geräte konnten nicht aufgelistet werden: %1$s</string>
     <string name="common_devices_retire_failed">Das Gerät konnte nicht stillgelegt werden: %1$s</string>
     <string name="common_devices_unretire_failed">Das Gerät konnte nicht wieder aufgenommen werden: %1$s</string>
 </resources>

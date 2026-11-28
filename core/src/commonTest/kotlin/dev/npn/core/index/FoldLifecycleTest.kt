@@ -173,7 +173,7 @@ class FoldLifecycleTest {
         listOf(FileStat(10, 7_001), FileStat(11, 5_000)).forEach { other ->
             val back = resolve(other)
             back.fileBack shouldBe null
-            back.resurrected shouldBe Resurrected(doc, origPath, 500, immediate = true)
+            back.resurrected shouldBe Resurrected(doc, origPath, 500)
         }
         resolve(FileStat(10, 5_000), trashStat = null).resurrected shouldBe Resurrected(doc, origPath, 500)
         resolve(FileStat(10, 5_000), deleted = true).resurrected shouldBe Resurrected(doc, origPath, 500)

@@ -1,6 +1,5 @@
 package dev.npn.app.ui.settings
 
-import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.core.app.LibraryDevice
 import dev.npn.core.app.LibrarySession
@@ -8,8 +7,8 @@ import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_devices_list_failed
 import no_papers_needed.composeapp.generated.resources.common_devices_retire_failed
 import no_papers_needed.composeapp.generated.resources.common_devices_unretire_failed
 
@@ -46,7 +45,9 @@ internal class DevicesViewModel(
             state.value = devices.devices()
         }
 
-    private fun refresh() {
-        viewModelScope.launch { state.value = devices.devices() }
-    }
+    /** Read the list; one that cannot be read (the session closing, an unreadable folder) says why. */
+    private fun refresh() =
+        launchReporting(Res.string.common_devices_list_failed) {
+            state.value = devices.devices()
+        }
 }

@@ -12,6 +12,7 @@
     <string name="common_devices_retire">Buiten gebruik zetten</string>
     <string name="common_devices_unretire">Weer in gebruik nemen</string>
     <string name="common_devices_empty">Nog geen ander apparaat heeft deze bibliotheek geopend.</string>
+    <string name="common_devices_list_failed">Kan de apparaten niet weergeven: %1$s</string>
     <string name="common_devices_retire_failed">Kan het apparaat niet buiten gebruik zetten: %1$s</string>
     <string name="common_devices_unretire_failed">Kan het apparaat niet weer in gebruik nemen: %1$s</string>
 </resources>

@@ -25,7 +25,7 @@ import kotlin.test.Test
 class TrashOwnFileTest {
     private val rig = IndexRig.create()
     private val files = WatchedFileSystem(rig.fs).also { it.db = rig.db }
-    private val coordinator = rig.coordinator()
+    private val coordinator = rig.coordinator(onRigClock = true)
     private val lifecycle =
         rig.docLifecycle(coordinator, files)
 
@@ -193,9 +193,14 @@ class TrashOwnFileTest {
             rig.fs.trashEntries().shouldBeEmpty()
         }
 
-    /** One copied back with a new mtime cannot be a sync tool's stale copy: the next rescan restores it. */
+    /**
+     * One back with a new mtime is no stale copy of a sync tool that keeps mtimes, but is one of a
+     * transport that does not (a cloud remote without modtimes, a fresh download), on a device whose
+     * trash move has yet to arrive: undoing that trash at once would undo it on every device. So it
+     * waits out the window, as a return with no recorded stat does, and comes back after it.
+     */
     @Test
-    fun aFileBackWithANewMtimeIsRestoredByTheNextRescan() =
+    fun aFileBackWithANewMtimeWaitsOutTheWindow() =
         runTest {
             rig.writePdf("a.pdf", "put back with a new mtime")
             coordinator.rescan()
@@ -206,7 +211,17 @@ class TrashOwnFileTest {
             Files.setLastModifiedTime(rig.libRoot.resolve("a.pdf"), FileTime.fromMillis(entry.mtimeMillis + 60_000L))
 
             coordinator.rescan().filesBack.shouldBeEmpty()
+            rig.db
+                .metadataProjectionDao()
+                .eventsForDocument(doc)
+                .count { it.operation == JournalOp.DocRestore.WIRE } shouldBe 0
 
+            rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + 1)
+            coordinator.rescan()
+            rig.db
+                .metadataProjectionDao()
+                .eventsForDocument(doc)
+                .count { it.operation == JournalOp.DocRestore.WIRE } shouldBe 1
             rowOf(doc).trashed.shouldBeFalse()
             coordinator.rescan()
             rowOf(doc).let {

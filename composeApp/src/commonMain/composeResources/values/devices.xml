@@ -12,6 +12,7 @@
     <string name="common_devices_retire">Retire</string>
     <string name="common_devices_unretire">Bring back</string>
     <string name="common_devices_empty">No other device has opened this library yet.</string>
+    <string name="common_devices_list_failed">Could not list the devices: %1$s</string>
     <string name="common_devices_retire_failed">Could not retire the device: %1$s</string>
     <string name="common_devices_unretire_failed">Could not bring the device back: %1$s</string>
 </resources>

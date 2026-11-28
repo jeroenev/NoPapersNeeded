@@ -12,6 +12,7 @@
     <string name="common_devices_retire">Retirar</string>
     <string name="common_devices_unretire">Volver a usar</string>
     <string name="common_devices_empty">Ningún otro dispositivo ha abierto esta biblioteca todavía.</string>
+    <string name="common_devices_list_failed">No se pudo mostrar la lista de dispositivos: %1$s</string>
     <string name="common_devices_retire_failed">No se pudo retirar el dispositivo: %1$s</string>
     <string name="common_devices_unretire_failed">No se pudo volver a usar el dispositivo: %1$s</string>
 </resources>

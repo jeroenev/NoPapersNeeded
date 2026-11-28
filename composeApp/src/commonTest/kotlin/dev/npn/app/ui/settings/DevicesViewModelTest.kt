@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_devices_list_failed
 import no_papers_needed.composeapp.generated.resources.common_devices_retire_failed
 import kotlin.test.Test
 
@@ -38,6 +39,22 @@ class DevicesViewModelTest : MainDispatcherTest() {
             vm.list.value
                 ?.single { it.deviceId == "other-device" }
                 ?.retired shouldBe false
+        }
+
+    /** A list that cannot be read (the session closing, an unreadable folder) says why, and stays unread. */
+    @Test
+    fun aListThatCannotBeReadSaysWhy() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.devices.failList = { throw IllegalStateException("the library is closing") }
+            val vm = DevicesViewModel(session)
+            val messages = collecting(vm.messages.map { it.text })
+
+            advanceUntilIdle()
+
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_devices_list_failed, "the library is closing"))
+            vm.list.value shouldBe null
         }
 
     @Test
