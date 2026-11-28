@@ -158,7 +158,8 @@ class TrashOwnFileTest {
      * A trashed document's file copied back with the mtime its trash took it with (a file manager's
      * copy, a backup restored) is the copy a sync tool has yet to take away as far as any device can
      * tell: it stays in the trash for good, however long rescans see it, flagged for the user, and a
-     * restore takes that very file where it is.
+     * restore takes that very file where it is. The trash's own copy of it then goes: nothing else
+     * would remove it while the document is in the library, as the purge takes only a hidden one's.
      */
     @Test
     fun aFileBackWithItsTrashsStatStaysInTheTrashUntilARestoreTakesItInPlace() =
@@ -189,6 +190,7 @@ class TrashOwnFileTest {
             rig.fs.sha256("inbox/a.pdf") shouldBe doc
             coordinator.rescan().filesBack.shouldBeEmpty()
             rig.fs.listAllUnder("inbox").map { it.relPath } shouldBe listOf("inbox/a.pdf")
+            rig.fs.trashEntries().shouldBeEmpty()
         }
 
     /** One copied back with a new mtime cannot be a sync tool's stale copy: the next rescan restores it. */

@@ -53,8 +53,38 @@ internal class StoragePathRuleApplicator(
             )
         val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull ?: return
         val target = resolveUniqueTarget(fs, documentDao, docId, expanded, hash = docId)
-        if (NpnPaths.normalize(target) != NpnPaths.normalize(doc.relPath)) setPath(docId, target)
+        val current = NpnPaths.normalize(doc.relPath)
+        if (NpnPaths.normalize(target) == current) return
+        // Beside its taken target under the name an older build gave it there: filed already.
+        val wanted = withPdfExtension(expanded)
+        if (target != wanted && isOlderNameBeside(current, wanted)) return
+        setPath(docId, target)
     }
+}
+
+/**
+ * Whether [current] is a name an older build gave a document beside [wanted] when that was taken
+ * (`name-1.pdf`, `name-2.pdf`, ...): the document is where the rule wants it, and a move to today's
+ * name for that ([uniquifyByHash], `name (7f3a).pdf`) would be a rename nobody asked for, which every
+ * device then syncs.
+ */
+internal fun isOlderNameBeside(
+    current: String,
+    wanted: String,
+): Boolean {
+    val dot = wanted.lastIndexOf('.')
+    if (dot <= wanted.lastIndexOf('/')) return false
+    val base = wanted.substring(0, dot)
+    val extension = wanted.substring(dot)
+    if (!current.startsWith("$base-") || !current.endsWith(extension)) return false
+    val index = current.substring(base.length + 1, current.length - extension.length)
+    return index.isNotEmpty() && index.all(Char::isDigit)
+}
+
+/** [target], normalized, with `.pdf` added when it names no PDF. */
+private fun withPdfExtension(target: String): String {
+    val normalized = NpnPaths.normalize(target)
+    return if (NpnPaths.isPdf(NpnPaths.fileName(normalized))) normalized else "$normalized.pdf"
 }
 
 /**
@@ -69,16 +99,7 @@ internal suspend fun resolveUniqueTarget(
     currentDocId: String?,
     target: String,
     hash: String,
-): String {
-    val normalized = NpnPaths.normalize(target)
-    val withExtension =
-        if (NpnPaths.isPdf(NpnPaths.fileName(normalized))) {
-            normalized
-        } else {
-            "$normalized.pdf"
-        }
-    return uniquifyByHash(withExtension, hash) { pathTaken(fs, documentDao, currentDocId, it) }
-}
+): String = uniquifyByHash(withPdfExtension(target), hash) { pathTaken(fs, documentDao, currentDocId, it) }
 
 /**
  * Whether [candidate] is taken for [currentDocId], the document about to occupy it (null for a file

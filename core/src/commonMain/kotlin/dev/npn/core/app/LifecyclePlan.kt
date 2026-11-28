@@ -111,13 +111,16 @@ internal object LifecyclePlan {
     /**
      * Restore [doc] to [finalPath], moving there the trash [entry] that holds its bytes, of stat
      * [entryStat], which the row records as its proof from then on; with no entry, the row keeps the
-     * stat it had (none, for a row the fold made for a trash whose file it never saw).
+     * stat it had (none, for a row the fold made for a trash whose file it never saw). [afterPublish]
+     * follows once the restore stands: a restore that took the file where it is removes the trash's
+     * copies there.
      */
     fun restore(
         doc: DocumentEntity,
         finalPath: String,
         entry: String?,
         entryStat: FileMeta?,
+        afterPublish: (suspend () -> Unit)? = null,
     ): LifecycleChange =
         LifecycleChange(
             ops =
@@ -137,6 +140,7 @@ internal object LifecyclePlan {
                     missing = false,
                 ),
             move = entry?.let { FileMove(it, finalPath) },
+            afterPublish = afterPublish,
         )
 
     /** Whether [doc] can be deleted for good: only from the trash. */

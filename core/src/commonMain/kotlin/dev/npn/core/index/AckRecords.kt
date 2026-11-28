@@ -11,6 +11,8 @@ import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnJson
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 
@@ -65,7 +67,9 @@ internal data class AckedDevice(
  * Builds from before them publish none, and their devices are unknown here: what waits for every
  * device's acknowledgment waits only for the devices that write one.
  *
- * Not safe for concurrent calls: the session runs [publish] under the writer lock.
+ * [publish] runs under the writer lock: two at once would number a record alike. The reads run from
+ * anywhere (the keep gate's refresh, the Devices screen, the purge) and share the records parsed so
+ * far under a lock of their own.
  */
 internal class AckRecords(
     private val fs: LibraryFileSystem,
@@ -77,8 +81,9 @@ internal class AckRecords(
     private val installationId: String,
     private val ids: IdSource = IdSource.Random,
 ) {
-    /** Records read so far, by path: each is write-once, so it is read once once it parses. */
+    /** Records read so far, by path: each is write-once, so it is read once once it parses. Guarded by [readLock]. */
     private val read = HashMap<String, Pair<AckRecord, String>>()
+    private val readLock = Mutex()
 
     /**
      * Write this device's next record: the first; else, a day or more after its last, when it
@@ -232,8 +237,13 @@ internal class AckRecords(
     }
 
     /** The record at [path] with the hash of its bytes, read once it parses; null while it cannot be read or parsed. */
-    private suspend fun record(path: String): Pair<AckRecord, String>? =
-        read[path] ?: parse(path)?.also { read[path] = it }
+    private suspend fun record(path: String): Pair<AckRecord, String>? {
+        readLock.withLock { read[path] }?.let { return it }
+        // Parsed outside the lock: two callers may both read a new record, and both find it alike.
+        val parsed = parse(path) ?: return null
+        readLock.withLock { read[path] = parsed }
+        return parsed
+    }
 
     /** The record at [path] with the hash of its bytes, or null for one that cannot be read or parsed (yet). */
     private suspend fun parse(path: String): Pair<AckRecord, String>? {

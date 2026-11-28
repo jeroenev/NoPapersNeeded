@@ -172,7 +172,9 @@ internal class DocLifecycleImpl(
             // Its bytes back where it was (a put-back that kept the mtime, or the copy a sync tool has
             // yet to take away: either stays in the trash until restored) are taken where they are.
             heldInPlace(listOf(target, doc.relPath), doc)?.let { file ->
-                return@changeLifecycle LifecyclePlan.restore(doc, file.relPath, entry = null, entryStat = file)
+                return@changeLifecycle LifecyclePlan.restore(doc, file.relPath, entry = null, entryStat = file) {
+                    discardTrashCopies(docId, hashed, file)
+                }
             }
             // The file lives in trash under a hash-suffixed name; the entry that holds its bytes goes
             // back to the target, or beside it when the target is taken. Another document may hold the
@@ -197,6 +199,21 @@ internal class DocLifecycleImpl(
                 LifecyclePlan.restore(doc, finalPath, entry, entryStat)
             }
         }
+    }
+
+    /**
+     * Remove [docId]'s copies in the trash, as [hashed] (before the lock) confirmed them, once a
+     * restore took its file [kept] where it is: nothing else would, as the purge takes only a hidden
+     * document's. Each goes through the gate while [kept] still holds the bytes. Under the lock.
+     */
+    private suspend fun discardTrashCopies(
+        docId: String,
+        hashed: Map<FileMeta, Boolean>,
+        kept: FileMeta,
+    ) {
+        val proved = hashed.filterValues { it }.keys.associateBy { it.relPath }
+        val authority = DeleteAuthority.ExtraCopy(kept.relPath, kept)
+        for (path in trashOps.confirmedCopiesOf(docId, hashed)) gate.reap(path, docId, authority, proved[path])
     }
 
     /**
@@ -302,10 +319,13 @@ internal class DocLifecycleImpl(
             if (!journal.isDeleted(docId)) return@serialized
             val inTrash = trashOps.confirmedCopiesOf(docId, hashed)
             val atItsPath = listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
-            val kept = keep?.entriesOf(docId).orEmpty().map { it.path }
-            // The stat each was proved by before the lock, so the gate hashes none again that is unchanged.
-            val proved = (hashed + file).filterValues { it }.keys.associateBy { it.relPath }
-            for (path in (inTrash + atItsPath + kept).distinct()) {
+            val kept = keep?.entriesOf(docId).orEmpty()
+            // The stat each was proved by before the lock, so the gate hashes none again that is
+            // unchanged; a keep-store entry's name is its verified hash, so its listed stat is its proof.
+            val proved =
+                (hashed + file).filterValues { it }.keys.associateBy { it.relPath } +
+                    kept.associate { it.path to it.meta }
+            for (path in (inTrash + atItsPath + kept.map { it.path }).distinct()) {
                 gate.reap(path, docId, DeleteAuthority.Tombstone(journal), proved[path])
             }
         }
