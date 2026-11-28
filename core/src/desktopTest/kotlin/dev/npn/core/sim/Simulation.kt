@@ -103,8 +103,26 @@ object KnownIssues {
      */
     const val CLOUD_NAMES_MAY_DIFFER = true
 
-    /** Each finding by the phrases its failure message holds, all of them. */
-    val knownFailures: Map<List<String>, String> = emptyMap()
+    /**
+     * Each finding by the phrases its failure message holds, all of them.
+     *
+     * - A keep-store purge racing another device's restore (docs/SIMULATION.md, "Known issues"): with
+     *   a sync tool sharing `.npn/keep`, one device's purge takes a document's keep-store copy by the
+     *   retention while another device has just restored it, its restore not yet delivered (no
+     *   acknowledgment covers an event after the retention's cutoff). The restoring device copies the
+     *   document out of its own keep-store copy at once, before the sync tool carries the purge
+     *   there, so the document stays; the last-copy check counts no copy at the purged path, and
+     *   reports the purge (seed 6600248, #87). Off once a restore holds the document's bytes before its
+     *   event stands, or the purge leaves a keep-store copy another device may restore from.
+     */
+    val knownFailures: Map<List<String>, String> =
+        mapOf(
+            listOf(
+                "the app removed the last copy of a document no journal deleted or relinked",
+                "loss=APP_TRASH, path=.npn/keep/",
+                "doc-restore@",
+            ) to "KEEP_PURGE_RACES_A_RESTORE",
+        )
 
     /** The finding [message] reports, or null for a new failure. */
     fun classify(message: String): String? = knownFailures.entries.firstOrNull { it.key.all(message::contains) }?.value

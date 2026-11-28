@@ -387,6 +387,16 @@ means turning its switch off (or removing its `knownFailures` entry) and making 
   convergence check compares the libraries without document paths, and traces the paths that
   differ. Off once renames are settled with a temporary name.
 
+- **A keep-store purge races another device's restore**, `KEEP_PURGE_RACES_A_RESTORE` in
+  `KnownIssues.knownFailures`: with a sync tool sharing `.npn/keep`, one device's trash purge takes
+  a document's keep-store copy by the retention while another device has just restored the
+  document, before that restore is delivered (acknowledgment records cover only events up to the
+  retention's cutoff). The restoring device copies the document out of its own keep-store copy at
+  once, before the sync tool carries the purge's delete there, so the document stays; but the
+  last-copy check does not count a copy at the path the purge deleted, and reports the purge (seed
+  6600248, 400 steps; #87). Fixed by a restore that holds the document's bytes before its event stands,
+  or a purge that leaves a keep-store copy another device may still restore from.
+
 ## Finding: rclone bisync loses documents
 
 Run with `-Dnpn.sim.bisync=40` over seeds 1..80 (250 steps), nearly every bisync seed failed the
