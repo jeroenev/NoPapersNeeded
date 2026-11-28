@@ -517,13 +517,17 @@ internal class SessionGraph(
     /**
      * Whether the library shows the document [docId] while no file at its row's path holds its bytes
      * (its row is missing, or names a path another file took): a bake's leftover temporary file
-     * holding them may be its only copy ([BakeService]). A hash with no row is no document the
-     * library knows (the journal calls any id it never saw current), such as a failed bake's output
-     * that no relink names.
+     * holding them may be its only copy ([BakeService]). A hash with no row counts only when an event
+     * names it (the journal calls any id it never saw current): another device's bake whose relink
+     * arrived first, not a failed bake's output that no relink names.
      */
     private suspend fun shownWithoutItsFile(docId: String): Boolean {
-        val row = db.documentDao().getByDocId(docId)?.takeIf { !it.trashed && !it.deleted } ?: return false
-        return coordinator.serialized { it.isCurrent(docId) } && !deps.fs.holds(row.relPath, docId)
+        val row = db.documentDao().getByDocId(docId)
+        if (row != null && (row.trashed || row.deleted)) return false
+        // No row yet: another device's bake, whose relink arrived before a rescan gave its output a
+        // row, is still a document the journal names, and these bytes may be its only copy here.
+        val shown = coordinator.serialized { it.isCurrent(docId) && (row != null || it.isNamed(docId)) }
+        return shown && (row == null || !deps.fs.holds(row.relPath, docId))
     }
 
     /** What a sync pass asks of the session: the journal's answers, a fold, a rescan. */

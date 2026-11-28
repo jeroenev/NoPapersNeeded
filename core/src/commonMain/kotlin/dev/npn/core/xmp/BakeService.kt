@@ -223,7 +223,7 @@ internal class BakeService(
                     } finally {
                         @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                         if (!standing) {
-                            restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
+                            restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside, read)
                             operations.done(intent)
                         }
                     }
@@ -338,7 +338,8 @@ internal class BakeService(
      * [tmpPath] goes only once [norm] holds the original again (until then
      * [dev.npn.core.fs.TempFileSweep] keeps it, as it keeps any bake's temporary file whose bytes
      * are not at its document's path). The caller still sees the swap's failure; a restore that
-     * fails too is logged with where the original is, which the next rescan indexes. One whose
+     * fails too is logged with where the original is, which the next rescan indexes; [read] is the
+     * original's stat when the bake read it, which proves it under [aside]. One whose
      * swap never got to move the original ([movedAside] false) and finds it at neither place lost
      * nothing: another hand (the app's own path move, a sync tool, the user) took the file between
      * the bake's last look and its move, and that hand's rescan indexes it where it went.
@@ -350,8 +351,11 @@ internal class BakeService(
         tmpPath: String,
         aside: String,
         movedAside: Boolean,
+        read: FileMeta,
     ) {
-        suspend fun asideHolds() = runCatchingCancellable { fs.holds(aside, oldSha) }.getOrDefault(false)
+        // By the stat the original had when the bake read it, which a move keeps, before its hash:
+        // a hash that cannot be read just now says nothing of a file only this bake names.
+        suspend fun asideHolds() = runCatchingCancellable { holdsWhatWasRead(aside, read, oldSha) }.getOrDefault(false)
 
         suspend fun normHolds() = runCatchingCancellable { fs.holds(norm, oldSha) }.getOrDefault(false)
         if (!movedAside && !normHolds() && !asideHolds()) {

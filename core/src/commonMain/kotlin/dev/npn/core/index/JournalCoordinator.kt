@@ -583,6 +583,8 @@ internal class JournalCoordinator(
 
             override suspend fun isCurrent(docId: String): Boolean = foldedState().isCurrent(docId)
 
+            override suspend fun isNamed(docId: String): Boolean = docId in foldedState().namedDocs()
+
             override suspend fun restoreReturned(
                 docId: String,
                 relPath: String,

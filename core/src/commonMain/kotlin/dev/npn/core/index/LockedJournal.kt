@@ -30,6 +30,12 @@ internal interface LockedJournal : DocumentFacts {
     suspend fun isCurrent(docId: String): Boolean
 
     /**
+     * Whether an event names [docId] (its own, or a relink onto it): a document the library knows,
+     * where [isCurrent] says true of any id it never saw as well.
+     */
+    suspend fun isNamed(docId: String): Boolean = false
+
+    /**
      * Record that [docId]'s bytes are in the library again, at [relPath], when the journal still has
      * it deleted or trashed. Writes nothing, and needs no write access, for a document nothing hides,
      * nor for a deleted one while this build writes no `doc-undelete`: the import then stands as
