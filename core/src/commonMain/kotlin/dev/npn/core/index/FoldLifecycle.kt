@@ -53,10 +53,8 @@ internal object FoldLifecycle {
      *   bytes, or a put-back that kept it (a backup restored, a file manager's copy). Either way the
      *   document stays in the trash, with no window after which it comes back by itself: its file is
      *   reported as [ProjectedLifecycle.fileBack], for the user to restore in place;
-     * - any other stat: no stale copy of a sync tool that keeps mtimes, but possibly one of a
-     *   transport that does not (a cloud remote without modtimes, a fresh download) on a device whose
-     *   trash move has yet to arrive. It is a return, and waits out the coordinator's window as one
-     *   without a recorded stat does: recorded at once, it would undo that trash on every device.
+     * - any other stat: no stale copy, a deliberate return, recorded at once
+     *   ([Resurrected.immediate]).
      *
      * Without one (a trash that moved nothing, one an older build wrote, a delete for good) the
      * return waits out the coordinator's window, as before.
@@ -96,7 +94,12 @@ internal object FoldLifecycle {
                 fileName = fileName,
                 origPath = journal.origPath,
                 resurrected =
-                    Resurrected(doc, backAt, hiddenAtMillis = journal.hiddenAtMillis),
+                    Resurrected(
+                        doc,
+                        backAt,
+                        hiddenAtMillis = journal.hiddenAtMillis,
+                        immediate = recorded != null && found != null,
+                    ),
             )
         }
         return hiddenAs(doc, row, journal, preserved)

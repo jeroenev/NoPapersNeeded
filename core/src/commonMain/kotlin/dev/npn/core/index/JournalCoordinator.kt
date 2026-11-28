@@ -821,10 +821,13 @@ internal class JournalCoordinator(
      * Record as a restore the rescan's preference for a file that is back in the library, so the next
      * fold that is not a rescan does not hide the document again (and every replica shows it).
      *
-     * A file back with the stat its trash recorded is never reported here: it stays in the trash for
-     * the user to restore ([FoldLifecycle.resolve]). Any other return (another stat, a trash that
-     * recorded none, a delete for good) is recorded only for a document hidden at least
-     * [RESTORE_SETTLE_MS] ago, whose bytes this session's rescans have found back, scan after
+     * At once for a return the trash's recorded stat tells from a copy a sync tool has yet to take
+     * away ([Resurrected.immediate]: its file has another mtime, which no such copy has). A file back
+     * with that very stat is never reported here: it stays in the trash for the user to restore
+     * ([FoldLifecycle.resolve]).
+     *
+     * Otherwise (a trash that recorded no stat, a delete for good), only for a document hidden at
+     * least [RESTORE_SETTLE_MS] ago, whose bytes this session's rescans have found back, scan after
      * scan, for that long too. Sooner, a file still in place may be one a
      * sync tool has not taken away yet: it delivers another device's trash or delete event before the
      * file move that went with it, and writing a restore then would undo that device's decision and
@@ -858,7 +861,9 @@ internal class JournalCoordinator(
         returnsSeen.putAll(seen)
         val settled = now - RESTORE_SETTLE_MS
         val returned =
-            resurrected.filter { it.hiddenAtMillis <= settled && seen.getValue(it.docId).sinceMillis <= settled }
+            resurrected.filter {
+                it.immediate || (it.hiddenAtMillis <= settled && seen.getValue(it.docId).sinceMillis <= settled)
+            }
         val written = undeleteWritten
         val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, written) }
         if (ops.isEmpty()) return

@@ -635,13 +635,10 @@ Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `Writ
     (a file manager's copy, a backup). The document stays in the trash however long they stay,
     reported in `ScanReport.filesBack` (the Trash screen says its file is back), and a restore takes
     that file where it is (`DocLifecycleImpl.restore`);
-  - the bytes back with another mtime are no such copy of a tool that keeps mtimes, but may be one
-    of a transport that does not (a cloud remote without modtimes, a fresh download) on a device the
-    trash move has yet to reach. Written at once, such a return would undo that trash on every
-    device, so it waits out the window below, as a return without a recorded stat does.
+  - the bytes back with another mtime are no such copy: a deliberate return, written at once.
 
-  For those (another mtime; no recorded stat: a trash that moved nothing, one an older build wrote, a
-  delete for good), a rescan that finds the file back writes it once the event that hid the document is a day old
+  Without a recorded stat (a trash that moved nothing, one an older build wrote, a delete for good),
+  a rescan that finds the file back writes it once the event that hid the document is a day old
   (`RESTORE_SETTLE_MS`) and the session's rescans have found the file back, scan after scan, for a
   day as well, as the scan's last step; sooner, the file may be one a sync tool has not taken away
   yet, and the rescan shows it for that scan only. The second day counts from this device's own
